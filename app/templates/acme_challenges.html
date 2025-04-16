@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">{{ title }}</h2>
+
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover text-sm table-striped">
+      <thead>
+        <tr>
+          <th>Challenge ID</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Token</th>
+          <th>Created</th>
+          <th>Validated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ch in challenges %}
+          {% set data = ch.data %}
+          <tr>
+            <td><code>{{ ch.nkey }}</code></td>
+            <td>{{ data.type or '—' }}</td>
+            <td>
+              {% if data.status %}
+                <span class="badge badge-{{
+                  'success' if data.status == 'valid' else
+                  'warning' if data.status == 'pending' else
+                  'danger' if data.status == 'invalid' else 'secondary'
+                }}">{{ data.status }}</span>
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            </td>
+            <td><code>{{ data.token or '—' }}</code></td>
+            <td>{{ data.createdAt or '—' }}</td>
+            <td>{{ data.validatedAt or '—' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

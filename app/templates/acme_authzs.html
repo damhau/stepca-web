@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">{{ title }}</h2>
+
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover text-sm table-striped">
+      <thead>
+        <tr>
+          <th>Authorization ID</th>
+          <th>Identifier</th>
+          <th>Status</th>
+          <th>Wildcard</th>
+          <th>Expires</th>
+          <th>Challenges</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for authz in authzs %}
+          {% set data = authz.data %}
+          <tr>
+            <td><code>{{ authz.nkey }}</code></td>
+            <td>
+              {% if data.identifier %}
+                {{ data.identifier.type }}: {{ data.identifier.value }}
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            </td>
+            <td>
+              {% if data.status %}
+                <span class="badge badge-{{
+                  'success' if data.status == 'valid' else
+                  'warning' if data.status == 'pending' else
+                  'danger' if data.status == 'invalid' else 'secondary'
+                }}">{{ data.status }}</span>
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            </td>
+            <td>{{ data.wildcard | default(false) }}</td>
+            <td>{{ data.expiresAt or '—' }}</td>
+            <td>
+              {% if data.challengeIDs %}
+                {{ data.challengeIDs | length }} challenges
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

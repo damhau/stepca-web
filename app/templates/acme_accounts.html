@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">{{ title }}</h2>
+
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover text-sm table-striped">
+      <thead>
+        <tr>
+          <th>Account ID</th>
+          <th>Provisionner</th>
+          <th>Contact</th>
+          <th>Status</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for account in accounts %}
+          {% set data = account.data %}
+          <tr>
+            <td><code>{{ account.nkey }}</code></td>
+            <td>{{ data.provisionerName or "-" }}</td>
+            <td>
+              {% if data.contact %}
+                {{ data.contact | join(', ') }}
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            </td>
+            
+            <td>{{ data.status or "unknown" }}</td>
+            <td>{{ data.createdAt or "—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

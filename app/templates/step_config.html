@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">{{ title }}</h2>
+
+{% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+{% elif success %}
+  <div class="alert alert-success">{{ success }}</div>
+{% endif %}
+
+<form method="POST" id="configForm">
+    <div class="form-group">
+      <label for="config">Edit Config JSON</label>
+      <textarea name="config" id="configTextarea" style="display:none;">{{ config }}</textarea>
+      <div id="editor" style="border: 1px solid #ccc; font-size: 13px;"></div>
+
+    </div>
+  
+    <div id="validationResult" class="mb-2"></div>
+  
+    <button type="button" class="btn btn-secondary" onclick="validateConfig()">
+      <i class="fas fa-check-circle"></i> Validate
+    </button>
+  
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-save"></i> Save
+    </button>
+  </form>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">{{ title }}</h2>
+
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover text-sm table-striped">
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Identifiers</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Expires</th>
+          <th>Certificate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+          {% set data = order.data %}
+          <tr>
+            <td><code>{{ order.nkey }}</code></td>
+            <td>
+              {% if data.identifiers %}
+                {% for i in data.identifiers %}
+                  {{ i.type }}: {{ i.value }}<br>
+                {% endfor %}
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            </td>
+            <td>
+              {% if data.status %}
+                <span class="badge badge-{{
+                  'success' if data.status == 'valid' else
+                  'warning' if data.status == 'pending' else
+                  'danger' if data.status == 'invalid' else 'secondary'
+                }}">{{ data.status }}</span>
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            </td>
+            <td>{{ data.createdAt or '—' }}</td>
+            <td>{{ data.expiresAt or '—' }}</td>
+            <td>
+              {% if data.certificate %}
+                <a href="#" onclick="loadCert('{{ data.certificate }}')" data-toggle="modal" data-target="#certModal">View</a>
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="modal fade" id="certModal" tabindex="-1" role="dialog" aria-labelledby="certModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="certModalLabel">Certificate Details</h5>
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+      </div>
+      <div class="modal-body text-sm" id="certModalBody">
+        Loading...
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

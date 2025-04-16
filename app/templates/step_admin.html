@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">{{ title }}</h2>
+
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover text-sm table-striped">
+      <thead>
+        <tr>
+          <th>Admin ID</th>
+          <th>ProvisionerID</th>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for admin in admins %}
+          {% set data = admin.data %}
+            <td><code>{{ admin.nkey }}</code></td>
+            <td>{{ data.provisionerID or "-" }}</td>
+            <td>{{ data.subject or "n/a" }}</td>
+            <td>
+              {% if data.type == 1 %}
+              ADMIN
+              {% elif data.type == 2 %}
+              SUPER_ADMIN
+              {% else %}
+                {{ data.type }}
+              {% endif %}
+            </td>
+            <td>{{ data.createdAt or "—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">Step CA Service Control</h2>
+
+<div class="btn-group mb-3">
+  <button class="btn btn-success" onclick="controlService('start')"><i class="fas fa-play"></i> Start</button>
+  <button class="btn btn-danger" onclick="controlService('stop')"><i class="fas fa-stop"></i> Stop</button>
+  <button class="btn btn-info" onclick="controlService('restart')"><i class="fas fa-sync-alt"></i> Restart</button>
+  <button class="btn btn-secondary" onclick="controlService('status')"><i class="fas fa-info-circle"></i> Status</button>
+</div>
+
+<pre id="serviceOutput" class="bg-light p-3 text-sm"></pre>
+
+<script>
+function controlService(action) {
+  document.getElementById("serviceOutput").textContent = "Running...";
+  fetch(`/api/step/service/${action}`, { method: "POST" })
+    .then(resp => resp.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById("serviceOutput").textContent = data.output;
+      } else {
+        document.getElementById("serviceOutput").textContent = "❌ Error: " + data.error;
+      }
+    });
+}
+</script>
+{% endblock %}

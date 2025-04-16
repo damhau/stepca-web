@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">{{ title }}</h2>
+
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover text-sm table-striped">
+      <thead>
+        <tr>
+          <th>Cert ID</th>
+          <th>Subject</th>
+          <th>Issuer</th>
+          <th>SAN</th>
+          <th>Not Before</th>
+          <th>Not After</th>
+          <th>Serial</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cert in certs %}
+          {% set data = cert.data %}
+          <tr>
+            <td><code>{{ cert.nkey }}</code></td>
+            <td>{{ data.subject or '—' }}</td>
+            <td>{{ data.issuer or '—' }}</td>
+            <td>{{ data.dns_names or '—' }}</td>
+            <td>{{ data.not_before or '—' }}</td>
+            <td>{{ data.not_after or '—' }}</td>
+            <td>{{ data.serial or '—' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

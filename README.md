@@ -1,6 +1,6 @@
 # Step CA Admin
 
-A web-based dashboard for managing [Step CA](https://smallstep.com/docs/step-ca) – the open-source certificate authority. Built with Flask and styled with AdminLTE, it provides an intuitive UI to manage ACME accounts, x.509 and SSH certificates, provisioners, and system services.
+A web-based dashboard for managing [Step CA](https://smallstep.com/docs/step-ca) – the open-source certificate authority. Built with Flask and styled with AdminLTE, it provides an intuitive UI to manage ACME accounts, x.509 and SSH certificates, provisioners, and system services
 
 ---
 

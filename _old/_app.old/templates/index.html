@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="content-header">
+  <div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h1 class="m-0">Dashboard</h1>
+    </div>
+  </div>
+</div>
+
+<div class="content">
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Total Certificates -->
+
+      <div class="col-lg-4 col-6">
+        <div class="small-box bg-info">
+          <div class="inner">
+            <h3>{{ active_certs }}</h3>
+            <p>Active Certificates</p>
+          </div>
+          <div class="icon">
+            <i class="fas fa-certificate"></i>
+          </div>
+          <a href="/x509/active_certs" class="small-box-footer">View All <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+      </div>
+
+
+      <!-- Revoked Certificates -->
+      <div class="col-lg-4 col-6">
+        <div class="small-box bg-danger">
+          <div class="inner">
+            <h3>{{ revoked_certs }}</h3>
+            <p>Revoked Certificates</p>
+          </div>
+          <div class="icon">
+            <i class="fas fa-ban"></i>
+          </div>
+          <a href="/x509/revoked" class="small-box-footer">View All <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+      </div>
+
+      <!-- Provisioners -->
+      <div class="col-lg-4 col-6">
+        <div class="small-box bg-success">
+          <div class="inner">
+            <h3>{{ total_provisioners }}</h3>
+            <p>Provisioners</p>
+          </div>
+          <div class="icon">
+            <i class="fas fa-users-cog"></i>
+          </div>
+          <a href="/step/provisioners" class="small-box-footer">Manage <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

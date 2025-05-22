@@ -1,0 +1,93 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} {{ title }} {% endblock %}
+
+<!-- Element injected in the BODY element -->
+{% block body_class %} sidebar-mini {% endblock body_class %}
+
+<!-- Specific Page CSS goes HERE  -->
+{% block stylesheets %}
+<!-- Google Font: Source Sans Pro -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+<!-- Font Awesome -->
+<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
+<!-- Theme style -->
+<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
+{% endblock stylesheets %}
+
+{% block content %}
+
+<div class="content-wrapper">
+
+  <!-- Content Header (Page header) -->
+  <div class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-6">
+          <h1 class="m-0 text-dark">{{ title }}</h1>
+        </div>
+        <div class="col-sm-6">
+          <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item active">{{ title }}</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- /.content-header -->
+
+  <!-- Main content -->
+  <section class="content">
+    <div class="card">
+      <div class="card-body">
+        <h2 class="mb-4">Edit Configuration</h2>
+
+        <form method="POST">
+          <div class="form-group">
+            <label for="db_host">Database Host</label>
+            <input type="text" class="form-control" id="db_host" name="db_host" value="{{ db_host }}" required>
+          </div>
+
+          <div class="form-group">
+            <label for="db_user">Database User</label>
+            <input type="text" class="form-control" id="db_user" name="db_user" value="{{ db_user }}" required>
+          </div>
+
+          <div class="form-group">
+            <label for="db_password">Database Password</label>
+            <input type="password" class="form-control" id="db_password" name="db_password" value="{{ db_password }}"
+              required>
+          </div>
+
+          <div class="form-group">
+            <label for="db_name">Database Name</label>
+            <input type="text" class="form-control" id="db_name" name="db_name" value="{{ db_name }}" required>
+          </div>
+
+          <div class="form-group">
+            <label for="db_port">Database Port</label>
+            <input type="number" class="form-control" id="db_port" name="db_port" value="{{ db_port }}" required>
+          </div>
+
+          <div class="form-group">
+            <label for="ca_url">CA URL</label>
+            <input type="text" class="form-control" id="ca_url" name="ca_url" value="{{ ca_url }}" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  </section>
+  <!-- /.content -->
+
+</div>
+
+{% endblock content %}
+
+<!-- Specific Page JS goes HERE  -->
+{% block javascripts %}
+
+
+{% endblock javascripts %}

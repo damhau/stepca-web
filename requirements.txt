@@ -1,0 +1,14 @@
+Flask
+cryptography
+psutil
+psycopg2
+requests
+python-jose
+protobuf
+PyJWT 
+pytz
+jwcrypto
+authlib
+flask-login
+flask_sqlalchemy
+flask_wtf

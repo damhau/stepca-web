@@ -1,7 +1,12 @@
 import psycopg2
 
+from config_db import DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT
+
 def get_connection():
-    # Update with your PostgreSQL credentials.
-    return psycopg2.connect(host='localhost', user='step-ca',
-                              password='step-ca', 
-                              dbname='step_ca_db', port=5432)
+    return psycopg2.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME,
+        port=DB_PORT
+    )

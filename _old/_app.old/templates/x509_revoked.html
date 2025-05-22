@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">{{ title }}</h2>
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover table-striped text-sm">
+      <thead>
+        <tr>
+          <th>Id</th>
+          <th>Serial</th>
+          <th>Revoked At</th>
+          <th>Subject</th>
+          <th>Issuer</th>
+          <th>Provisionner</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in revoked %}
+          <tr>
+            <td><code>{{ r.data.Serial }}</code></td>
+            <td>{{ r.cert.serial if r.cert else "—" }}</td>
+            <td>{{ r.data.RevokedAt }}</td>
+            <td>{{ r.cert.subject if r.cert else "—" }}</td>
+            <td>{{ r.cert.issuer if r.cert else "—" }}</td>
+            <td>{{ r.data.provisioner_name if r.data.provisioner_name else "—" }}</td>
+
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

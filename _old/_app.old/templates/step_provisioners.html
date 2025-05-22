@@ -1,0 +1,305 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2 class="mb-4">{{ title }}</h2>
+<div class="d-flex justify-content-end mb-3">
+  <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#createProvisionerModal">
+    Add Provisioner
+  </button>
+</div>
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover text-sm table-striped">
+      <thead>
+        <tr>
+          <th>Name111</th>
+          <th>Type</th>
+          <th>Claims</th>
+          <th style="width: 150px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in provisioners %}
+        <tr>
+          <td>{{ p.name or "—" }}</td>
+          <td>{{ p.type or "—" }}</td>
+          <td>
+            {% if p.claims %}
+              {% if p.claims.defaultTLSCertDuration %}
+                TLS: {{ p.claims.defaultTLSCertDuration }}
+              {% elif p.claims.x509 and p.claims.x509.durations %}
+                x509: {{ p.claims.x509.durations.default or "—" }}
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            {% else %}
+              <em>—</em>
+            {% endif %}
+          </td>
+          <td>
+            <!-- Inside <td> for Actions -->
+              <button class="btn btn-sm btn-info"
+              data-toggle="modal"
+              data-target="#viewModal"
+              data-prov='{{ p | tojson | safe }}'>
+            <i class="fas fa-edit"></i>
+            </button>
+
+            <a href="/step/provisioner/{{ p.name }}/delete" class="btn btn-sm btn-danger"
+               onclick="return confirm('Are you sure you want to delete this provisioner?')">
+              <i class="fas fa-trash"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<div class="modal fade" id="viewModal" tabindex="-1" role="dialog" aria-labelledby="viewModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Provisioner Details</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span>&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="jsonForm" class="form-horizontal">
+          <!-- Form fields will be dynamically injected here -->
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="submit" form="jsonForm" class="btn btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+<!-- Modal -->
+<div class="modal fade" id="createProvisionerModal" tabindex="-1" role="dialog" aria-labelledby="createProvisionerModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="createProvisionerModalLabel">Add Provisioner</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form method="POST" action="{{ url_for('step_provisioner') }}">
+          <div class="form-group">
+            <label>Provisioner Name</label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+
+          <div class="form-group">
+            <label>Type</label>
+            <select name="type" class="form-control" id="provType" required>
+              <option value="ACME">ACME</option>
+              <option value="JWK">JWK</option>
+            </select>
+          </div>
+
+          <!-- Shared claims -->
+          <div class="form-group">
+            <label>X.509 Claims (Durations)</label>
+            <div class="row">
+              <div class="col">
+                <input type="text" name="duration_default" class="form-control" placeholder="Default (e.g. 24h)" required>
+              </div>
+              <div class="col">
+                <input type="text" name="duration_min" class="form-control" placeholder="Min (e.g. 1h)" required>
+              </div>
+              <div class="col">
+                <input type="text" name="duration_max" class="form-control" placeholder="Max (e.g. 72h)" required>
+              </div>
+            </div>
+          </div>
+
+          <!-- ACME specific -->
+          <div id="acmeFields">
+            <div class="form-group">
+              <label>ACME Challenge Types</label>
+              <div class="form-check">
+                <input type="checkbox" name="challenges" value="1" class="form-check-input" id="http01">
+                <label for="http01" class="form-check-label">HTTP-01</label>
+              </div>
+              <div class="form-check">
+                <input type="checkbox" name="challenges" value="2" class="form-check-input" id="dns01">
+                <label for="dns01" class="form-check-label">DNS-01</label>
+              </div>
+              <div class="form-check">
+                <input type="checkbox" name="challenges" value="3" class="form-check-input" id="tlsalpn01">
+                <label for="tlsalpn01" class="form-check-label">TLS-ALPN-01</label>
+              </div>
+            </div>
+
+            <div class="form-check">
+              <input type="checkbox" name="require_eab" class="form-check-input" id="requireEab">
+              <label for="requireEab" class="form-check-label">Require External Account Binding</label>
+            </div>
+
+            <div class="form-check">
+              <input type="checkbox" name="force_cn" class="form-check-input" id="forceCn">
+              <label for="forceCn" class="form-check-label">Force Common Name</label>
+            </div>
+          </div>
+
+          <!-- JWK specific -->
+          <div id="jwkFields" style="display: none;">
+            <div class="form-group">
+              <label for="passphrase">Provisioner Passphrase</label>
+              <input type="password" class="form-control" id="passphrase" name="passphrase" required>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Create Provisioner</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+    
+          </div>
+          
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+<script>
+$(document).ready(function() {
+  $('#viewModal').on('show.bs.modal', function (event) {
+    console.log("🧪 Modal triggered");
+
+    const button = event.relatedTarget;  // This is the button that was clicked
+    console.log("🧪 Trigger button:", button);
+
+    const prov = $(button).data('prov');  // Get the provisioner data passed as JSON
+    console.log("🧪 Loaded provisioner data:", prov);
+
+    const modalContent = $('#jsonForm');
+    modalContent.empty();  // Clear previous content in the form
+
+    if (prov) {
+      // Generate form dynamically based on the JSON data
+      generateForm(prov, modalContent);
+      console.log("🧪 Form generated for modal");
+
+      // Optionally, handle form submission to save data
+      $('#jsonForm').submit(function(event) {
+        event.preventDefault();
+        const updatedData = gatherFormData(modalContent);
+        console.log("🧪 Updated data:", updatedData);
+        // Send the updated data back to the server
+      });
+    } else {
+      modalContent.html("❌ Failed to load provisioner data.");
+      console.warn("⚠️ No provisioner data found in button");
+    }
+  });
+});
+
+// Function to generate form fields based on JSON structure
+function generateForm(data, container) {
+  for (let key in data) {
+    if (data.hasOwnProperty(key)) {
+      const value = data[key];
+      let inputElement;
+      
+      // Handle nested objects
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        inputElement = $('<div class="form-group"></div>');
+        inputElement.append(`<label>${key}</label>`);
+        const nestedContainer = $('<div></div>');
+        generateForm(value, nestedContainer);  // Recursive call for nested objects
+        inputElement.append(nestedContainer);
+      } 
+      // Handle arrays
+      else if (Array.isArray(value)) {
+        inputElement = $('<div class="form-group"></div>');
+        inputElement.append(`<label>${key}</label>`);
+        const arrayContainer = $('<div class="checkbox-list"></div>');
+        value.forEach((item, idx) => {
+          const checkboxId = `${key}_${idx}`;
+          const checkboxElement = $('<div class="custom-control custom-checkbox"></div>');
+          checkboxElement.append(`
+            <input type="checkbox" class="custom-control-input" id="${checkboxId}" name="${key}" value="${item}" ${item ? 'checked' : ''}>
+            <label class="custom-control-label" for="${checkboxId}">${item}</label>
+          `);
+          arrayContainer.append(checkboxElement);
+        });
+        inputElement.append(arrayContainer);
+      } 
+      // Handle boolean values as a select dropdown
+      else if (typeof value === 'boolean') {
+        inputElement = $('<div class="form-group"></div>');
+        inputElement.append(`<label for="${key}">${key}</label>`);
+        inputElement.append(`
+          <select class="form-control" id="${key}" name="${key}">
+            <option value="true" ${value === true ? 'selected' : ''}>True</option>
+            <option value="false" ${value === false ? 'selected' : ''}>False</option>
+          </select>
+        `);
+      } 
+      // Handle other data types like string, number, etc.
+      else {
+        inputElement = $('<div class="form-group"></div>');
+        inputElement.append(`<label for="${key}">${key}</label>`);
+        inputElement.append(`<input type="text" class="form-control" id="${key}" name="${key}" value="${value}">`);
+      }
+
+      container.append(inputElement);
+    }
+  }
+}
+
+
+// Function to gather form data and return as an object
+function gatherFormData(container) {
+  let formData = {};
+  
+  container.find('input').each(function() {
+    const key = $(this).attr('name');
+    const value = $(this).val();
+    formData[key] = value;
+  });
+  
+  container.find('input[type="checkbox"]:checked').each(function() {
+    const key = $(this).attr('name');
+    const value = $(this).val();
+    if (!formData[key]) formData[key] = [];
+    formData[key].push(value);
+  });
+
+  return formData;
+}
+function toggleFields() {
+    const type = document.getElementById("provType").value;
+    document.getElementById("acmeFields").style.display = (type === "ACME") ? "block" : "none";
+    document.getElementById("jwkFields").style.display = (type === "JWK") ? "block" : "none";
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const selector = document.getElementById("provType");
+    selector.addEventListener("change", toggleFields);
+    toggleFields(); // initialize on load
+  });
+
+</script>
+{% endblock %}
+

@@ -1,0 +1,154 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2 class="mb-4">{{ title }}</h2>
+
+<div class="d-flex justify-content-end mb-3">
+  <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addJwkModal">
+    Add JWK Key
+  </button>
+</div>
+
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover text-sm table-striped">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for key in keys %}
+          <tr>
+            <td>{{ key.id }}</td>
+            <td>{{ key.name }}</td>
+            <td>
+              
+                <button class="btn btn-info btn-sm" onclick="viewKey('{{ key.id }}')">
+                <i class="fas fa-eye"></i>
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="deleteKey({{ key.id }})">
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="addJwkModal" tabindex="-1" role="dialog" aria-labelledby="addJwkModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form id="addJwkForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addJwkModalLabel">Add New JWK Key</h5>
+          <button type="button" class="close" data-dismiss="modal">
+            <span>&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Provisioner</label>
+            <select class="form-control" id="provisionerSelect" required>
+              {% for id, name in provisioners.items() %}
+                <option value="{{ name }}">{{ name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>JWK (JSON)</label>
+            <textarea class="form-control" id="jwkContent" rows="5" required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="viewKeyModal" tabindex="-1" role="dialog" aria-labelledby="viewKeyModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="viewKeyModalLabel">View JWK Key</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Provisioner</label>
+          <input type="text" class="form-control" id="viewProvisioner" readonly>
+        </div>
+        <div class="form-group">
+          <label>JWK</label>
+          <textarea class="form-control" id="viewJwk" rows="10" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<script>
+document.getElementById("addJwkForm").addEventListener("submit", function(event) {
+  event.preventDefault();
+  const name = document.getElementById("provisionerSelect").value;
+  const jwk = JSON.parse(document.getElementById("jwkContent").value);
+
+  fetch("/api/jwk_keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name, jwk: jwk })
+  })
+  .then(resp => resp.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert("Error saving key.");
+    }
+  });
+});
+
+function deleteKey(id) {
+  if (!confirm("Are you sure you want to delete this JWK key?")) return;
+  fetch(`/api/jwk_keys/${id}`, { method: "DELETE" })
+    .then(resp => resp.json())
+    .then(data => {
+      if (data.success) {
+        location.reload();
+      } else {
+        alert("Error deleting key.");
+      }
+    });
+}
+
+function viewKey(id) {
+  fetch(`/api/jwk_keys/${id}`)
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('viewProvisioner').value = data.provisioner_name;
+      document.getElementById('viewJwk').value = JSON.stringify(data.jwk, null, 2);
+      $('#viewKeyModal').modal('show');
+    })
+    .catch(error => {
+      console.error('Error fetching key:', error);
+      alert('Failed to load key');
+    });
+}
+
+
+</script>
+
+{% endblock %}

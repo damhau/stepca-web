@@ -1,0 +1,13 @@
+{
+  "database": {
+    "host": "localhost",
+    "user": "step-ca",
+    "password": "step-ca",
+    "name": "step_ca_db",
+    "port": 5432
+  },
+  "ca": {
+    "url": "https://ca.dhc.lan",
+    "fingerprint": "5c24fe52146c4ccec0e569dc1e01bb635338de5748d0085264b7d556a13fd1c1"
+  }
+}

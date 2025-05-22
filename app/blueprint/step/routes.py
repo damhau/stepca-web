@@ -2,7 +2,7 @@ from flask import render_template, request, flash, redirect, jsonify
 from app.libs.db_step import *
 from app.blueprint.step import bp
 from app.libs.stepapi import *
-from config_db import CA_URL
+from config import CA_URL
 import subprocess
 
 client = StepCAClient(CA_URL)
@@ -94,9 +94,8 @@ def admins():
             flash(f"Failed to create admin '{subject}'.", "danger")
 
     admins = client.list_admins()
-    print("admins:", admins)
     provisioner_map = get_active_provisioner_map(get_step_provisioners())
-    print("provisioners:", provisioner_map)
+
     return render_template("step/admin.html", title="StepCA Admins", admins=admins["admins"], provisioners=provisioner_map)
 
 

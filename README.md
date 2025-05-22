@@ -86,8 +86,18 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+4. **Generate the jwk_key.json file**
 
-4. **Run the app**
+- Run the following step command
+
+```bash
+step ca provisioner list \
+    | jq -r '.[] | select(.name == "Admin JWK") | .encryptedKey' \
+    | step crypto jwe decrypt \
+    | jq
+```
+
+5. **Run the app**
 
 ```bash
 flask run

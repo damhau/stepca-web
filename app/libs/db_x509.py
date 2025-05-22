@@ -8,6 +8,7 @@ from .cert_utils import parse_cert_from_bytes
 from .db_step import get_step_provisioners
 from app.models.x509 import X509Cert, X509CertData, RevokedX509Cert, GeneratedCert
 
+
 def get_x509_certs():
     certs = []
     for row in X509Cert.query.all():
@@ -16,21 +17,16 @@ def get_x509_certs():
             cert_bytes = row.nvalue
             parsed = parse_cert_from_bytes(cert_bytes)
             cert_metadata = get_x509_certs_data_by_id(cert_id)
-            certs.append({
-                "nkey": cert_id,
-                "data": parsed,
-                "provisioner": cert_metadata["data"]["provisioner"]
-            })
+            certs.append({"nkey": cert_id, "data": parsed, "provisioner": cert_metadata["data"]["provisioner"]})
         except Exception as e:
-            certs.append({
-                "nkey": row.nkey.hex(),
-                "data": {"subject": "[error decoding cert]", "error": str(e)}
-            })
+            certs.append({"nkey": row.nkey.hex(), "data": {"subject": "[error decoding cert]", "error": str(e)}})
     return certs
+
 
 def get_x509_certs_by_id(cert_id):
     all_certs = get_x509_certs()
     return next((c for c in all_certs if c["nkey"] == cert_id), None)
+
 
 def get_x509_certs_data():
     results = []
@@ -43,6 +39,7 @@ def get_x509_certs_data():
             results.append({"nkey": row.nkey.hex(), "data": {"error": str(e)}})
     return results
 
+
 def get_x509_certs_data_by_id(cert_id):
     for row in X509CertData.query.all():
         try:
@@ -54,6 +51,7 @@ def get_x509_certs_data_by_id(cert_id):
             pass
     return None
 
+
 def get_revoked_x509_certs():
     certs = []
     for row in RevokedX509Cert.query.all():
@@ -64,6 +62,7 @@ def get_revoked_x509_certs():
         except Exception as e:
             certs.append({"nkey": row.nkey.hex(), "data": {"error": str(e)}})
     return certs
+
 
 def get_revoked_x509_with_cert_info():
     revocations = []
@@ -83,16 +82,21 @@ def get_revoked_x509_with_cert_info():
             revocations.append({"nkey": row.nkey.hex(), "data": {"error": str(e)}})
     return revocations
 
+
 def get_generated_certs():
-    return [{
-        "id": row.id,
-        "serial": row.serial,
-        "common_name": row.common_name,
-        "provisioner": row.provisioner,
-        "created_at": row.created_at,
-        "csr": row.csr,
-        "certificate": row.certificate
-    } for row in GeneratedCert.query.order_by(GeneratedCert.created_at.desc()).all()]
+    return [
+        {
+            "id": row.id,
+            "serial": row.serial,
+            "common_name": row.common_name,
+            "provisioner": row.provisioner,
+            "created_at": row.created_at,
+            "csr": row.csr,
+            "certificate": row.certificate,
+        }
+        for row in GeneratedCert.query.order_by(GeneratedCert.created_at.desc()).all()
+    ]
+
 
 def get_generated_cert_by_serial(serial):
     row = GeneratedCert.query.filter_by(serial=serial).first()
@@ -104,25 +108,21 @@ def get_generated_cert_by_serial(serial):
             "provisioner": row.provisioner,
             "created_at": row.created_at,
             "csr": row.csr,
-            "certificate": row.certificate
+            "certificate": row.certificate,
         }
     return None
 
+
 def save_generated_cert(serial, common_name, provisioner, csr_pem, cert_pem):
-    new_cert = GeneratedCert(
-        serial=serial,
-        common_name=common_name,
-        provisioner=provisioner,
-        csr=csr_pem,
-        certificate=cert_pem
-    )
+    new_cert = GeneratedCert(serial=serial, common_name=common_name, provisioner=provisioner, csr=csr_pem, certificate=cert_pem)
     db.session.add(new_cert)
     db.session.commit()
+
 
 def get_x509_active_certs():
     x509_certs = get_x509_certs()
     revoked_certs = get_revoked_x509_certs()
-    revoked_serials = {cert['data']['Serial'] for cert in revoked_certs}
+    revoked_serials = {cert["data"]["Serial"] for cert in revoked_certs}
     now = datetime.utcnow().replace(tzinfo=pytz.UTC)
     active = []
 
@@ -144,12 +144,10 @@ def get_x509_active_certs():
 
     # Enrich with `generated` flag
     generated_serials = {g["serial"] for g in get_generated_certs()}
-    print(f"Generated serials: {generated_serials}")
+
     for cert in active:
         print(cert)
         if cert["data"].get("serial") in generated_serials:
             cert["data"]["generated"] = True
 
-
     return active
-

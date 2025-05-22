@@ -1,0 +1,84 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} {{ title }} {% endblock %}
+
+<!-- Element injected in the BODY element -->
+{% block body_class %} sidebar-mini {% endblock body_class %}
+
+<!-- Specific Page CSS goes HERE  -->
+{% block stylesheets %}
+<!-- Google Font: Source Sans Pro -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+<!-- Font Awesome -->
+<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
+<!-- Theme style -->
+<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
+{% endblock stylesheets %}
+
+{% block content %}
+
+<div class="content-wrapper">
+
+  <!-- Content Header (Page header) -->
+  <div class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-6">
+          <h1 class="m-0 text-dark">{{ title }}</h1>
+        </div>
+        <div class="col-sm-6">
+          <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item active">{{ title }}</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- /.content-header -->
+
+  <!-- Main content -->
+  <section class="content">
+    <div class="card">
+      <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-sm table-striped">
+          <thead>
+            <tr>
+              <th>Cert ID</th>
+              <th>Subject</th>
+              <th>Issuer</th>
+              <th>SAN</th>
+              <th>Not Before</th>
+              <th>Not After</th>
+              <th>Serial</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cert in certs %}
+            {% set data = cert.data %}
+            <tr>
+              <td><code>{{ cert.nkey }}</code></td>
+              <td>{{ data.subject or '—' }}</td>
+              <td>{{ data.issuer or '—' }}</td>
+              <td>{{ data.dns_names or '—' }}</td>
+              <td>{{ data.not_before or '—' }}</td>
+              <td>{{ data.not_after or '—' }}</td>
+              <td>{{ data.serial or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+  <!-- /.content -->
+
+</div>
+
+{% endblock content %}
+
+<!-- Specific Page JS goes HERE  -->
+{% block javascripts %}
+
+
+{% endblock javascripts %}

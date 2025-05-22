@@ -1,0 +1,136 @@
+<!-- Main Sidebar Container -->
+<aside class="main-sidebar sidebar-dark-primary elevation-4">
+  <!-- Brand Logo -->
+
+
+
+  <a href="/" class="brand-link d-flex align-items-center justify-content-center">
+    <i class="fas fa-shield-alt mr-2" style="font-size: 1.5rem;"></i>
+    <span class="brand-text font-weight-light">Step CA Admin</span>
+  </a>
+
+
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <!-- Sidebar user panel (optional) -->
+
+    <!-- SidebarSearch Form -->
+    <div class="form-inline">
+      <div class="input-group" data-widget="sidebar-search">
+        <input class="form-control form-control-sidebar" type="search" placeholder="Search" aria-label="Search">
+        <div class="input-group-append">
+          <button class="btn btn-sidebar">
+            <i class="fas fa-search fa-fw"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar Menu -->
+    <nav class="mt-2">
+      <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+
+        <li class="nav-item has-treeview {% if 'index' in segment %} menu-open {% endif %}">
+
+        <li class="nav-header">Dashboard</li>
+        <li class="nav-item">
+          <a href="/" class="nav-link">
+            <i class="nav-icon fas fa-chart-line"></i>
+            <p>Certificate Summary</p>
+          </a>
+        </li>
+
+        <!-- ACME -->
+        <li class="nav-header">ACME Management</li>
+        <li class="nav-item">
+          <a href="{{ url_for('acme.accounts') }}" class="nav-link">
+            <i class="nav-icon fas fa-user-shield"></i>
+            <p>Accounts</p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="{{ url_for('acme.orders') }}" class="nav-link">
+            <i class="nav-icon fas fa-shopping-cart"></i>
+            <p>Orders</p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="{{ url_for('acme.certs') }}" class="nav-link">
+            <i class="nav-icon fas fa-certificate"></i>
+            <p>Certificates</p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="{{ url_for('acme.authzs') }}" class="nav-link">
+            <i class="nav-icon fas fa-check-circle"></i>
+            <p>Authorizations</p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="{{ url_for('acme.challenges') }}" class="nav-link">
+            <i class="nav-icon fas fa-puzzle-piece"></i>
+            <p>Challenges</p>
+          </a>
+        </li>
+
+        <!-- x509 -->
+        <li class="nav-header">x509 Certificate Management</li>
+        <li class="nav-item">
+          <a href="{{ url_for('x509.active_certs') }}" class="nav-link">
+            <i class="far fa-list-alt nav-icon"></i>
+            <p>Active</p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="{{ url_for('x509.revoked_certs') }}" class="nav-link">
+            <i class="fas fa-user-plus nav-icon"></i>
+            <p>Revoked</p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="{{ url_for('x509.all_certs') }}" class="nav-link">
+            <i class="fas fa-user-plus nav-icon"></i>
+            <p>All</p>
+          </a>
+        </li>
+
+        <!-- Management -->
+        <li class="nav-header">StepCA Management</li>
+        <li class="nav-item">
+          <a href="/step/provisioners" class="nav-link">
+            <i class="far fa-list-alt nav-icon"></i>
+            <p>Provisioners</p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/step/admins" class="nav-link">
+            <i class="nav-icon fas fas fa-user-shield"></i>
+            <p>Admins</p>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/step/service" class="nav-link">
+            <i class="nav-icon fas fas fa-power-off"></i>
+            <p>Service</p>
+          </a>
+        </li>
+
+        <!-- Management -->
+        <li class="nav-header">System</li>
+        <li class="nav-item">
+          <a href="/system/config" class="nav-link">
+            <i class="nav-icon fas fas fa-cogs"></i>
+            <p>App Config</p>
+          </a>
+        </li>
+
+
+
+      </ul>
+    </nav>
+    <!-- /.sidebar-menu -->
+
+  </div>
+  <!-- /.sidebar -->
+</aside>

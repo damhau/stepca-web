@@ -1,0 +1,215 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} {{ title }} {% endblock %}
+
+<!-- Element injected in the BODY element -->
+{% block body_class %} sidebar-mini {% endblock body_class %}
+
+<!-- Specific Page CSS goes HERE  -->
+{% block stylesheets %}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+<!-- Font Awesome -->
+<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
+<!-- Theme style -->
+<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
+{% endblock stylesheets %}
+
+{% block content %}
+
+<div class="content-wrapper">
+
+  <div class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-6">
+          <h1 class="m-0 text-dark">{{ title }}</h1>
+        </div>
+        <div class="col-sm-6">
+          <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item active">{{ title }}</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <section class="content">
+    <div class="d-flex justify-content-end mb-3">
+      <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#createAdminModal">
+        Add Admin
+      </button>
+    </div>
+    <div class="card">
+      <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-sm table-striped">
+          <thead>
+            <tr>
+              <th>Admin ID</th>
+              <th>ProvisionerID</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Created At</th>
+              <th style="width: 150px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for admin in admins %}
+            <tr>
+              <td><code>{{ admin.id }}</code></td>
+              <td>{{ admin.provisioner_id or "-" }}</td>
+              <td>{{ admin.subject or "n/a" }}</td>
+              <td>
+                {% if admin.type == 1 %}
+                ADMIN
+                {% elif admin.type == 2 %}
+                SUPER_ADMIN
+                {% else %}
+                {{ admin.type }}
+                {% endif %}
+              </td>
+              <td>{% set created_at_seconds = admin.get('created_at', {}).get('seconds', None) %}
+                {% if created_at_seconds %}
+                {{ created_at_seconds | format_date }}
+                {% else %}
+                No timestamp available
+                {% endif %}</td>
+              <td>
+                <!-- Edit button triggers modal -->
+                <button class="btn btn-sm btn-info" data-toggle="modal" data-target="#editAdminModal"
+                  data-admin='{{ admin | tojson | safe }}'>
+                  <i class="fas fa-edit"></i>
+                </button>
+                <a href="/step/admin/{{ admin.id }}/delete" class="btn btn-sm btn-danger"
+                  onclick="return confirm('Are you sure you want to delete this provisioner?')">
+                  <i class="fas fa-trash"></i>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <!-- Modal -->
+    <div class="modal fade" id="createAdminModal" tabindex="-1" role="dialog" aria-labelledby="createAdminModalLabel"
+      aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="createAdminModalLabel">Create New Admin</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <form method="POST" action="{{ url_for('step.admins') }}">
+              <div class="form-group">
+                <label>Subject</label>
+                <input type="text" name="subject" class="form-control" required>
+              </div>
+
+              <div class="form-group">
+                <label>Provisioner</label>
+                <select name="provisioner" class="form-control" required>
+                  {% for id, name in provisioners.items() %}
+                  <option value="{{ name }}">{{ name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Type</label>
+                <select name="type" class="form-control" required>
+                  <option value=1>ADMIN</option>
+                  <option value=2>SUPER_ADMIN</option>
+                </select>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-primary">Create Admin</button>
+              </div>
+
+            </form>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Admin Modal -->
+    <div class="modal fade" id="editAdminModal" tabindex="-1" role="dialog" aria-labelledby="editAdminModalLabel"
+      aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editAdminModalLabel">Edit Admin</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <form id="editAdminForm" method="POST" action="{{ url_for('step.admins') }}">
+              <input type="hidden" name="admin_id" id="editAdminId">
+              <div class="form-group">
+                <label>Subject</label>
+                <input type="text" name="subject" id="editAdminSubject" class="form-control" required>
+              </div>
+              <div class="form-group">
+                <label>Provisioner</label>
+                <select name="provisioner" id="editAdminProvisioner" class="form-control" required>
+                  {% for id, name in provisioners.items() %}
+                  <option value="{{ name }}">{{ name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Type</label>
+                <select name="type" id="editAdminType" class="form-control" required>
+                  <option value=1>ADMIN</option>
+                  <option value=2>SUPER_ADMIN</option>
+                </select>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+              </div>
+
+            </form>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- /.content -->
+
+</div>
+
+{% endblock content %}
+
+<!-- Specific Page JS goes HERE  -->
+{% block javascripts %}
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  $('#editAdminModal').on('show.bs.modal', function (event) {
+    var button = $(event.relatedTarget);
+    var admin = button.data('admin');
+    // Fill the form fields
+    $('#editAdminId').val(admin.id);
+    $('#editAdminSubject').val(admin.subject);
+    // Map provisioner_id to name using provisioners Jinja variable
+    var provisionerMap = {{ provisioners| tojson
+  }};
+  var provName = provisionerMap[admin.provisioner_id] || admin.provisioner_id;
+  $('#editAdminProvisioner').val(provName);
+  $('#editAdminType').val(admin.type);
+});
+</script>
+
+{% endblock javascripts %}

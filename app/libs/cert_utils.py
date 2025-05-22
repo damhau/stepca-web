@@ -5,6 +5,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec
 import base64
 import re 
 
+
+
+
 def format_pretty_date(dt):
     return dt.strftime("%B %d, %Y")
 
@@ -113,3 +116,55 @@ def parse_cert_from_bytes(cert_bytes: bytes):
 
     except Exception as e:
         return {"subject": "[error decoding cert]", "error": str(e)}
+
+
+def decode_certificate(cert_pem_raw):
+    # Load the certificate
+    cert_pem = cert_pem_raw.replace('\\n', '\n')
+    cert = x509.load_pem_x509_certificate(cert_pem.encode('utf-8'), default_backend())
+    
+    # Extract basic information
+    subject = cert.subject
+    issuer = cert.issuer
+    serial_number = cert.serial_number
+    not_before = cert.not_valid_before
+    not_after = cert.not_valid_after
+
+    # Extract Common Name
+    common_name = None
+    for attribute in subject:
+        if attribute.oid == x509.NameOID.COMMON_NAME:
+            common_name = attribute.value
+            break
+
+    # Extract SANs (Subject Alternative Names) if present
+    try:
+        san_extension = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        sans = san_extension.value.get_values_for_type(x509.DNSName)
+    except x509.ExtensionNotFound:
+        sans = []
+
+    return {
+        "common_name": common_name,
+        "subject": subject.rfc4514_string(),
+        "issuer": issuer.rfc4514_string(),
+        "serial_number": str(serial_number),
+        "valid_from": not_before,
+        "valid_to": not_after,
+        "sans": sans,
+    }
+
+
+def get_subject_string(csr_pem):
+    csr = x509.load_pem_x509_csr(csr_pem.encode('utf-8'), default_backend())
+    subject = csr.subject
+    return subject.rfc4514_string()
+
+def extract_sans_from_csr(csr_pem):
+    csr = x509.load_pem_x509_csr(csr_pem.encode('utf-8'), default_backend())
+    try:
+        san_ext = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        sans = san_ext.value.get_values_for_type(x509.DNSName)
+        return sans
+    except x509.ExtensionNotFound:
+        return None

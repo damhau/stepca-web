@@ -172,3 +172,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+
+admin.crt
+admin.key
+jwk_key.json

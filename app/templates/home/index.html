@@ -210,92 +210,84 @@
 <!-- Page script -->
 <script>
   $(function () {
+    $.getJSON('/api/x509/certs', function (certs) {
+      const issuerCounts = {};
+      const statusCounts = {};
 
+      certs.forEach(cert => {
+        // Count issuers
+        const issuer = cert.issuer || "Unknown";
+        issuerCounts[issuer] = (issuerCounts[issuer] || 0) + 1;
 
-    /*
-    * BAR CHART
-    * ---------
-    */
+        // Count statuses
+        const status = (cert.status || "unknown").toLowerCase();
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
 
-    var bar_data = {
-      data: [[1, 10], [2, 8], [3, 4]],
-      bars: { show: true }
-    }
-    $.plot('#bar-chart', [bar_data], {
-      grid: {
-        borderWidth: 1,
-        borderColor: '#f3f3f3',
-        tickColor: '#f3f3f3'
-      },
-      series: {
-        bars: {
-          show: true, barWidth: 0.5, align: 'center',
+      // Prepare BAR chart data (issuer-based)
+      const barData = {
+        data: Object.entries(issuerCounts).map(([label, value], i) => [i + 1, value]),
+        bars: { show: true }
+      };
+      const barTicks = Object.keys(issuerCounts).map((label, i) => [i + 1, label]);
+
+      $.plot('#bar-chart', [barData], {
+        grid: {
+          borderWidth: 1,
+          borderColor: '#f3f3f3',
+          tickColor: '#f3f3f3'
         },
-      },
-      colors: ['#3c8dbc'],
-      xaxis: {
-        ticks: [[1, 'ACME'], [2, 'Linux CA'], [3, 'Admin JWK']]
-      }
-    })
-    /* END BAR CHART */
-
-    /*
-    * DONUT CHART
-    * -----------
-    */
-
-    var donutData = [
-      {
-        label: 'Valid',
-        data: 30,
-        color: '#3c8dbc'
-      },
-      {
-        label: 'Failed',
-        data: 20,
-        color: '#0073b7'
-      },
-      {
-        label: 'Unknown',
-        data: 50,
-        color: '#00c0ef'
-      }
-    ]
-    $.plot('#donut-chart', donutData, {
-      series: {
-        pie: {
-          show: true,
-          radius: 1,
-          innerRadius: 0.5,
-          label: {
+        series: {
+          bars: {
             show: true,
-            radius: 2 / 3,
-            formatter: labelFormatter,
-            threshold: 0.1
+            barWidth: 0.5,
+            align: 'center'
           }
-
+        },
+        colors: ['#3c8dbc'],
+        xaxis: {
+          ticks: barTicks
         }
-      },
-      legend: {
-        show: false
+      });
+
+      // Prepare DONUT chart data (status-based)
+      const statusColors = {
+        valid: '#3c8dbc',
+        failed: '#0073b7',
+        unknown: '#00c0ef'
+      };
+
+      const donutData = Object.entries(statusCounts).map(([label, value]) => ({
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        data: value,
+        color: statusColors[label] || '#999999'
+      }));
+
+      $.plot('#donut-chart', donutData, {
+        series: {
+          pie: {
+            show: true,
+            radius: 1,
+            innerRadius: 0.5,
+            label: {
+              show: true,
+              radius: 2 / 3,
+              formatter: labelFormatter,
+              threshold: 0.1
+            }
+          }
+        },
+        legend: {
+          show: false
+        }
+      });
+
+      function labelFormatter(label, series) {
+        return '<div style="font-size:13px; text-align:center; padding:2px; color: #fff; font-weight: 600;">'
+          + label + '<br>' + Math.round(series.percent) + '%</div>';
       }
-    })
-    /*
-    * END DONUT CHART
-    */
-
-  })
-
-  /*
-  * Custom Label formatter
-  * ----------------------
-  */
-  function labelFormatter(label, series) {
-    return '<div style="font-size:13px; text-align:center; padding:2px; color: #fff; font-weight: 600;">'
-      + label
-      + '<br>'
-      + Math.round(series.percent) + '%</div>'
-  }
+    });
+  });
 </script>
 
 {% endblock javascripts %}

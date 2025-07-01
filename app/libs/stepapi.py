@@ -23,7 +23,7 @@ import json
 from urllib.parse import urljoin
 from datetime import timezone, datetime, timedelta
 import uuid
-from config import CA_FINGERPRINT
+from config import CA_FINGERPRINT, CA_ADMIN_PROVISIONER_NAME
 
 from jwcrypto import jwk as jwcrypto_jwk, jwe as jwcrypto_jwe, jwa
 
@@ -89,7 +89,7 @@ class CAToken:
 
 class StepCAClient:
     def __init__(
-        self, ca_url, cert_file="admin.crt", key_file="admin.key", subject="step", provisioner_name="Admin JWK", not_after="24h"
+        self, ca_url, cert_file="admin.crt", key_file="admin.key", subject="step", provisioner_name=CA_ADMIN_PROVISIONER_NAME, not_after="24h"
     ):
         self.ca_url = ca_url.rstrip("/")
         self.cert_file = cert_file

@@ -33,6 +33,7 @@ DB_NAME = get_config("database.name")
 DB_PORT = get_config("database.port")
 CA_URL = get_config("ca.url")
 CA_FINGERPRINT = get_config("ca.fingerprint")
+CA_ADMIN_PROVISIONER_NAME = get_config("ca.admin_provisioner_name")
 
 print(DB_HOST, DB_USER, CA_URL)
 

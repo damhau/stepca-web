@@ -210,21 +210,15 @@
 <!-- Page script -->
 <script>
   $(function () {
+    // Load BAR chart data from /api/x509/certs
     $.getJSON('/api/x509/certs', function (certs) {
       const issuerCounts = {};
-      const statusCounts = {};
 
       certs.forEach(cert => {
-        // Count issuers
-        const issuer = cert.issuer || "Unknown";
+        const issuer = cert.provisioner.name || "Unknown";
         issuerCounts[issuer] = (issuerCounts[issuer] || 0) + 1;
-
-        // Count statuses
-        const status = (cert.status || "unknown").toLowerCase();
-        statusCounts[status] = (statusCounts[status] || 0) + 1;
       });
 
-      // Prepare BAR chart data (issuer-based)
       const barData = {
         data: Object.entries(issuerCounts).map(([label, value], i) => [i + 1, value]),
         bars: { show: true }
@@ -249,12 +243,24 @@
           ticks: barTicks
         }
       });
+    });
 
-      // Prepare DONUT chart data (status-based)
+    // Load DONUT chart data from /api/acme/orders
+    $.getJSON('/api/acme/orders', function (orders) {
+      const statusCounts = {};
+
+      orders.forEach(order => {
+        const status = (order.data.status || "unknown").toLowerCase();
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+
       const statusColors = {
         valid: '#3c8dbc',
-        failed: '#0073b7',
-        unknown: '#00c0ef'
+        pending: '#f39c12',
+        invalid: '#dd4b39',
+        processing: '#0073b7',
+        ready: '#00c0ef',
+        unknown: '#999999'
       };
 
       const donutData = Object.entries(statusCounts).map(([label, value]) => ({

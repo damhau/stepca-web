@@ -7,8 +7,8 @@
     "port": 5432
   },
   "ca": {
-    "url": "https://inf-pki-t05.prod.omsv.ch",
-    "fingerprint": "a1f642bb9306363e5ad1abde45804e468909e00d7ee7123ac78a0950adc391a2",
-    "admin_provisioner_name": "jwk"
+    "url": "https://ca.dhc.lan",
+    "fingerprint": "5c24fe52146c4ccec0e569dc1e01bb635338de5748d0085264b7d556a13fd1c1",
+    "admin_provisioner_name": "Admin JWK"
   }
 }

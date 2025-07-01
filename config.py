@@ -1,35 +1,49 @@
 import os
+import json
 import random
 import string
 
-
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-
-import json
-
-# Load the JSON file
+# Load settings.json as fallback
 with open("settings.json") as f:
     config = json.load(f)
 
-# Recreate variables
-DB_HOST = config["database"]["host"]
-DB_USER = config["database"]["user"]
-DB_PASSWORD = config["database"]["password"]
-DB_NAME = config["database"]["name"]
-DB_PORT = config["database"]["port"]
-CA_URL = config["ca"]["url"]
-CA_FINGERPRINT = config["ca"]["fingerprint"]
+def get_config(key_path: str, default=None):
+    """Get configuration from env first, fallback to settings.json."""
+    env_var = key_path.upper().replace(".", "_")  # e.g. database.host → DATABASE_HOST
+    if env_var in os.environ:
+        return os.environ[env_var]
 
-# You can now use the variables as before
+    # Fallback to JSON
+    parts = key_path.split(".")
+    value = config
+    try:
+        for part in parts:
+            value = value[part]
+        return value
+    except (KeyError, TypeError):
+        return default
+
+# Assign configuration values
+DB_HOST = get_config("database.host")
+DB_USER = get_config("database.user")
+DB_PASSWORD = get_config("database.password")
+DB_NAME = get_config("database.name")
+DB_PORT = get_config("database.port")
+CA_URL = get_config("ca.url")
+CA_FINGERPRINT = get_config("ca.fingerprint")
+
 print(DB_HOST, DB_USER, CA_URL)
 
-
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY")
-    if not SECRET_KEY:
-        SECRET_KEY = "".join(random.choice(string.ascii_lowercase) for i in range(32))
-    SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASSWORD}@localhost/{DB_NAME}" or "sqlite:///" + os.path.join(
-        basedir, "app.db"
+    SECRET_KEY = os.environ.get("SECRET_KEY") or "".join(
+        random.choice(string.ascii_letters) for _ in range(32)
     )
+
+    SQLALCHEMY_DATABASE_URI = (
+        os.environ.get("SQLALCHEMY_DATABASE_URI") or
+        f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False

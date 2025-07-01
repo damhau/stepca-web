@@ -22,3 +22,24 @@ def index():
         revoked_certs=len(revoked),
         total_provisioners=len(active_provisioners),
     )
+
+
+@bp.route('/api/dahsboard-chart-data')
+def chart_data():
+    # Example data, replace with your DB/stats logic
+    bar_data = [
+        {"label": "ACME", "value": 10},
+        {"label": "Linux CA", "value": 8},
+        {"label": "Admin JWK", "value": 4},
+    ]
+
+    donut_data = [
+        {"label": "Valid", "value": 30},
+        {"label": "Failed", "value": 20},
+        {"label": "Unknown", "value": 50},
+    ]
+
+    return jsonify({
+        "bar": bar_data,
+        "donut": donut_data
+    })

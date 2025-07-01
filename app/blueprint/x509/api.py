@@ -13,3 +13,12 @@ def api_get_x509_certs_by_id(id):
     if cert:
         return jsonify(cert)
     return jsonify({"error": "Certificate not found"}), 404
+
+
+@api_bp.route("/certs")
+def api_get_x509_certs():
+    certs = get_x509_certs()
+
+    if certs:
+        return jsonify(certs)
+    return jsonify({"error": "Certificates not found"}), 404

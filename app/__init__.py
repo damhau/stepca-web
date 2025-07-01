@@ -22,6 +22,11 @@ def create_app(config_class=Config):
 
     app.register_blueprint(acme_bp)
 
+
+    from app.blueprint.acme import api_bp as acme_api_bp
+
+    app.register_blueprint(acme_api_bp)
+
     from app.blueprint.x509 import bp as x509_bp
 
     app.register_blueprint(x509_bp)

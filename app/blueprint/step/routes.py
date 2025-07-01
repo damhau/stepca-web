@@ -83,9 +83,7 @@ def admins():
         subject = request.form.get("subject")
         provisioner_id = request.form.get("provisioner")
         admin_type = int(request.form.get("type"))
-        print("subject:", subject)
-        print("provisioner_id:", provisioner_id)
-        print("admin_type:", admin_type)
+
         resp = client.create_admin(subject=subject, provisioner=provisioner_id, admin_type=admin_type)
 
         if resp:

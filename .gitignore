@@ -178,3 +178,4 @@ cython_debug/
 admin.crt
 admin.key
 jwk_key.json
+settings.json

@@ -38,7 +38,7 @@ def download_cert(serial):
     if not cert:
         flash(f"Certificate {cert} not found", "danger")
         return redirect(url_for("x509/x509.active_certs"))
-    print("cert:", cert)
+
 
     # Serve the cert_pem as a downloadable file
     response = make_response(cert["certificate"])
@@ -86,13 +86,12 @@ def sign_cert():
 def revoke_cert():
     cert_id = request.form.get("cert_id")
     passphrase = request.form.get("passphrase")
-    print("Revoke cert_id:", cert_id)
-    print("Revoke passphrase:", passphrase)
+
 
     # Add your logic to use the cert_id + passphrase
     # Example: call Step CA API to revoke the certificate
     cert = get_x509_certs_by_id(cert_id)
-    print("cert:", cert)
+
     if not cert:
         flash(f"Certificate not found", "danger")
         return redirect(url_for("x509.active_certs"))

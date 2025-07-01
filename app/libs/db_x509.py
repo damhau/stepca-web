@@ -146,7 +146,6 @@ def get_x509_active_certs():
     generated_serials = {g["serial"] for g in get_generated_certs()}
 
     for cert in active:
-        print(cert)
         if cert["data"].get("serial") in generated_serials:
             cert["data"]["generated"] = True
 

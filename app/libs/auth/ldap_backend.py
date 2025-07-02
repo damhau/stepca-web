@@ -3,13 +3,13 @@ from ldap3 import Server, Connection, ALL, SIMPLE, SUBTREE
 
 class LDAPAuthBackend(AuthBackend):
     def __init__(self, config):
-        print("Using Ldap Baclend2")
         self.config = config
         self.ldap_url = config.get('LDAP_URL', 'ldap://localhost')
         self.base_dn = config.get('LDAP_BASE_DN', '')
         self.domain = config.get('LDAP_DOMAIN', '')
         self.user_search_filter = config.get('LDAP_USER_SEARCH_FILTER', '(uid={username})')
         self.user_search_base = config.get('LDAP_USER_SEARCH_BASE', self.base_dn)
+        print(f"Using Ldap Backend. url: {self.ldap_url}")
 
     def authenticate(self, username, password):
 

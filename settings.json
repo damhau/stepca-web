@@ -12,7 +12,7 @@
     "admin_provisioner_name": "jwk"
   },
   "ldap": {
-    "url": "ldap://prod.omsv.ch",
+    "url": "ldaps://prod.omsv.ch:636",
     "domain": "prod.omsv.ch",
     "base_dn": "DC=prod,DC=omsv,DC=ch",
     "user_search_filter": "(sAMAccountName={username})",

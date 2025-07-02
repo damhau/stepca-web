@@ -16,7 +16,8 @@
     "domain": "prod.omsv.ch",
     "base_dn": "DC=prod,DC=omsv,DC=ch",
     "user_search_filter": "(sAMAccountName={username})",
-    "user_search_base": "DC=prod,DC=omsv,DC=ch"
+    "user_search_base": "DC=prod,DC=omsv,DC=ch",
+    "ldap_required_group_dn": "CN=PWD_ORG,OU=Groups_system,DC=prod,DC=omsv,DC=ch"
   }
 }
 

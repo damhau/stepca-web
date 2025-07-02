@@ -46,6 +46,7 @@ class Config:
     LDAP_DOMAIN = os.environ.get('LDAP_DOMAIN') or get_config('ldap.domain', '')
     LDAP_USER_SEARCH_FILTER = os.environ.get('LDAP_USER_SEARCH_FILTER') or get_config('ldap.user_search_filter', '(uid={username})')
     LDAP_USER_SEARCH_BASE = os.environ.get('LDAP_USER_SEARCH_BASE') or get_config('ldap.user_search_base', LDAP_BASE_DN)
+    LDAP_REQUIRED_GROUP_DN = os.environ.get('LDAP_REQUIRED_GROUP_DN') or get_config('ldap.ldap_required_group_dn', LDAP_BASE_DN)
     # OIDC, SAML, RADIUS config can be added similarly
     SECRET_KEY = os.environ.get("SECRET_KEY") or "".join(
         random.choice(string.ascii_letters) for _ in range(32)

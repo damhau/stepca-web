@@ -10,7 +10,6 @@ def login():
         password = request.form['password']
         backend = get_auth_backend(current_app.config)
         user = backend.authenticate(username, password)
-        print(user)
         if user:
             session['user_id'] = user.get('id', username)
             return redirect(url_for('home.index'))

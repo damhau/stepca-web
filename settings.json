@@ -7,8 +7,16 @@
     "port": 5432
   },
   "ca": {
-    "url": "https://ca.dhc.lan",
-    "fingerprint": "5c24fe52146c4ccec0e569dc1e01bb635338de5748d0085264b7d556a13fd1c1",
-    "admin_provisioner_name": "Admin JWK"
+    "url": "https://inf-pki-t05.prod.omsv.ch",
+    "fingerprint": "a1f642bb9306363e5ad1abde45804e468909e00d7ee7123ac78a0950adc391a2",
+    "admin_provisioner_name": "jwk"
+  },
+  "ldap": {
+    "url": "ldap://prod.omsv.ch",
+    "domain": "prod.omsv.ch",
+    "base_dn": "DC=prod,DC=omsv,DC=ch",
+    "user_search_filter": "(sAMAccountName={username})",
+    "user_search_base": "DC=prod,DC=omsv,DC=ch"
   }
 }
+

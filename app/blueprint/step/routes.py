@@ -4,11 +4,13 @@ from app.blueprint.step import bp
 from app.libs.stepapi import *
 from config import CA_URL
 import subprocess
+from app.auth.decorator import login_required
 
 client = StepCAClient(CA_URL)
 
 
 @bp.route("/provisioners", methods=["GET", "POST"])
+@login_required
 def provisioner():
     if request.method == "POST":
         data = request.form.to_dict()

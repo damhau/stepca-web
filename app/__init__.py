@@ -15,29 +15,26 @@ def create_app(config_class=Config):
 
     # Register blueprints here
     from app.blueprint.home import bp as main_bp
-
     app.register_blueprint(main_bp)
 
     from app.blueprint.acme import bp as acme_bp
-
     app.register_blueprint(acme_bp)
 
-
     from app.blueprint.acme import api_bp as acme_api_bp
-
     app.register_blueprint(acme_api_bp)
 
     from app.blueprint.x509 import bp as x509_bp
-
     app.register_blueprint(x509_bp)
 
     from app.blueprint.x509 import api_bp as x509_api_bp
-
     app.register_blueprint(x509_api_bp)
 
     from app.blueprint.step import bp as step_bp
-
     app.register_blueprint(step_bp)
+
+    # Register authentication blueprint
+    from app.blueprint.auth.routes import auth_bp
+    app.register_blueprint(auth_bp)
 
     from app.blueprint.system import bp as system_bp
 

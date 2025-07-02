@@ -4,9 +4,11 @@ from app.libs.db_x509 import *
 
 
 from app.blueprint.x509 import api_bp   
+from app.auth.decorator import login_required
 
 
 @api_bp.route("/certs/<id>")
+@login_required
 def api_get_x509_certs_by_id(id):
     cert = get_x509_certs_by_id(id)
 
@@ -16,6 +18,7 @@ def api_get_x509_certs_by_id(id):
 
 
 @api_bp.route("/certs")
+@login_required
 def api_get_x509_certs():
     certs = get_x509_certs()
 

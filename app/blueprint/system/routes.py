@@ -3,6 +3,7 @@ from app.libs.db_step import *
 from app.blueprint.system import bp
 from app.libs.stepapi import *
 from config import CA_URL
+from app.auth.decorator import login_required
 
 client = StepCAClient(CA_URL)
 
@@ -20,6 +21,7 @@ def load_config():
 
 
 @bp.route("/config", methods=["GET", "POST"])
+@login_required
 def config():
     config_data = load_config()
 

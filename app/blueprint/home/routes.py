@@ -3,9 +3,10 @@ from app.blueprint.home import bp
 from app.libs.db_x509 import *
 from app.libs.db_acme import *
 from app.libs.db_step import *
-
+from app.auth.decorator import login_required
 
 @bp.route("/")
+@login_required
 def index():
     certs = get_x509_certs()
     active_certs = get_x509_active_certs()
@@ -23,23 +24,3 @@ def index():
         total_provisioners=len(active_provisioners),
     )
 
-
-@bp.route('/api/dahsboard-chart-data')
-def chart_data():
-    # Example data, replace with your DB/stats logic
-    bar_data = [
-        {"label": "ACME", "value": 10},
-        {"label": "Linux CA", "value": 8},
-        {"label": "Admin JWK", "value": 4},
-    ]
-
-    donut_data = [
-        {"label": "Valid", "value": 30},
-        {"label": "Failed", "value": 20},
-        {"label": "Unknown", "value": 50},
-    ]
-
-    return jsonify({
-        "bar": bar_data,
-        "donut": donut_data
-    })

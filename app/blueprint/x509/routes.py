@@ -6,6 +6,7 @@ from app.libs.stepapi import *
 
 from app.blueprint.x509 import bp
 from config import CA_URL
+from app.auth.decorator import login_required
 
 
 client = StepCAClient(CA_URL)
@@ -13,12 +14,14 @@ client = StepCAClient(CA_URL)
 
 ### X.509 Html routes
 @bp.route("/all")
+@login_required
 def all_certs():
     certs = get_x509_certs()
     return render_template("x509/all_certs.html", title="X.509 All Certificates", certs=certs)
 
 
 @bp.route("/active")
+@login_required
 def active_certs():
     certs = get_x509_active_certs()
     provisioner_map = get_active_provisioner_map(get_step_provisioners())
@@ -27,12 +30,14 @@ def active_certs():
 
 
 @bp.route("/revoked")
+
 def revoked_certs():
     revoked = get_revoked_x509_with_cert_info()
     return render_template("x509/revoked_certs.html", title="Revoked X.509 Certificates", revoked=revoked)
 
 
 @bp.route("/download/<serial>")
+@login_required
 def download_cert(serial):
     cert = get_generated_cert_by_serial(serial)
     if not cert:
@@ -48,6 +53,7 @@ def download_cert(serial):
 
 
 @bp.route("/sign", methods=["POST"])
+@login_required
 def sign_cert():
     csr = request.form.get("csr_pem")
     passphrase = request.form.get("passphrase")
@@ -83,6 +89,7 @@ def sign_cert():
 
 
 @bp.route("/revoke", methods=["POST"])
+
 def revoke_cert():
     cert_id = request.form.get("cert_id")
     passphrase = request.form.get("passphrase")

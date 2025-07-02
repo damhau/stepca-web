@@ -38,6 +38,15 @@ CA_ADMIN_PROVISIONER_NAME = get_config("ca.admin_provisioner_name")
 print(DB_HOST, DB_USER, CA_URL)
 
 class Config:
+    # Authentication backend: 'ldap', 'radius', 'saml', 'oidc'
+    AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'ldap')
+    # LDAP-specific configuration
+    LDAP_URL = os.environ.get('LDAP_URL') or get_config('ldap.url', 'ldap://localhost')
+    LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN') or get_config('ldap.base_dn', '')
+    LDAP_USER_DN_TEMPLATE = os.environ.get('LDAP_USER_DN_TEMPLATE') or get_config('ldap.user_dn_template', 'uid={username},' + LDAP_BASE_DN)
+    LDAP_USER_SEARCH_FILTER = os.environ.get('LDAP_USER_SEARCH_FILTER') or get_config('ldap.user_search_filter', '(uid={username})')
+    LDAP_USER_SEARCH_BASE = os.environ.get('LDAP_USER_SEARCH_BASE') or get_config('ldap.user_search_base', LDAP_BASE_DN)
+    # OIDC, SAML, RADIUS config can be added similarly
     SECRET_KEY = os.environ.get("SECRET_KEY") or "".join(
         random.choice(string.ascii_letters) for _ in range(32)
     )

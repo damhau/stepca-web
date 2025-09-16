@@ -439,31 +439,32 @@ class StepCAClient:
             if provisioner["name"] == name:
                 return provisioner
 
-    def revoke(self, serial, provisionner_name, passphrase, reason_code=1, reason="revoked"):
-        provisioner = self.public_get_provisioner_by_name(provisionner_name)
+    def revoke(self, serial, passphrase, reason_code=1, reason="revoked"):
+        provisioner_name=CA_ADMIN_PROVISIONER_NAME
+        provisioner = self.public_get_provisioner_by_name(provisioner_name)
+
         full_jwk = self.decrypt_and_merge(
             jwk_public=provisioner["key"], encrypted_key=provisioner["encryptedKey"], passphrase=passphrase
         )
-        print("🔍 JWK:", full_jwk)
 
-        token = CAToken(self.ca_url, "/1.0/revoke", CA_FINGERPRINT, provisionner_name, serial, full_jwk).token
+        token = CAToken(self.ca_url, "/1.0/revoke", CA_FINGERPRINT, provisioner_name, serial, full_jwk).token
 
         payload = {"serial": serial, "ott": token, "passive": True, "reasonCode": reason_code, "reason": reason}
-
+        print(payload)
         response = self._request_noauth("POST", "/1.0/revoke", json_payload=payload)
-
+        print(response.text)
         if response.status_code == 200:
             return response.json()
         else:
             return None
 
-    def sign(self, csr, provisionner_name, passphrase):
+    def sign(self, csr, provisioner_name, passphrase):
 
-        provisioner = self.public_get_provisioner_by_name(provisionner_name)
+        provisioner = self.public_get_provisioner_by_name(provisioner_name)
         full_jwk = self.decrypt_and_merge(
             jwk_public=provisioner["key"], encrypted_key=provisioner["encryptedKey"], passphrase=passphrase
         )
-        print("🔍 JWK:", full_jwk)
+
         subject = self.extract_cn_from_csr(csr)
 
         sans = extract_sans_from_csr(csr)
@@ -472,9 +473,9 @@ class StepCAClient:
             print("🔍 Subject:", subject)
             print("🔍 SANS:", " ".join(sans))
             sans_str = str(",".join(sans))
-            token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisionner_name, subject, full_jwk, sans).token
+            token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk, sans).token
         else:
-            token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisionner_name, subject, full_jwk).token
+            token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk).token
 
         payload = {
             "csr": csr,

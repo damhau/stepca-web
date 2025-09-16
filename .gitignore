@@ -179,3 +179,5 @@ admin.crt
 admin.key
 jwk_key.json
 settings.json
+svc.crt
+svc.key

@@ -94,9 +94,6 @@ def revoke_cert():
     cert_id = request.form.get("cert_id")
     passphrase = request.form.get("passphrase")
 
-
-    # Add your logic to use the cert_id + passphrase
-    # Example: call Step CA API to revoke the certificate
     cert = get_x509_certs_by_id(cert_id)
 
     if not cert:
@@ -104,7 +101,7 @@ def revoke_cert():
         return redirect(url_for("x509.active_certs"))
 
     try:
-        client.revoke(cert_id, cert["provisioner"]["name"], passphrase)
+        client.revoke(cert_id, passphrase)
         flash(f"Certificate {cert_id} has been revoked successfully.", "success")
     except Exception as e:
         flash(f"Failed to revoke certificate {cert_id} with error {e}.", "danger")

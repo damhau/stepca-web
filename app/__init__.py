@@ -5,6 +5,12 @@ from config import Config
 from app.extensions import db
 
 
+from sqlalchemy import inspect
+from app.models.x509 import GeneratedCert
+
+
+
+
 def create_app(config_class=Config):
     app = Flask(__name__)
 
@@ -12,6 +18,13 @@ def create_app(config_class=Config):
 
     # Initialize Flask extensions here
     db.init_app(app)
+
+
+    with app.app_context():
+        insp = inspect(db.engine)
+        if "generated_certs" not in insp.get_table_names():
+            GeneratedCert.__table__.create(bind=db.engine, checkfirst=True)
+
 
     # Register blueprints here
     from app.blueprint.home import bp as main_bp

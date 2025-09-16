@@ -13,3 +13,4 @@ flask-login
 flask_sqlalchemy
 flask_wtf
 ldap3
+gunicorn

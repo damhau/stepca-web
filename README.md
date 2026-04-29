@@ -235,6 +235,48 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
   ```
 
 
+## Authentication
+
+The app supports several auth backends, selected via the `AUTH_BACKEND` environment variable (`config.py`): `ldap` (default), `radius`, `saml`, `oidc`, `local`. The factory dispatching the choice lives in `app/auth/factory.py`.
+
+### Local auth setup
+
+Use this when you want a self-contained login without an external identity provider. Users are stored in-memory in `app/libs/auth/local_backend.py`.
+
+1. **Generate a password hash**
+
+   Werkzeug ships with Flask, so no extra install is needed:
+
+   ```bash
+   uv run python -c "from werkzeug.security import generate_password_hash; import getpass; print(generate_password_hash(getpass.getpass('Password: ')))"
+   ```
+
+   The command prompts for a password (input is hidden) and prints a hash like `scrypt:32768:8:1$...`.
+
+2. **Add the user to the local backend**
+
+   Edit `app/libs/auth/local_backend.py` and update the `USERS` dict with your username and the hash from step 1:
+
+   ```python
+   USERS = {
+       'admin': {
+           'id': 'admin',
+           'username': 'admin',
+           'password_hash': 'scrypt:32768:8:1$...PASTE_HERE...',
+           'attributes': {'role': 'admin'}
+       },
+   }
+   ```
+
+3. **Select the local backend and run the app**
+
+   ```bash
+   AUTH_BACKEND=local uv run python run.py
+   ```
+
+   Then log in at [http://localhost:5000](http://localhost:5000) with the username and password you configured.
+
+
 ## Development
 
 - Use the built-in Flask dev server for local testing.

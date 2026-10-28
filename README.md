@@ -267,6 +267,8 @@ The image runs the app with gunicorn as a non-root user. All configuration comes
    docker compose up -d --build
    ```
 
+   This builds `Dockerfile`, which installs the dependencies with uv. To use plain pip instead, set `DOCKERFILE=Dockerfile.pip` in `.env`.
+
    The UI listens on `127.0.0.1:5000` by default. Put a TLS reverse proxy in front of it, or set `STEPCA_WEB_BIND=0.0.0.0` in `.env` to expose it directly.
 
 Notes:

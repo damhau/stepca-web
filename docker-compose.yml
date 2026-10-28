@@ -1,6 +1,9 @@
 services:
   stepca-web:
-    build: .
+    build:
+      context: .
+      # Dockerfile (uv) or Dockerfile.pip (plain pip)
+      dockerfile: ${DOCKERFILE:-Dockerfile}
     image: stepca-web:latest
     container_name: stepca-web
     restart: unless-stopped

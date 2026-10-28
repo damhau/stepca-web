@@ -1,3 +1,5 @@
+# Installs dependencies with uv. Dockerfile.pip builds the same image with plain pip.
+
 # --- Build stage: install Python dependencies into a venv ---
 FROM python:3.12-slim AS builder
 

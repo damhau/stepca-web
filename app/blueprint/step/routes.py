@@ -8,8 +8,7 @@ from app.blueprint.step import bp
 from app.libs import ca
 from app.libs.audit import audit
 from app.libs.ca import client
-from app.libs.db_step import *
-from app.libs.stepapi import *
+from app.libs.db_step import get_active_provisioner_map, get_step_provisioners
 
 
 @bp.route("/provisioners", methods=["GET", "POST"])

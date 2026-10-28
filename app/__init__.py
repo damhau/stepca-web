@@ -1,4 +1,6 @@
-from datetime import datetime
+import logging
+import os
+from datetime import UTC, datetime
 
 from flask import Flask
 
@@ -9,6 +11,7 @@ from config import CA_URL, DB_HOST, Config
 
 
 def create_app(config_class=Config):
+    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     app = Flask(__name__)
 
     app.config.from_object(config_class)
@@ -67,12 +70,10 @@ def create_app(config_class=Config):
 
     app.register_blueprint(system_bp)
 
-    # from app.blueprint.questions import bp as questions_bp
-    # app.register_blueprint(questions_bp, url_prefix='/questions')
 
     @app.template_filter("format_date")
     def format_date(value):
         # Convert seconds to datetime object and return formatted string
-        return datetime.utcfromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.fromtimestamp(value, UTC).strftime("%Y-%m-%d %H:%M:%S")
 
     return app

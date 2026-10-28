@@ -2,7 +2,7 @@ from flask import jsonify
 
 from app.auth.decorator import login_required
 from app.blueprint.x509 import api_bp
-from app.libs.db_x509 import *
+from app.libs.db_x509 import get_x509_certs, get_x509_certs_by_id
 
 
 @api_bp.route("/certs/<id>")

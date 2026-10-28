@@ -1,7 +1,7 @@
-import atexit
 import base64
 import fcntl
 import json
+import logging
 import os
 import secrets
 import tempfile
@@ -20,7 +20,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID, ObjectIdentifier
-from jose import jwt
 from jwcrypto import jwa
 from jwcrypto import jwe as jwcrypto_jwe
 from jwcrypto import jwk as jwcrypto_jwk
@@ -29,7 +28,11 @@ from jwt.algorithms import ECAlgorithm
 from app.libs.cert_utils import extract_sans_from_csr
 from config import CA_ADMIN_PASSWORD, CA_ADMIN_PASSWORD_FILE, CA_ADMIN_PROVISIONER_NAME, CA_ADMIN_SUBJECT, CA_FINGERPRINT, CA_ROOT
 
-jwa.default_max_pbkdf2_iterations = 10000000
+# step encrypts provisioner keys with PBES2 and 600,000 iterations; jwcrypto refuses more than its own small
+# default to stop a malicious server from burning CPU, so raise the cap just enough
+jwa.default_max_pbkdf2_iterations = 1_000_000
+
+log = logging.getLogger(__name__)
 
 # Seconds before a request to the CA is abandoned
 TIMEOUT = 30
@@ -72,10 +75,6 @@ class CAToken:
         self.subject = subject
         self.sans = sans
 
-        # jwk_privkey = get_jwk_key_by_provisioner_name(provisioner_name).get("jwk")
-        # if not jwk_privkey:
-        #     raise ValueError(f"No JWK found for provisioner: {provisioner_name}")
-        print("🔍 jwt_body:", self.jwt_body)
         key = ECAlgorithm(ECAlgorithm.SHA256).from_jwk(jwk_privkey)
         self.token = python_jwt.encode(self.jwt_body(), key=key, headers={"kid": jwk_privkey["kid"]}, algorithm="ES256")
 
@@ -91,8 +90,7 @@ class CAToken:
             "sub": self.subject,
         }
 
-        if getattr(self, "sans", None):  # or another condition
-            print("🔍 SANS1:", self.sans)
+        if self.sans:
             body["sans"] = self.sans
 
         return body
@@ -121,19 +119,6 @@ class StepCAClient:
         self.ca_fingerprint = (CA_FINGERPRINT or "").replace(":", "").lower()
         self.root_file = CA_ROOT or "ca_root.crt"
         self._root_verified = bool(CA_ROOT)
-
-    def _save_tempfile(self, contents):
-        f = tempfile.NamedTemporaryFile(mode="w", delete=False)
-        f.write(contents)
-        f.close()
-        atexit.register(self._tempfile_unlinker(f.name))
-        return f.name
-
-    def _tempfile_unlinker(self, fn):
-        def cleanup():
-            os.unlink(fn)
-
-        return cleanup
 
     def _compare_fingerprints(self, pem, fingerprint):
         cert = x509.load_pem_x509_certificate(str.encode(pem))
@@ -172,7 +157,7 @@ class StepCAClient:
         with os.fdopen(fd, "w") as f:
             f.write(pem)
         os.replace(tmp, self.root_file)
-        print(f"✅ CA root verified against fingerprint and saved to {self.root_file}")
+        log.info("CA root verified against the fingerprint and saved to %s", self.root_file)
         self._root_verified = True
         return self.root_file
 
@@ -196,7 +181,7 @@ class StepCAClient:
                             password = f.read().strip()
                     provisioner = self.public_get_provisioner_by_name(self.provisioner_name)
                     self._jwk = self.decrypt_and_merge(jwk_public=provisioner["key"], encrypted_key=provisioner["encryptedKey"], passphrase=password)
-                    print(f"✅ Key of provisioner '{self.provisioner_name}' decrypted in memory")
+                    log.info("Key of provisioner '%s' decrypted in memory", self.provisioner_name)
                 else:
                     self._jwk = self._load_jwk_key_from_file("jwk_key.json")
                     if self._jwk is None:
@@ -207,10 +192,9 @@ class StepCAClient:
         try:
             with open(filename) as json_file:
                 jwk_key = json.load(json_file)
-                print(f"✅ JWK key loaded from {filename}")
-                return jwk_key
+            log.warning("Using the decrypted key in %s: set CA_ADMIN_PASSWORD_FILE to keep it off the disk", filename)
+            return jwk_key
         except FileNotFoundError:
-            print(f"❌ File {filename} not found.")
             return None
 
     def _is_cert_valid(self, cert_path, min_validity_hours=1):
@@ -243,7 +227,7 @@ class StepCAClient:
         with open(f"{self.cert_file}.lock", "w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             if not (os.path.exists(self.cert_file) and os.path.exists(self.key_file) and self._is_cert_valid(self.cert_file)):
-                print(f"📁 No valid admin certificate for '{self.subject}' from '{self.provisioner_name}' — requesting one.")
+                log.info("No valid admin certificate for '%s' from '%s': requesting one", self.subject, self.provisioner_name)
                 self._request_new_certificate()
             with open(self.cert_file, "rb") as f:
                 pem_cert = f.read()
@@ -251,9 +235,8 @@ class StepCAClient:
                 pem_key = f.read()
         return pem_cert, pem_key
 
-    # --- Placeholder for your certificate request function ---
     def _request_new_certificate(self):
-
+        """Get the app's admin certificate from the CA with a one-time token of the admin provisioner."""
         # --- Generate Subject Key & CSR ---
         subject_key = ec.generate_private_key(ec.SECP256R1())
         csr = (
@@ -277,7 +260,8 @@ class StepCAClient:
         }
 
         admin_jwk = self._admin_jwk()
-        token = jwt.encode(claims=jwt_payload, key=admin_jwk, algorithm="ES256", headers={"kid": admin_jwk["kid"]})
+        key = ECAlgorithm(ECAlgorithm.SHA256).from_jwk(admin_jwk)
+        token = python_jwt.encode(jwt_payload, key, algorithm="ES256", headers={"kid": admin_jwk["kid"]})
 
         # --- Send to CA ---
         payload = {"csr": csr_pem, "ott": token, "notAfter": self.not_after}
@@ -296,7 +280,7 @@ class StepCAClient:
         ).decode()
         self._write_atomic(self.key_file, key_pem, mode=0o600)
         self._write_atomic(self.cert_file, data["crt"] + "\n" + data["ca"])
-        print(f"✅ Admin certificate saved to {self.cert_file}")
+        log.info("Admin certificate saved to %s", self.cert_file)
 
     def _get_jwt_token(self, audience):
         pem_cert, pem_key = self._admin_credentials()
@@ -324,17 +308,7 @@ class StepCAClient:
         }
         headers = {"kid": kid, "x5c": x5c_cert_strs}
 
-        jwt_token = jwt.encode(
-            payload,
-            private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption(),
-            ).decode(),
-            algorithm="ES256",
-            headers=headers,
-        )
-        return jwt_token
+        return python_jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
 
     def _request(self, method, path, json_payload=None, params=None):
         url = f"{self.ca_url}/{path.lstrip('/')}"
@@ -354,7 +328,7 @@ class StepCAClient:
             method, url, params=params, json=json_payload, headers=headers, verify=self._ca_root(), timeout=TIMEOUT
         )
         if not resp.ok:
-            print(f"❌ Error {resp.status_code}: {resp.text}")
+            log.warning("step-ca %s %s returned %s: %s", method, path, resp.status_code, resp.text)
         return resp
 
     def extract_cn_from_csr(self, csr_pem):
@@ -369,12 +343,6 @@ class StepCAClient:
                 break
 
         return cn
-
-    def extract_subject_from_csr(self, csr_pem):
-        csr = x509.load_pem_x509_csr(csr_pem.encode("utf-8"), default_backend())
-        subject = csr.subject
-
-        return subject.rfc4514_string()
 
     def _list_all(self, path, key, auth=True):
         """Every item of a step-ca list: it returns at most 100 per page plus a nextCursor."""
@@ -399,11 +367,6 @@ class StepCAClient:
         provisioners = self._list_all("/admin/provisioners", "provisioners")
         return {"provisioners": provisioners} if provisioners is not None else None
 
-    # Get a specific provisioner by name
-    def get_provisioner(self, name):
-        response = self._request("GET", f"/admin/provisioners/{name}")
-        return response.json() if response.ok else None
-
     # Create a new provisioner (JWK or ACME)
     def create_provisioner_acme(self, name, details, claims=None):
         """
@@ -416,12 +379,11 @@ class StepCAClient:
             payload["claims"] = claims
 
         response = self._request("POST", "/admin/provisioners", json_payload=payload)
-        print(f"🔍 Status: {response.status_code}")
         if response.status_code == 201:
 
             return response.json()
         else:
-            print(f"❌ Error: {response.status_code} - {response.text}")
+            log.warning("step-ca returned %s: %s", response.status_code, response.text)
             return None
 
     def create_provisioner_jwk(self, name, password, claims=None):
@@ -430,7 +392,6 @@ class StepCAClient:
         details: dict with the structure {'JWK': {...}} or {'ACME': {...}}
         claims: optional claims dict
         """
-        print(f"🔍 Creating JWK provisioner with name: {name}")
         public_jwk, encrypted_jwk = self.generate_default_key_pair(password.encode())
         public_jwk_bytes = json.dumps(public_jwk).encode("utf-8")
         encrypted_jwk_bytes = encrypted_jwk.encode("utf-8")
@@ -448,39 +409,12 @@ class StepCAClient:
             payload["claims"] = claims
 
         response = self._request("POST", "/admin/provisioners", json_payload=payload)
-        print(f"🔍 Status: {response.status_code}")
         if response.status_code == 201:
 
             return response.json()
         else:
-            print(f"❌ Error: {response.status_code} - {response.text}")
+            log.warning("step-ca returned %s: %s", response.status_code, response.text)
             return None
-
-    # Update a provisioner
-    def update_provisioner(self, name, updates: dict):
-        current = self.get_provisioner(name)
-        if not current:
-            print(f"❌ Provisioner '{name}' not found.")
-            return None
-
-        prov_type = current["type"]  # e.g. "ACME"
-        detail_block = current.get("details", {}).get(prov_type)
-        if not detail_block:
-            print(f"⚠️ Could not extract details.{prov_type}")
-            return None
-
-        # Step 1: Apply updates to 'details' if needed
-        if "details" in updates:
-            prov_updates = updates["details"].get(prov_type, {})
-            current["details"][prov_type].update(prov_updates)
-
-        # Step 2: Apply other top-level updates like 'claims', 'x509Template', etc.
-        for key, value in updates.items():
-            if key != "details":
-                current[key] = value
-
-        # Step 3: PUT the full updated payload
-        return self._request("PUT", f"/admin/provisioners/{name}", json_payload=current).json()
 
     # Delete a provisioner
     def delete_provisioner(self, name):
@@ -488,22 +422,19 @@ class StepCAClient:
 
         try:
             data = response.json()
-        except Exception as e:
-            print(f"❌ Failed to parse JSON: {e}")
+        except ValueError:
             data = {}
-
-        # You can log, return, or check the content of `data`
         if response.status_code == 200 and data.get("status") == "ok":
             return True
-        else:
-            return False
+        log.warning("step-ca returned %s: %s", response.status_code, response.text)
+        return False
 
     def update_admin(self, id, admin_type):
         """step-ca only lets the type of an admin change (1 = ADMIN, 2 = SUPER_ADMIN)."""
         response = self._request("PATCH", f"/admin/admins/{id}", json_payload={"type": admin_type})
         if response.ok:
             return response.json()
-        print(f"❌ Error: {response.status_code} - {response.text}")
+        log.warning("step-ca returned %s: %s", response.status_code, response.text)
         return None
 
     def list_admins(self):
@@ -514,11 +445,10 @@ class StepCAClient:
         payload = {"subject": subject, "provisioner": provisioner, "type": admin_type}
 
         response = self._request("POST", "/admin/admins", json_payload=payload)
-        print(f"🔍 Status: {response.status_code}")
         if response.status_code == 201:
             return response.json()
         else:
-            print(f"❌ Error: {response.status_code} - {response.text}")
+            log.warning("step-ca returned %s: %s", response.status_code, response.text)
             return None
 
     def delete_admin(self, id):
@@ -526,26 +456,12 @@ class StepCAClient:
 
         try:
             data = response.json()
-        except Exception as e:
-            print(f"❌ Failed to parse JSON: {e}")
+        except ValueError:
             data = {}
-
-        # You can log, return, or check the content of `data`
         if response.status_code == 200 and data.get("status") == "ok":
             return True
-        else:
-            return False
-
-    # def public_list_provisioners(self, id):
-    #     response = self._request("GET", f"/provisioners")
-
-    #     try:
-    #         data = response.json()
-    #     except Exception as e:
-    #         print(f"❌ Failed to parse JSON: {e}")
-    #         data = {}
-
-    #     return data
+        log.warning("step-ca returned %s: %s", response.status_code, response.text)
+        return False
 
     def public_get_provisioner_by_name(self, name):
         for provisioner in self._list_all("/provisioners", "provisioners", auth=False) or []:
@@ -569,7 +485,6 @@ class StepCAClient:
         raise RuntimeError(f"step-ca returned {response.status_code}: {response.text}")
 
     def sign(self, csr, provisioner_name, passphrase):
-
         provisioner = self.public_get_provisioner_by_name(provisioner_name)
         full_jwk = self.decrypt_and_merge(
             jwk_public=provisioner["key"], encrypted_key=provisioner["encryptedKey"], passphrase=passphrase
@@ -578,20 +493,14 @@ class StepCAClient:
         subject = self.extract_cn_from_csr(csr)
 
         sans = extract_sans_from_csr(csr)
-        if sans:
-
-            print("🔍 Subject:", subject)
-            print("🔍 SANS:", " ".join(sans))
-            token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk, sans).token
-        else:
-            token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk).token
+        token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk, sans or None).token
 
         payload = {"csr": csr, "ott": token}
         response = self._request_noauth("POST", "/1.0/sign", json_payload=payload)
         if response.status_code == 201:
             return x509.load_pem_x509_certificate(str.encode(response.json()["crt"]))
         else:
-            print(f"❌ Error: {response.status_code} - {response.text}")
+            log.warning("step-ca returned %s: %s", response.status_code, response.text)
             return None
 
     def generate_default_key_pair(self, passphrase: bytes):

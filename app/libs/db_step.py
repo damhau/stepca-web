@@ -1,8 +1,12 @@
-
 import base64
 import json
+import logging
 
-from app.models.step import StepAdmin, StepProvisioner
+from app.models.step import StepProvisioner
+
+log = logging.getLogger(__name__)
+
+
 
 
 def get_step_provisioners():
@@ -24,7 +28,7 @@ def get_step_provisioners():
                 "details": details_json
             })
         except Exception as e:
-            print("Error parsing account:", e)
+            log.warning("Cannot parse provisioner: %s", e)
     return accounts
 
 def get_active_provisioner_map(provisioners):
@@ -42,25 +46,3 @@ def get_active_provisioner_map(provisioners):
         if provisioner['data'].get('deletedAt', '') == '0001-01-01T00:00:00Z'
     }
     return provisioner_map
-
-
-
-
-
-
-def get_step_admins():
-    admins = []
-    for row in StepAdmin.query.all():
-        try:
-            key = bytes(row.nkey).decode("utf-8", errors="ignore")
-            value = json.loads(bytes(row.nvalue))
-            if value.get("deletedAt", "") == "0001-01-01T00:00:00Z":
-
-                admins.append({
-                    "nkey": key,
-                    "data": value
-                })
-        except Exception as e:
-            print("Error parsing admin:", e)
-    return admins
-

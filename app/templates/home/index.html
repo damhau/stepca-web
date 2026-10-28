@@ -82,7 +82,7 @@
             <div class="inner">
               <h3>{{ acme_certs }}</h3>
 
-              <p>ACMECertificates</p>
+              <p>ACME Certificates</p>
             </div>
             <div class="icon">
               <i class="ion ion-stats-bars"></i>
@@ -206,16 +206,6 @@
 <!-- Specific Page JS goes HERE  -->
 {% block javascripts %}
 
-<!-- jQuery -->
-<script src="/static/assets/plugins/jquery/jquery.min.js"></script>
-<!-- jQuery UI -->
-<script src="/static/assets/plugins/jquery-ui/jquery-ui.min.js"></script>
-<!-- Bootstrap 4 -->
-<script src="/static/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<!-- AdminLTE App -->
-<script src="/static/assets/js/adminlte.min.js"></script>
-<!-- AdminLTE for demo purposes -->
-<script src="/static/assets/js/demo.js"></script>
 <!-- FLOT CHARTS -->
 <script src="/static/assets/plugins/flot/jquery.flot.js"></script>
 <!-- FLOT RESIZE PLUGIN - allows the chart to redraw when the window is resized -->
@@ -226,7 +216,12 @@
 <script>
   $(function () {
     // Load BAR chart data from /api/x509/certs
+    // Flot draws axis labels as HTML: escape the provisioner names
+    const escapeHtml = text => $('<div>').text(text).html();
+    const showEmpty = (selector, message) => { $(selector).empty().append($('<p class="text-muted text-center mt-5">').text(message)); };
+
     $.getJSON('/api/x509/certs', function (certs) {
+      if (!certs.length) return showEmpty('#bar-chart', 'No certificates yet');
       const issuerCounts = {};
 
       certs.forEach(cert => {
@@ -238,7 +233,7 @@
         data: Object.entries(issuerCounts).map(([label, value], i) => [i + 1, value]),
         bars: { show: true }
       };
-      const barTicks = Object.keys(issuerCounts).map((label, i) => [i + 1, label]);
+      const barTicks = Object.keys(issuerCounts).map((label, i) => [i + 1, escapeHtml(label)]);
 
       $.plot('#bar-chart', [barData], {
         grid: {
@@ -262,6 +257,8 @@
 
     // Load DONUT chart data from /api/acme/orders
     $.getJSON('/api/acme/orders', function (orders) {
+      // Flot's pie plugin fails on an empty series
+      if (!orders.length) return showEmpty('#donut-chart', 'No ACME orders yet');
       const statusCounts = {};
 
       orders.forEach(order => {
@@ -305,7 +302,7 @@
 
       function labelFormatter(label, series) {
         return '<div style="font-size:13px; text-align:center; padding:2px; color: #fff; font-weight: 600;">'
-          + label + '<br>' + Math.round(series.percent) + '%</div>';
+          + escapeHtml(label) + '<br>' + Math.round(series.percent) + '%</div>';
       }
     });
   });

@@ -5,7 +5,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="/static/assets/favicon.ico" type="image/x-icon">
-  <link rel="canonical" href="https://appseed.us/adminlte" />
   <link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
   <title>
     StepCA Admin - {% block title %}{% endblock %}
@@ -34,6 +33,11 @@
 
   </div>
   <!-- ./wrapper -->
+
+  <!-- Loaded once for every page, from the app itself (no CDN) -->
+  <script src="/static/assets/plugins/jquery/jquery.min.js"></script>
+  <script src="/static/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/static/assets/js/adminlte.min.js"></script>
 
   <!-- Specific Page JS goes HERE  -->
   {% block javascripts %}{% endblock javascripts %}

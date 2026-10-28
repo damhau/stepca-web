@@ -1,6 +1,8 @@
 import re
 from datetime import UTC, datetime
 
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
 from flask import flash, make_response, redirect, render_template, request, url_for
 
 from app.auth.decorator import login_required
@@ -8,9 +10,17 @@ from app.auth.roles import role_required
 from app.blueprint.x509 import bp
 from app.libs.audit import audit
 from app.libs.ca import client
-from app.libs.db_step import *
-from app.libs.db_x509 import *
-from app.libs.stepapi import *
+from app.libs.db_step import get_active_provisioner_map, get_step_provisioners
+from app.libs.db_x509 import (
+    get_expiring_certs,
+    get_revocation,
+    get_revoked_x509_with_cert_info,
+    get_x509_active_certs,
+    get_x509_cert,
+    get_x509_certs,
+    get_x509_certs_by_id,
+    save_generated_cert,
+)
 
 # RFC 5280 reasons that make sense for a passive revocation
 REVOCATION_REASONS = [
@@ -36,7 +46,6 @@ def all_certs():
 def active_certs():
     certs = get_x509_active_certs()
     provisioner_map = get_active_provisioner_map(get_step_provisioners())
-    # print("Active certs:", certs)
     return render_template(
         "x509/active_certs.html",
         title="X.509 Active Certificates",
@@ -108,14 +117,13 @@ def download_cert(serial):
 def sign_cert():
     csr = request.form.get("csr_pem")
     passphrase = request.form.get("passphrase")
-    provisionner_name = request.form.get("provisioner")
+    provisioner_name = request.form.get("provisioner")
 
     try:
 
-        certificate = client.sign(csr, provisionner_name, passphrase)
+        certificate = client.sign(csr, provisioner_name, passphrase)
 
         if certificate:
-            print("Certificate signed successfully:", certificate)
             serial_number = str(certificate.serial_number)  # decimal, like step-ca's x509_certs key
 
             common_name = None
@@ -124,16 +132,16 @@ def sign_cert():
                     common_name = attribute.value
                     break
 
-            save_generated_cert(serial_number, common_name, provisionner_name, csr)
-            audit("sign", serial_number, detail=f"cn={common_name} provisioner={provisionner_name}")
+            save_generated_cert(serial_number, common_name, provisioner_name, csr)
+            audit("sign", serial_number, detail=f"cn={common_name} provisioner={provisioner_name}")
 
             flash(f"Certificate {serial_number} created successfully", "success")
             return redirect(url_for("x509.active_certs"))
         else:
-            audit("sign", "", success=False, detail=f"provisioner={provisionner_name}")
+            audit("sign", "", success=False, detail=f"provisioner={provisioner_name}")
             flash("Failed to sign certificate", "danger")
     except Exception as e:
-        audit("sign", "", success=False, detail=f"provisioner={provisionner_name}: {e}")
+        audit("sign", "", success=False, detail=f"provisioner={provisioner_name}: {e}")
         flash(f"Failed to sign certificate with error {e}", "danger")
 
     return redirect(url_for("x509.active_certs"))

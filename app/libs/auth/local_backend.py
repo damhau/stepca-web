@@ -1,15 +1,20 @@
 import json
+import logging
 import os
 
 from werkzeug.security import check_password_hash
 
 from .base import AuthBackend
 
+log = logging.getLogger(__name__)
+
+
+
 
 def load_users(path):
     """Load users from a JSON file: {"<username>": {"password_hash": "...", "role": "admin|operator|viewer"}}."""
     if not os.path.exists(path):
-        print(f"❌ Local users file {path} not found, no local user can log in.")
+        log.warning("Local users file %s not found: no local user can log in", path)
         return {}
     with open(path) as f:
         return json.load(f)
@@ -17,7 +22,6 @@ def load_users(path):
 
 class LocalAuthBackend(AuthBackend):
     def __init__(self, config):
-        print("Using LocalAuthBackend")
         self.config = config
         self.users = load_users(config.get('LOCAL_USERS_FILE', 'local_users.json'))
 

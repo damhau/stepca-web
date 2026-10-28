@@ -1,13 +1,12 @@
 from flask import render_template
 
 from app.blueprint.acme import bp
-from app.libs.db_acme import *
+from app.libs.db_acme import get_acme_accounts, get_acme_authzs, get_acme_certs, get_acme_challenges, get_acme_orders
 
 
 @bp.route("/accounts")
 def accounts():
     accounts = get_acme_accounts()
-    # print("Accounts:", accounts)
     return render_template("acme/accounts.html", title="ACME Accounts", accounts=accounts)
 
 @bp.route("/orders")

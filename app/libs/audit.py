@@ -1,7 +1,13 @@
+import logging
+
 from flask import session
 
 from app.extensions import db
 from app.models.audit import AuditEvent
+
+log = logging.getLogger("stepca_web.audit")
+
+
 
 
 def audit(action, target="", success=True, detail="", user=None):
@@ -16,7 +22,7 @@ def audit(action, target="", success=True, detail="", user=None):
     )
     db.session.add(event)
     db.session.commit()
-    print(f"AUDIT user={event.user} role={event.role} action={action} target={target} success={success}")
+    log.info("user=%s role=%s action=%s target=%s success=%s", event.user, event.role, action, target, success)
 
 
 def recent_events(limit=500):

@@ -1,7 +1,13 @@
+import logging
+
 from ldap3 import ALL, SIMPLE, SUBTREE, Connection, Server
 from ldap3.utils.conv import escape_filter_chars
 
 from .base import AuthBackend
+
+log = logging.getLogger(__name__)
+
+
 
 
 class LDAPAuthBackend(AuthBackend):
@@ -13,7 +19,6 @@ class LDAPAuthBackend(AuthBackend):
         self.user_search_filter = config.get('LDAP_USER_SEARCH_FILTER', '(uid={username})')
         self.user_search_base = config.get('LDAP_USER_SEARCH_BASE', self.base_dn)
         self.required_group_dn = config.get('LDAP_REQUIRED_GROUP_DN')
-        print(f"Using Ldap Backend. url: {self.ldap_url}")
 
     def authenticate(self, username, password):
         # An empty password would be an anonymous bind, which many servers accept
@@ -48,7 +53,7 @@ class LDAPAuthBackend(AuthBackend):
                 return {'id': username, 'dn': user_info.entry_dn, 'groups': member_of}
             return None
         except Exception as e:
-            print(e)
+            log.warning("LDAP authentication of %s failed: %s", username, e)
             return None
 
     def get_user(self, user_id):

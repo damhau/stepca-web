@@ -2,8 +2,6 @@ import json
 import os
 from datetime import timedelta
 
-basedir = os.path.abspath(os.path.dirname(__file__))
-
 # Load settings.json as fallback (optional when everything is set via env vars)
 config = {}
 if os.path.exists("settings.json"):
@@ -44,7 +42,6 @@ CA_ADMIN_SUBJECT = get_config("ca.admin_subject", "step")
 CA_ADMIN_PASSWORD_FILE = get_config("ca.admin_password_file")
 CA_ADMIN_PASSWORD = os.environ.get("CA_ADMIN_PASSWORD")
 
-print(DB_HOST, DB_USER, CA_URL)
 
 class Config:
     # Authentication backend: 'ldap', 'radius', 'saml', 'oidc'

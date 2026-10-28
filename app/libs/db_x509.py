@@ -1,10 +1,8 @@
-# services/x509_service.py
-
 import json
+import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 
-import pytz
 from cryptography import x509
 
 from app.extensions import db
@@ -12,6 +10,9 @@ from app.models.x509 import GeneratedCert, RevokedX509Cert, X509Cert, X509CertDa
 
 from .cert_utils import parse_cert_from_bytes
 from .db_step import get_step_provisioners
+
+log = logging.getLogger(__name__)
+
 
 
 def _serial(nkey):
@@ -66,18 +67,6 @@ def get_x509_certs_by_id(cert_id):
         return None
     certs = _get_x509_certs_by_serials([cert_id])
     return certs[0] if certs else None
-
-
-def get_x509_certs_data():
-    results = []
-    for row in X509CertData.query.all():
-        try:
-            serial = _serial(row.nkey)
-            value = json.loads(row.nvalue)
-            results.append({"nkey": serial, "data": value})
-        except Exception as e:
-            results.append({"nkey": _serial(row.nkey), "data": {"error": str(e)}})
-    return results
 
 
 def get_revoked_x509_certs():
@@ -137,7 +126,7 @@ def save_generated_cert(serial, common_name, provisioner, csr_pem):
 
 def get_expiring_certs(days, x509_certs=None):
     """Active certificates that expire within `days`, soonest first, with their `days_left`."""
-    now = datetime.now(pytz.UTC)
+    now = datetime.now(UTC)
     expiring = []
     for cert in get_x509_active_certs(x509_certs):
         not_after = datetime.fromisoformat(cert["data"]["not_after"])
@@ -151,7 +140,7 @@ def get_x509_active_certs(x509_certs=None):
     if x509_certs is None:
         x509_certs = get_x509_certs()
     revoked_serials = {_serial(nkey) for (nkey,) in db.session.query(RevokedX509Cert.nkey)}
-    now = datetime.utcnow().replace(tzinfo=pytz.UTC)
+    now = datetime.now(UTC)
     active = []
 
     for cert in x509_certs:
@@ -162,12 +151,12 @@ def get_x509_active_certs(x509_certs=None):
             continue
 
         try:
-            not_before = datetime.fromisoformat(data.get("not_before", "").replace("Z", "+00:00")).astimezone(pytz.UTC)
-            not_after = datetime.fromisoformat(data.get("not_after", "").replace("Z", "+00:00")).astimezone(pytz.UTC)
+            not_before = datetime.fromisoformat(data.get("not_before", ""))
+            not_after = datetime.fromisoformat(data.get("not_after", ""))
 
             if not_before <= now <= not_after:
                 active.append(cert)
         except Exception as e:
-            print(f"Invalid cert dates for {serial}: {e}")
+            log.warning("Invalid dates for certificate %s: %s", serial, e)
 
     return active

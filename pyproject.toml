@@ -15,8 +15,6 @@ dependencies = [
     "ldap3>=2.9",
     "psycopg[binary]>=3.2",
     "pyjwt>=2.10",
-    "python-jose>=3.4",
-    "pytz>=2024.1",
     "requests>=2.32",
     "sqlalchemy>=2.0",
 ]
@@ -43,5 +41,3 @@ extend-exclude = ["app/static"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
-# Star imports in the blueprints: replaced by explicit imports in the cleanup step
-ignore = ["F403", "F405"]

@@ -182,5 +182,6 @@ settings.json
 svc.crt
 svc.key
 local_users.json
+stepca-web.db
 *.key
 *.pem

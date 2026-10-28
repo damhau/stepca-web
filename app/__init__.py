@@ -5,7 +5,7 @@ from config import Config
 from app.extensions import db
 
 
-from app.models.x509 import GeneratedCert
+from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
 
 
 

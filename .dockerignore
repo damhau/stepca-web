@@ -23,6 +23,7 @@ docker-compose.yml
 settings.json
 jwk_key.json
 local_users.json
+stepca-web.db
 admin.crt
 admin.key
 svc.crt

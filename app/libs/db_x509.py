@@ -4,6 +4,7 @@ import json
 import re
 from datetime import datetime
 import pytz
+from cryptography import x509
 from app.extensions import db
 from .cert_utils import parse_cert_from_bytes
 from .db_step import get_step_provisioners
@@ -100,38 +101,14 @@ def get_revoked_x509_with_cert_info():
     return revocations
 
 
-def get_generated_certs():
-    return [
-        {
-            "id": row.id,
-            "serial": row.serial,
-            "common_name": row.common_name,
-            "provisioner": row.provisioner,
-            "created_at": row.created_at,
-            "csr": row.csr,
-            "certificate": row.certificate,
-        }
-        for row in GeneratedCert.query.order_by(GeneratedCert.created_at.desc()).all()
-    ]
+def get_x509_cert(serial):
+    """Return the certificate with this decimal serial from step-ca's x509_certs, or None."""
+    row = db.session.get(X509Cert, serial.encode("ascii"))
+    return x509.load_der_x509_certificate(bytes(row.nvalue)) if row else None
 
 
-def get_generated_cert_by_serial(serial):
-    row = GeneratedCert.query.filter_by(serial=serial).first()
-    if row:
-        return {
-            "id": row.id,
-            "serial": row.serial,
-            "common_name": row.common_name,
-            "provisioner": row.provisioner,
-            "created_at": row.created_at,
-            "csr": row.csr,
-            "certificate": row.certificate,
-        }
-    return None
-
-
-def save_generated_cert(serial, common_name, provisioner, csr_pem, cert_pem):
-    new_cert = GeneratedCert(serial=serial, common_name=common_name, provisioner=provisioner, csr=csr_pem, certificate=cert_pem)
+def save_generated_cert(serial, common_name, provisioner, csr_pem):
+    new_cert = GeneratedCert(serial=serial, common_name=common_name, provisioner=provisioner, csr=csr_pem)
     db.session.add(new_cert)
     db.session.commit()
 
@@ -158,12 +135,5 @@ def get_x509_active_certs():
                 active.append(cert)
         except Exception as e:
             print(f"Invalid cert dates for {serial}: {e}")
-
-    # Enrich with `generated` flag
-    generated_serials = {g["serial"] for g in get_generated_certs()}
-
-    for cert in active:
-        if cert["data"].get("serial") in generated_serials:
-            cert["data"]["generated"] = True
 
     return active

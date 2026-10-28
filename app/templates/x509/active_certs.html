@@ -106,11 +106,9 @@
                   data-cert-id="{{ cert.nkey }}">
                   <i class="fas fa-trash"></i>
                 </button>
-                {% if data.generated == True %}
-                <a href="{{ url_for('x509.download_cert', serial=data.serial) }}" class="btn btn-sm btn-success">
+                <a href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success">
                   <i class="fas fa-download"></i>
                 </a>
-                {% endif %}
               </td>
             </tr>
             {% endfor %}

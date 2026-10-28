@@ -1,3 +1,5 @@
+import re
+
 from flask import render_template, flash, redirect, make_response, url_for, request
 
 from app.libs.db_x509 import *
@@ -39,16 +41,18 @@ def revoked_certs():
 @bp.route("/download/<serial>")
 @login_required
 def download_cert(serial):
-    cert = get_generated_cert_by_serial(serial)
-    if not cert:
-        flash(f"Certificate {cert} not found", "danger")
-        return redirect(url_for("x509/x509.active_certs"))
+    cert = get_x509_cert(serial) if serial.isascii() and serial.isdigit() else None
+    if cert is None:
+        flash(f"Certificate {serial} not found", "danger")
+        return redirect(url_for("x509.active_certs"))
 
+    common_names = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+    filename = re.sub(r"[^A-Za-z0-9._-]", "_", common_names[0].value if common_names else serial)
 
-    # Serve the cert_pem as a downloadable file
-    response = make_response(cert["certificate"])
+    # Serve the PEM of the certificate stored by step-ca as a downloadable file
+    response = make_response(cert.public_bytes(serialization.Encoding.PEM))
     response.headers["Content-Type"] = "application/x-pem-file"
-    response.headers["Content-Disposition"] = f'attachment; filename={cert["common_name"]}.pem'
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}.pem"'
     return response
 
 
@@ -65,7 +69,7 @@ def sign_cert():
 
         if certificate:
             print("Certificate signed successfully:", certificate)
-            serial_number = format(certificate.serial_number, "x").lstrip("0")  # padding optional
+            serial_number = str(certificate.serial_number)  # decimal, like step-ca's x509_certs key
 
             common_name = None
             for attribute in certificate.subject:
@@ -73,10 +77,7 @@ def sign_cert():
                     common_name = attribute.value
                     break
 
-            pem = certificate.public_bytes(serialization.Encoding.PEM).decode("utf-8")
-            # decoded_certificate = decode_certificate(resp)
-            # print("Decoded certificate:", decoded_certificate)
-            save_generated_cert(serial_number, common_name, provisionner_name, csr, pem)
+            save_generated_cert(serial_number, common_name, provisionner_name, csr)
 
             flash(f"Certificate {serial_number} created successfully", "success")
             return redirect(url_for("x509.active_certs"))

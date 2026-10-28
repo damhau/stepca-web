@@ -215,6 +215,18 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
 ### Database Connection
 
 - The app expects a PostgreSQL database with Step CA tables (`x509_certs`, `acme_accounts`, `provisioners`, etc.).
+- The app only **reads** step-ca's database, so give it a read-only role. Changes to the CA go through the step-ca API. Run this as a PostgreSQL superuser, replacing `step-ca` with the role step-ca itself uses:
+
+  ```sql
+  CREATE ROLE stepca_web LOGIN PASSWORD 'change-me';
+  GRANT CONNECT ON DATABASE step_ca_db TO stepca_web;
+  GRANT USAGE ON SCHEMA public TO stepca_web;
+  GRANT SELECT ON ALL TABLES IN SCHEMA public TO stepca_web;
+  -- tables step-ca creates later (e.g. when ACME is first used)
+  ALTER DEFAULT PRIVILEGES FOR ROLE "step-ca" IN SCHEMA public GRANT SELECT ON TABLES TO stepca_web;
+  ```
+
+- The app's own data (certificates signed from the UI, with their CSR) lives in a SQLite file, `stepca-web.db`, in the working directory. Override it with `APP_DATABASE_URI`.
 - Connection parameters are set in `settings.json` or via the `/system/config` page.
 - Example config:
 
@@ -260,7 +272,7 @@ The image runs the app with gunicorn as a non-root user. All configuration comes
 Notes:
 
 - To reach a step-ca or PostgreSQL running on the Docker host, use `host.docker.internal` as the hostname. PostgreSQL must listen on the Docker bridge interface and allow the connection in `pg_hba.conf`.
-- `admin.crt`, `admin.key` and any `settings.json` saved from `/system/config` live in the `stepca-web-data` volume.
+- `admin.crt`, `admin.key`, the app's SQLite database `stepca-web.db` and any `settings.json` saved from `/system/config` live in the `stepca-web-data` volume.
 - The Step CA service control page (`sudo` + systemd) does not work inside the container.
 
 

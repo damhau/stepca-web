@@ -1,93 +1,76 @@
-from flask import flash, redirect, render_template, request, url_for
+from flask import current_app, render_template
 
 from app.auth.decorator import login_required
+from app.auth.roles import role_required
 from app.blueprint.system import bp
-from app.libs.db_step import *
-from app.libs.stepapi import *
-from config import CA_URL
-
-client = StepCAClient(CA_URL)
-
-SETTINGS_FILE = "settings.json"
-
-
-def load_config():
-    if not os.path.exists(SETTINGS_FILE):
-        return {
-            "database": {"host": "", "user": "", "password": "", "name": "", "port": 5432},
-            "ca": {"url": "", "fingerprint": ""},
-        }
-    with open(SETTINGS_FILE) as f:
-        return json.load(f)
+from app.libs.audit import recent_events
+from config import (
+    CA_ADMIN_PROVISIONER_NAME,
+    CA_FINGERPRINT,
+    CA_ROOT,
+    CA_URL,
+    DB_HOST,
+    DB_NAME,
+    DB_PASSWORD,
+    DB_PORT,
+    DB_USER,
+)
 
 
-@bp.route("/config", methods=["GET", "POST"])
+def effective_settings():
+    """The configuration in effect, grouped for display. Secrets are never shown."""
+    config = current_app.config
+    return [
+        (
+            "Step CA database (read-only)",
+            [
+                ("Host", DB_HOST),
+                ("Port", DB_PORT),
+                ("Database", DB_NAME),
+                ("User", DB_USER),
+                ("Password", "set" if DB_PASSWORD else "not set"),
+            ],
+        ),
+        (
+            "Step CA",
+            [
+                ("URL", CA_URL),
+                ("Root fingerprint", CA_FINGERPRINT or "not set"),
+                ("Root certificate", CA_ROOT or "downloaded from the CA and pinned with the fingerprint"),
+                ("Admin provisioner", CA_ADMIN_PROVISIONER_NAME),
+            ],
+        ),
+        (
+            "Authentication",
+            [
+                ("Backend", config["AUTH_BACKEND"]),
+                ("LDAP URL", config["LDAP_URL"] if config["AUTH_BACKEND"] == "ldap" else "—"),
+                ("Admin group", config["ROLE_ADMIN_GROUP"] or "—"),
+                ("Operator group", config["ROLE_OPERATOR_GROUP"] or "—"),
+                ("Viewer group", config["ROLE_VIEWER_GROUP"] or "—"),
+                ("Default role", config["DEFAULT_ROLE"]),
+                ("Session lifetime", str(config["PERMANENT_SESSION_LIFETIME"])),
+            ],
+        ),
+        (
+            "Application",
+            [
+                ("App database", config["SQLALCHEMY_BINDS"]["app"]),
+                ("Service control", "enabled" if config["SERVICE_CONTROL_ENABLED"] else "disabled"),
+            ],
+        ),
+    ]
+
+
+@bp.route("/config")
 @login_required
+@role_required("admin")
 def config():
-    config_data = load_config()
-
-    if request.method == "POST":
-        # Get data from form
-        config_data["database"]["host"] = request.form["db_host"]
-        config_data["database"]["user"] = request.form["db_user"]
-        config_data["database"]["password"] = request.form["db_password"]
-        config_data["database"]["name"] = request.form["db_name"]
-        config_data["database"]["port"] = int(request.form["db_port"])
-        config_data["ca"]["url"] = request.form["ca_url"]
-
-        # Write updated config to JSON
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(config_data, f, indent=2)
-
-        flash("Configuration updated successfully!", "success")
-        return redirect(url_for("system.config"))
-
-    # Pass values to template
-    return render_template(
-        "system/config_edit.html",
-        title="Application Configuration",
-        db_host=config_data["database"]["host"],
-        db_user=config_data["database"]["user"],
-        db_password=config_data["database"]["password"],
-        db_name=config_data["database"]["name"],
-        db_port=config_data["database"]["port"],
-        ca_url=config_data["ca"]["url"],
-    )
+    return render_template("system/config.html", title="Configuration", settings=effective_settings())
 
 
-# @bp.route("/config", methods=["GET", "POST"])
-# def config():
-#     if request.method == "POST":
-#         # Get data from the form
-#         db_host = request.form["db_host"]
-#         db_user = request.form["db_user"]
-#         db_password = request.form["db_password"]
-#         db_name = request.form["db_name"]
-#         db_port = request.form["db_port"]
-#         ca_url = request.form["ca_url"]  # Add CA URL
-
-#         # Save these changes to config.py
-#         with open("config.py", "w") as config_file:
-#             config_file.write(
-#                 f"""
-# DB_HOST = '{db_host}'
-# DB_USER = '{db_user}'
-# DB_PASSWORD = '{db_password}'
-# DB_NAME = '{db_name}'
-# DB_PORT = {db_port}
-# CA_URL = '{ca_url}'  # Save CA URL here
-# """
-#             )
-
-#         flash("Configuration updated successfully!", "success")
-#         return redirect(url_for("config"))
-
-#     return render_template(
-#         "system/config_edit.html",
-#         db_host=DB_HOST,
-#         db_user=DB_USER,
-#         db_password=DB_PASSWORD,
-#         db_name=DB_NAME,
-#         db_port=DB_PORT,
-#         ca_url=CA_URL,
-#     )  # Pass CA_URL to the template
+@bp.route("/audit")
+@login_required
+@role_required("admin")
+def audit_log():
+    return render_template("system/audit.html", title="Audit Log", events=recent_events())

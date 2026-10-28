@@ -50,7 +50,7 @@
           <a href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success ml-2">
             <i class="fas fa-download"></i> Download PEM
           </a>
-          {% if not revocation %}
+          {% if not revocation and can("operator") %}
           <button type="button" class="btn btn-sm btn-danger ml-2" data-toggle="modal" data-target="#revokeModal"
             data-cert-id="{{ cert.nkey }}" data-cert-subject="{{ data.subject }}">
             <i class="fas fa-ban"></i> Revoke
@@ -79,7 +79,7 @@
       </div>
     </div>
   </section>
-  {% include "x509/_revoke_modal.html" %}
+  {% if can("operator") %}{% include "x509/_revoke_modal.html" %}{% endif %}
 </div>
 {% endblock content %}
 

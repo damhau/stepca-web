@@ -63,7 +63,8 @@ def make_cert(serial, common_name, days_valid=30, not_before=None):
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     users = tmp_path / "local_users.json"
-    users.write_text(json.dumps({"admin": {"password_hash": generate_password_hash(PASSWORD)}}))
+    password_hash = generate_password_hash(PASSWORD)
+    users.write_text(json.dumps({role: {"password_hash": password_hash, "role": role} for role in ("viewer", "operator", "admin")}))
 
     class TestConfig(Config):
         TESTING = True
@@ -97,7 +98,7 @@ def ca_client(monkeypatch):
         "admins": [{"id": "adm-1", "subject": "step", "provisionerId": ADMIN_JWK["id"], "type": "SUPER_ADMIN"}]
     }
     fake.revoke.return_value = {"status": "ok"}
-    for module in ("app.blueprint.step.routes", "app.blueprint.x509.routes", "app.blueprint.system.routes"):
+    for module in ("app.blueprint.step.routes", "app.blueprint.x509.routes"):
         monkeypatch.setattr(f"{module}.client", fake)
     return fake
 
@@ -107,13 +108,23 @@ def csrf_token(client):
     return re.search(r'name="csrf_token" value="([^"]+)"', html).group(1)
 
 
-@pytest.fixture
-def client(app, ca_client):
-    """A logged-in test client."""
+def login(app, username):
     client = app.test_client()
-    response = client.post("/auth/login", data={"username": "admin", "password": PASSWORD, "csrf_token": csrf_token(client)})
+    response = client.post("/auth/login", data={"username": username, "password": PASSWORD, "csrf_token": csrf_token(client)})
     assert response.status_code == 302
     return client
+
+
+@pytest.fixture
+def client(app, ca_client):
+    """A test client logged in as an admin."""
+    return login(app, "admin")
+
+
+@pytest.fixture
+def login_as(app, ca_client):
+    """Log in with a given role: login_as("viewer")."""
+    return lambda role: login(app, role)
 
 
 @pytest.fixture

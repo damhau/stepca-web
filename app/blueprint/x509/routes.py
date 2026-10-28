@@ -4,7 +4,9 @@ from datetime import UTC, datetime
 from flask import flash, make_response, redirect, render_template, request, url_for
 
 from app.auth.decorator import login_required
+from app.auth.roles import role_required
 from app.blueprint.x509 import bp
+from app.libs.audit import audit
 from app.libs.db_step import *
 from app.libs.db_x509 import *
 from app.libs.stepapi import *
@@ -44,6 +46,14 @@ def active_certs():
         provisioners=provisioner_map,
         revocation_reasons=REVOCATION_REASONS,
     )
+
+
+@bp.route("/expiring")
+@login_required
+def expiring_certs():
+    days = request.args.get("days", 30, type=int)
+    days = days if days in (7, 30, 90) else 30
+    return render_template("x509/expiring.html", title=f"Expiring within {days} days", certs=get_expiring_certs(days), days=days)
 
 
 @bp.route("/revoked")
@@ -96,6 +106,7 @@ def download_cert(serial):
 
 @bp.route("/sign", methods=["POST"])
 @login_required
+@role_required("operator")
 def sign_cert():
     csr = request.form.get("csr_pem")
     passphrase = request.form.get("passphrase")
@@ -116,12 +127,15 @@ def sign_cert():
                     break
 
             save_generated_cert(serial_number, common_name, provisionner_name, csr)
+            audit("sign", serial_number, detail=f"cn={common_name} provisioner={provisionner_name}")
 
             flash(f"Certificate {serial_number} created successfully", "success")
             return redirect(url_for("x509.active_certs"))
         else:
+            audit("sign", "", success=False, detail=f"provisioner={provisionner_name}")
             flash("Failed to sign certificate", "danger")
     except Exception as e:
+        audit("sign", "", success=False, detail=f"provisioner={provisionner_name}: {e}")
         flash(f"Failed to sign certificate with error {e}", "danger")
 
     return redirect(url_for("x509.active_certs"))
@@ -129,6 +143,7 @@ def sign_cert():
 
 @bp.route("/revoke", methods=["POST"])
 @login_required
+@role_required("operator")
 def revoke_cert():
     cert_id = request.form.get("cert_id", "")
     passphrase = request.form.get("passphrase")
@@ -147,8 +162,10 @@ def revoke_cert():
 
     try:
         client.revoke(cert_id, passphrase, reason_code=reason_code, reason=reasons[reason_code])
+        audit("revoke", cert_id, detail=reasons[reason_code])
         flash(f"Certificate {cert_id} has been revoked successfully.", "success")
     except Exception as e:
+        audit("revoke", cert_id, success=False, detail=str(e))
         flash(f"Failed to revoke certificate {cert_id} with error {e}.", "danger")
 
     return redirect(url_for("x509.cert_detail", serial=cert_id))

@@ -50,6 +50,14 @@ class Config:
     LDAP_USER_SEARCH_FILTER = os.environ.get('LDAP_USER_SEARCH_FILTER') or get_config('ldap.user_search_filter', '(uid={username})')
     LDAP_USER_SEARCH_BASE = os.environ.get('LDAP_USER_SEARCH_BASE') or get_config('ldap.user_search_base', LDAP_BASE_DN)
     LDAP_REQUIRED_GROUP_DN = os.environ.get('LDAP_REQUIRED_GROUP_DN') or get_config('ldap.ldap_required_group_dn', LDAP_BASE_DN)
+    # Roles: viewer (read-only), operator (also sign and revoke), admin (also provisioners, admins, system).
+    # LDAP group DNs per role; users in none of them get DEFAULT_ROLE ("none" refuses them)
+    ROLE_ADMIN_GROUP = os.environ.get('ROLE_ADMIN_GROUP') or get_config('roles.admin_group')
+    ROLE_OPERATOR_GROUP = os.environ.get('ROLE_OPERATOR_GROUP') or get_config('roles.operator_group')
+    ROLE_VIEWER_GROUP = os.environ.get('ROLE_VIEWER_GROUP') or get_config('roles.viewer_group')
+    DEFAULT_ROLE = os.environ.get('DEFAULT_ROLE') or get_config('roles.default', 'viewer')
+    # Start/stop of the step-ca systemd unit through sudo: off by default, never works in Docker
+    SERVICE_CONTROL_ENABLED = os.environ.get('SERVICE_CONTROL_ENABLED', 'false').lower() == 'true'
     # Local backend: users and password hashes live outside the source tree
     LOCAL_USERS_FILE = os.environ.get('LOCAL_USERS_FILE', 'local_users.json')
     # OIDC, SAML, RADIUS config can be added similarly

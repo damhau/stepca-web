@@ -135,6 +135,17 @@ def save_generated_cert(serial, common_name, provisioner, csr_pem):
     db.session.commit()
 
 
+def get_expiring_certs(days, x509_certs=None):
+    """Active certificates that expire within `days`, soonest first, with their `days_left`."""
+    now = datetime.now(pytz.UTC)
+    expiring = []
+    for cert in get_x509_active_certs(x509_certs):
+        not_after = datetime.fromisoformat(cert["data"]["not_after"])
+        if (not_after - now).days < days:
+            expiring.append({**cert, "days_left": (not_after - now).days})
+    return sorted(expiring, key=lambda c: c["data"]["not_after"])
+
+
 def get_x509_active_certs(x509_certs=None):
     """Valid, non-revoked certificates. Pass the result of get_x509_certs() to avoid loading them twice."""
     if x509_certs is None:

@@ -51,11 +51,13 @@
   </div>
   <!-- Main content -->
   <section class="content">
+    {% if can("operator") %}
     <div class="d-flex justify-content-end mb-3">
       <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#newCertModal">
         Submit CSR
       </button>
     </div>
+    {% endif %}
     <div class="card">
       <div class="card-body table-responsive p-0">
         <table class="table table-hover text-sm table-striped">
@@ -97,10 +99,12 @@
                   <i class="fas fa-eye"></i>
                 </a>
 
+{% if can("operator") %}
                 <button type="button" class="btn btn-danger btn-sm" data-toggle="modal" data-target="#revokeModal"
                   data-cert-id="{{ cert.nkey }}" data-cert-subject="{{ data.subject }}" aria-label="Revoke certificate">
                   <i class="fas fa-trash"></i>
                 </button>
+                {% endif %}
                 <a href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success">
                   <i class="fas fa-download"></i>
                 </a>
@@ -111,8 +115,9 @@
         </table>
       </div>
     </div>
-    {% include "x509/_revoke_modal.html" %}
+    {% if can("operator") %}{% include "x509/_revoke_modal.html" %}{% endif %}
 
+    {% if can("operator") %}
     <div class="modal fade" id="newCertModal" tabindex="-1" role="dialog" aria-labelledby="newCertModalLabel"
       aria-hidden="true">
       <div class="modal-dialog" role="document">
@@ -145,9 +150,7 @@
         </form>
       </div>
     </div>
-
-
-
+    {% endif %}
   </section>
   <!-- /.content -->
 

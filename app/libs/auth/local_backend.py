@@ -7,7 +7,7 @@ from .base import AuthBackend
 
 
 def load_users(path):
-    """Load users from a JSON file: {"<username>": {"password_hash": "...", "attributes": {...}}}."""
+    """Load users from a JSON file: {"<username>": {"password_hash": "...", "role": "admin|operator|viewer"}}."""
     if not os.path.exists(path):
         print(f"❌ Local users file {path} not found, no local user can log in.")
         return {}
@@ -24,7 +24,8 @@ class LocalAuthBackend(AuthBackend):
     def authenticate(self, username, password):
         user = self.users.get(username)
         if user and check_password_hash(user['password_hash'], password):
-            return {'id': username, 'attributes': user.get('attributes', {})}
+            attributes = user.get('attributes', {})
+            return {'id': username, 'attributes': attributes, 'role': user.get('role') or attributes.get('role')}
         return None
 
     def get_user(self, user_id):

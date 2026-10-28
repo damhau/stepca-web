@@ -83,6 +83,12 @@
           </a>
         </li>
         <li class="nav-item">
+          <a href="{{ url_for('x509.expiring_certs') }}" class="nav-link">
+            <i class="fas fa-hourglass-half nav-icon"></i>
+            <p>Expiring</p>
+          </a>
+        </li>
+        <li class="nav-item">
           <a href="{{ url_for('x509.revoked_certs') }}" class="nav-link">
             <i class="fas fa-user-plus nav-icon"></i>
             <p>Revoked</p>
@@ -109,21 +115,31 @@
             <p>Admins</p>
           </a>
         </li>
+        {% if can("admin") and config.SERVICE_CONTROL_ENABLED %}
         <li class="nav-item">
-          <a href="/step/service" class="nav-link">
-            <i class="nav-icon fas fas fa-power-off"></i>
+          <a href="{{ url_for('step.step_service') }}" class="nav-link">
+            <i class="nav-icon fas fa-power-off"></i>
             <p>Service</p>
           </a>
         </li>
+        {% endif %}
 
+        {% if can("admin") %}
         <!-- Management -->
         <li class="nav-header">System</li>
         <li class="nav-item">
-          <a href="/system/config" class="nav-link">
-            <i class="nav-icon fas fas fa-cogs"></i>
-            <p>App Config</p>
+          <a href="{{ url_for('system.config') }}" class="nav-link">
+            <i class="nav-icon fas fa-cogs"></i>
+            <p>Configuration</p>
           </a>
         </li>
+        <li class="nav-item">
+          <a href="{{ url_for('system.audit_log') }}" class="nav-link">
+            <i class="nav-icon fas fa-clipboard-list"></i>
+            <p>Audit Log</p>
+          </a>
+        </li>
+        {% endif %}
 
 
 

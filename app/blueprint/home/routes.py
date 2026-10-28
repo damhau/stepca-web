@@ -12,6 +12,7 @@ from app.libs.db_x509 import *
 def index():
     certs = get_x509_certs()
     active_certs = get_x509_active_certs(certs)
+    expiring_certs = get_expiring_certs(30, certs)
     acme_certs = get_acme_certs()
     revoked = get_revoked_x509_certs()
     provisioners = get_step_provisioners()
@@ -21,6 +22,7 @@ def index():
         "home/index.html",
         total_certs=len(certs),
         active_certs=len(active_certs),
+        expiring_certs=len(expiring_certs),
         acme_certs=len(acme_certs),
         revoked_certs=len(revoked),
         total_provisioners=len(active_provisioners),

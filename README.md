@@ -31,9 +31,11 @@ https://smallstep.com/docs/step-ca
   - List, add, and delete JWK/ACME provisioners.
 - **Admin Users**
   - View and manage admin provisioners.
-- **Step CA Config Editor**
-  - Edit and validate the `ca.json` file with JSON syntax highlighting.
-- **Systemd Service Control**
+- **Expiry Monitoring**
+  - Dashboard tile and a list of certificates expiring within 7, 30 or 90 days.
+- **Roles and Audit Log**
+  - Viewer, operator and admin roles; every change is recorded in an audit log.
+- **Systemd Service Control** (optional, off by default)
   - Start, stop, or restart the Step CA systemd service (with limited permissions).
 - **Dashboard Overview**
   - Visual KPIs: number of active certs, revoked certs, provisioners, etc.
@@ -145,13 +147,14 @@ The backend is organized using Flask blueprints:
 
 The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Bootstrap.
 
-- **Dashboard**: Shows KPIs for certificates, provisioners, and revoked certs.
+- **Dashboard**: KPIs for active, expiring and revoked certificates and provisioners.
 - **ACME Management**: Tables for accounts, orders, certs, authorizations, and challenges.
-- **X.509 Management**: Tables for all, active, and revoked certificates. Modal dialogs for certificate details and actions (sign, revoke, download).
-- **Provisioner Management**: Table of provisioners with add/edit/delete modals.
-- **Admin Management**: Table of admin users with add/edit/delete modals.
-- **Config Editor**: JSON editor for `ca.json` with validation.
-- **Service Control**: Buttons to start/stop/restart Step CA via systemd.
+- **X.509 Management**: Tables for all, active, expiring and revoked certificates, and a page per certificate with download and revoke (with a reason).
+- **Provisioner Management**: Table of provisioners with view, add and delete.
+- **Admin Management**: Table of admins with add, type change and delete (when the app's CA identity is a super admin).
+- **Configuration**: Read-only view of the settings in effect.
+- **Audit Log**: Who did what, for admins.
+- **Service Control** (optional, `SERVICE_CONTROL_ENABLED=true`): Buttons to start/stop/restart Step CA via systemd.
 - **Navigation**: Sidebar for quick access to all sections.
 
 
@@ -197,9 +200,10 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
 
 5. **Configure the database and CA connection**
 
-   - Edit `app/settings.json` or use the `/system/config` page in the GUI.
-   - Set your PostgreSQL host, user, password, database, and port.
-   - Set your Step CA URL and fingerprint.
+   - Set the environment variables listed in `.env.example` (or put the same keys in `settings.json` in the working directory).
+   - Set your PostgreSQL host, user, password, database, and port, and `SECRET_KEY`.
+   - Set your Step CA URL and root fingerprint.
+   - The `/system/config` page shows the settings in effect (read-only, secrets hidden).
 
 6. **Run the app**
 
@@ -224,7 +228,7 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
   ```
 
 - The app's own data (certificates signed from the UI, with their CSR) lives in a SQLite file, `stepca-web.db`, in the working directory. Override it with `APP_DATABASE_URI`.
-- Connection parameters are set in `settings.json` or via the `/system/config` page.
+- Connection parameters are set with environment variables or `settings.json`.
 - Example config:
 
   ```json
@@ -276,6 +280,20 @@ Notes:
 - The Step CA service control page (`sudo` + systemd) does not work inside the container.
 
 
+## Roles
+
+| Role | Can |
+|---|---|
+| viewer | See every list, certificate and dashboard |
+| operator | Also sign CSRs and revoke certificates |
+| admin | Also manage provisioners and admins, see the configuration and the audit log, control the service |
+
+- **LDAP:** set `ROLE_ADMIN_GROUP`, `ROLE_OPERATOR_GROUP` and `ROLE_VIEWER_GROUP` to group DNs. The highest matching group wins. Users in none of them get `DEFAULT_ROLE` (`viewer` by default; `none` refuses them).
+- **Local users:** set `"role"` for each user in `local_users.json`.
+- Every change (sign, revoke, provisioner and admin changes, service actions) and every login is recorded in the audit log (**System > Audit Log**, admins only) and printed to stdout.
+
+To keep the behaviour from before roles existed (every LDAP user can do everything), set `DEFAULT_ROLE=admin`.
+
 ## Authentication
 
 The app supports several auth backends, selected via the `AUTH_BACKEND` environment variable (`config.py`): `ldap` (default), `radius`, `saml`, `oidc`, `local`. The factory dispatching the choice lives in `app/auth/factory.py`.
@@ -302,10 +320,12 @@ Use this when you want a self-contained login without an external identity provi
    {
      "admin": {
        "password_hash": "scrypt:32768:8:1$...PASTE_HERE...",
-       "attributes": {"role": "admin"}
+       "role": "admin"
      }
    }
    ```
+
+   `role` is `viewer`, `operator` or `admin` (see [Roles](#roles)). Users without one get `DEFAULT_ROLE`.
 
    With Docker, uncomment the `local_users.json` volume in `docker-compose.yml`. The file must be readable by uid 1000.
 

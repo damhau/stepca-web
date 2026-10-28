@@ -35,21 +35,17 @@ class LDAPAuthBackend(AuthBackend):
                 )
 
                 user_info = conn.entries[0] if conn.entries else None
-                if user_info and self.required_group_dn:
-                    member_of = user_info.entry_attributes_as_dict.get('memberOf', [])
-                    # memberOf can be a string or list
-                    if isinstance(member_of, str):
-                        member_of = [member_of]
-                    if self.required_group_dn not in member_of:
-                        conn.unbind()
-                        return None  # Not a member of required group
-
-
                 conn.unbind()
-                if user_info:
-                    return {'id': username, 'dn': user_info.entry_dn, 'attributes': user_info.entry_attributes_as_dict}
-                else:
-                    return {'id': username, 'dn': user_info.entry_dn}
+                if not user_info:
+                    return None
+                member_of = user_info.entry_attributes_as_dict.get('memberOf', [])
+                # memberOf can be a string or list
+                if isinstance(member_of, str):
+                    member_of = [member_of]
+                if self.required_group_dn and self.required_group_dn not in member_of:
+                    return None  # Not a member of required group
+                # Group DNs are mapped to roles by resolve_role()
+                return {'id': username, 'dn': user_info.entry_dn, 'groups': member_of}
             return None
         except Exception as e:
             print(e)

@@ -51,11 +51,21 @@
 
   <!-- Main content -->
   <section class="content">
+    {# Admins can only be managed by an admin user, and only when the app's own CA identity is a SUPER_ADMIN #}
+    {% set manage = can("admin") and manage_admins %}
+    {% if can("admin") and not manage_admins %}
+    <div class="alert alert-info">
+      The app's identity on the CA is an <strong>ADMIN</strong>, not a SUPER_ADMIN, so admins are read-only here.
+      Manage them with <code>step ca admin</code>.
+    </div>
+    {% endif %}
+    {% if manage %}
     <div class="d-flex justify-content-end mb-3">
       <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#createAdminModal">
         Add Admin
       </button>
     </div>
+    {% endif %}
     <div class="card">
       <div class="card-body table-responsive p-0">
         <table class="table table-hover text-sm table-striped">
@@ -91,6 +101,7 @@
                 No timestamp available
                 {% endif %}</td>
               <td>
+                {% if manage %}
                 <!-- Edit button triggers modal -->
                 <button class="btn btn-sm btn-info" data-toggle="modal" data-target="#editAdminModal"
                   data-admin='{{ admin | tojson | safe }}'>
@@ -101,6 +112,7 @@
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
                 </form>
+                {% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -111,6 +123,7 @@
 
 
     <!-- Modal -->
+    {% if can("admin") and manage_admins %}
     <div class="modal fade" id="createAdminModal" tabindex="-1" role="dialog" aria-labelledby="createAdminModalLabel"
       aria-hidden="true">
       <div class="modal-dialog" role="document">
@@ -158,6 +171,9 @@
     </div>
 
     <!-- Edit Admin Modal -->
+    {% endif %}
+
+    {% if can("admin") and manage_admins %}
     <div class="modal fade" id="editAdminModal" tabindex="-1" role="dialog" aria-labelledby="editAdminModalLabel"
       aria-hidden="true">
       <div class="modal-dialog" role="document">
@@ -197,6 +213,8 @@
         </div>
       </div>
     </div>
+    {% endif %}
+
   </section>
   <!-- /.content -->
 

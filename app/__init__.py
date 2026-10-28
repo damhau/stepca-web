@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Flask
 
 from app.extensions import csrf, db
+from app.models.audit import AuditEvent  # noqa: F401  registers the model for create_all
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
 from config import Config
 
@@ -22,6 +23,13 @@ def create_app(config_class=Config):
     # Every route requires a session unless explicitly listed as public
     from app.auth.decorator import require_login
     app.before_request(require_login)
+
+    from app.auth.roles import current_role, role_at_least
+
+    @app.context_processor
+    def role_helpers():
+        # Templates show only the actions the user's role allows: {% if can("operator") %}
+        return {"current_role": current_role(), "can": lambda minimum: role_at_least(current_role(), minimum)}
 
 
     with app.app_context():

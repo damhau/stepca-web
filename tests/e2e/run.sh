@@ -60,7 +60,7 @@ python3 -c 'import json; print(next(p["encryptedKey"] for p in json.load(open("w
   | $DC exec -T step-ca step crypto jwe decrypt --password-file /home/step/secrets/password > work/jwk_key.json
 HASH=$($DC run --rm --no-deps -T --entrypoint python stepca-web -c \
   "from werkzeug.security import generate_password_hash as g; print(g('testpw'))")
-python3 -c 'import json, sys; json.dump({"admin": {"password_hash": sys.argv[1]}}, open("work/local_users.json", "w"))' "$HASH"
+python3 -c 'import json, sys; json.dump({"admin": {"password_hash": sys.argv[1], "role": "admin"}}, open("work/local_users.json", "w"))' "$HASH"
 
 cat > work/app.env <<EOF
 SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')

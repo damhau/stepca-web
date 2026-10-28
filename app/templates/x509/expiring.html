@@ -1,0 +1,74 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} {{ title }} {% endblock %}
+
+<!-- Element injected in the BODY element -->
+{% block body_class %} sidebar-mini {% endblock body_class %}
+
+<!-- Specific Page CSS goes HERE  -->
+{% block stylesheets %}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+<!-- Font Awesome -->
+<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
+<!-- Theme style -->
+<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
+{% endblock stylesheets %}
+
+{% block content %}
+
+<div class="content-wrapper">
+
+  <!-- Content Header (Page header) -->
+  <div class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-6">
+          <h1 class="m-0 text-dark">{{ title }}</h1>
+        </div>
+        <div class="col-sm-6">
+          <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item active">{{ title }}</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- /.content-header -->
+
+  <!-- Main content -->
+  <section class="content">
+    <div class="d-flex justify-content-end mb-3">
+      <div class="btn-group" role="group" aria-label="Expiry window">
+        {% for window in (7, 30, 90) %}
+        <a href="{{ url_for('x509.expiring_certs', days=window) }}" class="btn btn-sm {{ 'btn-primary' if window == days else 'btn-outline-primary' }}">{{ window }} days</a>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped text-sm">
+          <thead>
+            <tr><th>Days left</th><th>Expires</th><th>Subject</th><th>DNS Names</th><th>Issued via</th><th>Serial</th></tr>
+          </thead>
+          <tbody>
+            {% for cert in certs %}
+            <tr>
+              <td><span class="badge {{ 'badge-danger' if cert.days_left < 7 else 'badge-warning' if cert.days_left < 30 else 'badge-info' }}">{{ cert.days_left }}</span></td>
+              <td>{{ cert.data.not_after_pretty }}</td>
+              <td>{{ cert.data.subject }}</td>
+              <td>{{ cert.data.dns_names | join(", ") if cert.data.dns_names else "—" }}</td>
+              <td>{{ cert.provisioner.name or "—" }}</td>
+              <td><a href="{{ url_for('x509.cert_detail', serial=cert.nkey) }}"><code>{{ cert.nkey }}</code></a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-muted">No active certificate expires within {{ days }} days.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+{% endblock content %}

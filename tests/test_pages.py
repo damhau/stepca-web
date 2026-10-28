@@ -16,8 +16,11 @@ PAGES = [
     "/acme/challenges",
     "/step/provisioners",
     "/step/admins",
-    "/step/service",
     "/system/config",
+    "/system/audit",
+    "/x509/expiring",
+    "/x509/expiring?days=7",
+    "/x509/cert/1001",
     "/api/x509/certs",
 ]
 

@@ -47,3 +47,29 @@ def test_dashboard_counts(client, populated):
     assert tiles["Active Certificates"] == 2
     assert tiles["Revoked Certificates"] == 1
     assert tiles["Provisioners"] == 1
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/x509/all",
+        "/x509/active",
+        "/x509/revoked",
+        "/x509/expiring",
+        "/acme/accounts",
+        "/acme/orders",
+        "/step/provisioners",
+        "/step/admins",
+        "/system/audit",
+    ],
+)
+def test_lists_have_search_sort_and_paging(client, populated, path):
+    html = client.get(path).get_data(as_text=True)
+    assert "data-table-tools" in html
+    assert '<script src="/static/assets/js/tables.js"></script>' in html
+
+
+def test_pages_load_scripts_from_the_app_only(client, populated):
+    for path in PAGES:
+        html = client.get(path).get_data(as_text=True)
+        assert "code.jquery.com" not in html and "cdn.jsdelivr.net" not in html, path

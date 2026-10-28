@@ -152,6 +152,7 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
 - **Dashboard**: KPIs for active, expiring and revoked certificates and provisioners.
 - **ACME Management**: Tables for accounts, orders, certs, authorizations, and challenges.
 - **X.509 Management**: Tables for all, active, expiring and revoked certificates, and a page per certificate with download and revoke (with a reason).
+- **Every list** can be searched, sorted by any column and paged (50 rows per page), without any third-party script.
 - **Provisioner Management**: Table of provisioners with view, add and delete.
 - **Admin Management**: Table of admins with add, type change and delete (when the app's CA identity is a super admin).
 - **Configuration**: Read-only view of the settings in effect.

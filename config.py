@@ -32,7 +32,7 @@ DB_HOST = get_config("database.host")
 DB_USER = get_config("database.user")
 DB_PASSWORD = get_config("database.password")
 DB_NAME = get_config("database.name")
-DB_PORT = get_config("database.port")
+DB_PORT = get_config("database.port", 5432)
 CA_URL = get_config("ca.url")
 CA_FINGERPRINT = get_config("ca.fingerprint")
 # Optional path to the CA root PEM; otherwise it is downloaded once and pinned with CA_FINGERPRINT

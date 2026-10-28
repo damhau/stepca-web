@@ -1,4 +1,5 @@
 import re
+from datetime import UTC, datetime
 
 from flask import flash, make_response, redirect, render_template, request, url_for
 
@@ -10,6 +11,16 @@ from app.libs.stepapi import *
 from config import CA_URL
 
 client = StepCAClient(CA_URL)
+
+# RFC 5280 reasons that make sense for a passive revocation
+REVOCATION_REASONS = [
+    (0, "Unspecified"),
+    (1, "Key compromise"),
+    (3, "Affiliation changed"),
+    (4, "Superseded"),
+    (5, "Cessation of operation"),
+    (9, "Privilege withdrawn"),
+]
 
 
 ### X.509 Html routes
@@ -26,7 +37,13 @@ def active_certs():
     certs = get_x509_active_certs()
     provisioner_map = get_active_provisioner_map(get_step_provisioners())
     # print("Active certs:", certs)
-    return render_template("x509/active_certs.html", title="X.509 Active Certificates", certs=certs, provisioners=provisioner_map)
+    return render_template(
+        "x509/active_certs.html",
+        title="X.509 Active Certificates",
+        certs=certs,
+        provisioners=provisioner_map,
+        revocation_reasons=REVOCATION_REASONS,
+    )
 
 
 @bp.route("/revoked")
@@ -34,6 +51,29 @@ def active_certs():
 def revoked_certs():
     revoked = get_revoked_x509_with_cert_info()
     return render_template("x509/revoked_certs.html", title="Revoked X.509 Certificates", revoked=revoked)
+
+
+@bp.route("/cert/<serial>")
+@login_required
+def cert_detail(serial):
+    cert = get_x509_certs_by_id(serial)
+    if cert is None or "error" in cert["data"]:
+        flash(f"Certificate {serial} not found", "danger")
+        return redirect(url_for("x509.all_certs"))
+
+    now = datetime.now(UTC)
+    not_before = datetime.fromisoformat(cert["data"]["not_before"])
+    not_after = datetime.fromisoformat(cert["data"]["not_after"])
+    status = "expired" if now > not_after else "not yet valid" if now < not_before else "valid"
+    return render_template(
+        "x509/cert_detail.html",
+        title=f"Certificate {serial}",
+        cert=cert,
+        revocation=get_revocation(serial),
+        status=status,
+        days_left=(not_after - now).days,
+        revocation_reasons=REVOCATION_REASONS,
+    )
 
 
 @bp.route("/download/<serial>")
@@ -90,8 +130,14 @@ def sign_cert():
 @bp.route("/revoke", methods=["POST"])
 @login_required
 def revoke_cert():
-    cert_id = request.form.get("cert_id")
+    cert_id = request.form.get("cert_id", "")
     passphrase = request.form.get("passphrase")
+    reasons = dict(REVOCATION_REASONS)
+    reason = request.form.get("reason", "0")
+    reason_code = int(reason) if reason.isascii() and reason.isdigit() else None
+    if reason_code not in reasons:
+        flash("Invalid revocation reason", "danger")
+        return redirect(url_for("x509.active_certs"))
 
     cert = get_x509_certs_by_id(cert_id)
 
@@ -100,9 +146,9 @@ def revoke_cert():
         return redirect(url_for("x509.active_certs"))
 
     try:
-        client.revoke(cert_id, passphrase)
+        client.revoke(cert_id, passphrase, reason_code=reason_code, reason=reasons[reason_code])
         flash(f"Certificate {cert_id} has been revoked successfully.", "success")
     except Exception as e:
         flash(f"Failed to revoke certificate {cert_id} with error {e}.", "danger")
 
-    return redirect(url_for("x509.active_certs"))
+    return redirect(url_for("x509.cert_detail", serial=cert_id))

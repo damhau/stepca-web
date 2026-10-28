@@ -169,33 +169,28 @@
             </button>
           </div>
           <div class="modal-body">
-            <form id="editAdminForm" method="POST" action="{{ url_for('step.admins') }}">
+            <!-- step-ca can only change an admin's type: subject and provisioner are fixed -->
+            <form id="editAdminForm" method="POST" action="">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="admin_id" id="editAdminId">
               <div class="form-group">
                 <label>Subject</label>
-                <input type="text" name="subject" id="editAdminSubject" class="form-control" required>
+                <input type="text" id="editAdminSubject" class="form-control" readonly>
               </div>
               <div class="form-group">
                 <label>Provisioner</label>
-                <select name="provisioner" id="editAdminProvisioner" class="form-control" required>
-                  {% for id, name in provisioners.items() %}
-                  <option value="{{ name }}">{{ name }}</option>
-                  {% endfor %}
-                </select>
+                <input type="text" id="editAdminProvisioner" class="form-control" readonly>
               </div>
               <div class="form-group">
-                <label>Type</label>
+                <label for="editAdminType">Type</label>
                 <select name="type" id="editAdminType" class="form-control" required>
-                  <option value=1>ADMIN</option>
-                  <option value=2>SUPER_ADMIN</option>
+                  <option value="1">ADMIN</option>
+                  <option value="2">SUPER_ADMIN</option>
                 </select>
               </div>
               <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
                 <button type="submit" class="btn btn-primary">Save Changes</button>
               </div>
-
             </form>
           </div>
 
@@ -215,19 +210,15 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+  const provisionerNames = {{ provisioners | tojson }};
+  const updateUrl = {{ url_for('step.update_admin', id='__ID__') | tojson }};
   $('#editAdminModal').on('show.bs.modal', function (event) {
-    var button = $(event.relatedTarget);
-    var admin = button.data('admin');
-    // Fill the form fields
-    $('#editAdminId').val(admin.id);
+    const admin = $(event.relatedTarget).data('admin');
+    document.getElementById('editAdminForm').action = updateUrl.replace('__ID__', encodeURIComponent(admin.id));
     $('#editAdminSubject').val(admin.subject);
-    // Map provisioner_id to name using provisioners Jinja variable
-    var provisionerMap = {{ provisioners| tojson
-  }};
-  var provName = provisionerMap[admin.provisioner_id] || admin.provisioner_id;
-  $('#editAdminProvisioner').val(provName);
-  $('#editAdminType').val(admin.type);
-});
+    $('#editAdminProvisioner').val(provisionerNames[admin.provisioner_id] || admin.provisioner_id);
+    $('#editAdminType').val(String(admin.type === 'SUPER_ADMIN' || admin.type === 2 ? 2 : 1));
+  });
 </script>
 
 {% endblock javascripts %}

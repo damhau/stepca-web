@@ -6,6 +6,7 @@ import re
 from unittest import mock
 
 import pytest
+from flask import g
 
 # config.py reads the environment at import time: set it before importing the app
 os.environ.update(
@@ -73,6 +74,13 @@ def app(tmp_path, monkeypatch):
     # Files the app reads or writes relative to the working directory
     monkeypatch.chdir(tmp_path)
     app = create_app(TestConfig)
+
+    # The app context below stays pushed for the whole test, so `g` outlives each request (unlike in
+    # production). Reset Flask-WTF's per-request token cache, or a token cleared at login would be reused.
+    @app.before_request
+    def fresh_csrf_cache():
+        g.pop("csrf_token", None)
+
     with app.app_context():
         # The step-ca tables, with the same nkey/nvalue layout as step-ca's PostgreSQL tables
         db.create_all()

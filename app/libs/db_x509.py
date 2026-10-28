@@ -117,6 +117,12 @@ def get_revoked_x509_with_cert_info():
     return revocations
 
 
+def get_revocation(serial):
+    """step-ca's revocation record for this decimal serial, or None."""
+    row = db.session.get(RevokedX509Cert, serial.encode("ascii"))
+    return json.loads(row.nvalue) if row else None
+
+
 def get_x509_cert(serial):
     """Return the certificate with this decimal serial from step-ca's x509_certs, or None."""
     row = db.session.get(X509Cert, serial.encode("ascii"))

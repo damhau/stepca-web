@@ -3,6 +3,7 @@
 import os
 import re
 import subprocess
+from html import unescape
 
 import pytest
 import requests
@@ -29,7 +30,7 @@ def token_from(html):
 
 def flashes(html):
     return [
-        (kind, re.sub(r"\s+", " ", text).strip())
+        (kind, unescape(re.sub(r"\s+", " ", text).strip()))
         for kind, text in re.findall(r"alert alert-(success|danger)[^>]*>(.*?)<button", html, re.S)
     ]
 
@@ -89,8 +90,11 @@ def test_sign_download_and_revoke(session):
     renew = ["ca", "renew", "--force", *CA, "--out", "/tmp/renewed.crt", "/tmp/ui.crt", "/tmp/ui.key"]
     assert step(*renew).returncode == 0, "renewal must work before the revocation"
 
-    html = session.post(f"{BASE_URL}/x509/revoke", data={"cert_id": serial, "passphrase": "testpass", "csrf_token": session.csrf}).text
+    html = session.post(
+        f"{BASE_URL}/x509/revoke", data={"cert_id": serial, "passphrase": "testpass", "reason": "4", "csrf_token": session.csrf}
+    ).text
     assert ("success", f"Certificate {serial} has been revoked successfully.") in flashes(html)
+    assert "Superseded (4)" in html, "the revocation reason recorded by step-ca is shown on the certificate page"
     assert step(*renew).returncode != 0, "step-ca must refuse to renew a revoked certificate"
     assert serial not in session.get(f"{BASE_URL}/x509/active").text
 
@@ -110,3 +114,20 @@ def test_lists_are_not_truncated_at_20(session):
         )
     html = session.get(f"{BASE_URL}/step/provisioners").text
     assert len(re.findall(r'action="/step/provisioner/[^"]+/delete"', html)) == 26
+
+
+def test_admin_type_can_be_changed(session):
+    def admin_row(subject):
+        rows = re.findall(r"<tr>(.*?)</tr>", session.get(f"{BASE_URL}/step/admins").text, re.S)
+        return next(row for row in rows if f"<td>{subject}</td>" in row)
+
+    session.post(
+        f"{BASE_URL}/step/admins", data={"subject": "e2e-ops", "provisioner": "Admin JWK", "type": "1", "csrf_token": session.csrf}
+    )
+    row = admin_row("e2e-ops")
+    assert "SUPER_ADMIN" not in row
+    admin_id = re.search(r"/step/admin/([^/\"]+)/delete", row).group(1)
+    html = session.post(f"{BASE_URL}/step/admin/{admin_id}/update", data={"type": "2", "csrf_token": session.csrf}).text
+    assert ("success", f"Admin '{admin_id}' updated.") in flashes(html)
+    assert "SUPER_ADMIN" in admin_row("e2e-ops")
+    assert len(re.findall(r"<td>e2e-ops</td>", session.get(f"{BASE_URL}/step/admins").text)) == 1, "editing must not duplicate the admin"

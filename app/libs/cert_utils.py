@@ -52,6 +52,7 @@ def parse_cert(leaf_b64):
             "not_before_pretty": format_pretty_date(cert.not_valid_before_utc),
             "not_after_pretty": format_pretty_date(cert.not_valid_after_utc),
             "serial": format(cert.serial_number, "x"),
+            "serial_dec": str(cert.serial_number),
             "organization": get_attr(NameOID.ORGANIZATION_NAME),
             "organizational_unit": get_attr(NameOID.ORGANIZATIONAL_UNIT_NAME),
             "locality": get_attr(NameOID.LOCALITY_NAME),
@@ -108,6 +109,7 @@ def parse_cert_from_bytes(cert_bytes: bytes):
             "not_before_pretty": format_date(cert.not_valid_before_utc),
             "not_after_pretty": format_date(cert.not_valid_after_utc),
             "serial": format(cert.serial_number, "x"),
+            "serial_dec": str(cert.serial_number),
             "key_size": key_size,
             "dns_names": san,
         }

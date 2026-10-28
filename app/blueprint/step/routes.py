@@ -1,6 +1,6 @@
 import subprocess
 
-from flask import flash, jsonify, redirect, render_template, request
+from flask import flash, jsonify, redirect, render_template, request, url_for
 
 from app.auth.decorator import login_required
 from app.blueprint.step import bp
@@ -17,7 +17,8 @@ def provisioner():
     if request.method == "POST":
         data = request.form.to_dict()
 
-        if data["type"] == "JWK":
+        resp = None
+        if data.get("type") == "JWK":
 
             # Build full provisioner JSON
             provisioner_type = data["type"]
@@ -31,7 +32,7 @@ def provisioner():
             }
             resp = client.create_provisioner_jwk(data["name"], data["passphrase"], claims=claims)
 
-        if data["type"] == "ACME":
+        elif data.get("type") == "ACME":
             # Convert checkbox to bool
             data["require_eab"] = "require_eab" in request.form
 
@@ -60,13 +61,20 @@ def provisioner():
                 },
             )
 
+        else:
+            flash(f"Unknown provisioner type '{data.get("type")}'.", "danger")
+            return redirect(url_for("step.provisioner"))
+
         if resp:
             flash(f"Provisioner '{data["name"]}' created successfully.", "success")
         else:
             flash(f"Failed to create provisioner '{data["name"]}'.", "danger")
+        return redirect(url_for("step.provisioner"))
 
     provisioners = client.list_provisioners()
-    return render_template("step/provisioners.html", title="StepCA Provisioners", provisioners=provisioners["provisioners"])
+    if provisioners is None:
+        flash("Could not load the provisioners from the CA.", "danger")
+    return render_template("step/provisioners.html", title="StepCA Provisioners", provisioners=(provisioners or {}).get("provisioners", []))
 
 
 @bp.route("/provisioner/<name>/delete", methods=["POST"])
@@ -77,11 +85,12 @@ def delete_provisioner(name):
         flash(f"Provisioner '{name}' deleted successfully.", "success")
         return redirect("/step/provisioners")
     else:
-        flash(f"Failed to delete admin '{name}'.", "danger")
+        flash(f"Failed to delete provisioner '{name}'.", "danger")
         return redirect("/step/provisioners")
 
 
 @bp.route("/admins", methods=["GET", "POST"])
+@login_required
 def admins():
 
     if request.method == "POST":
@@ -95,11 +104,25 @@ def admins():
             flash(f"Admin '{subject}' created successfully.", "success")
         else:
             flash(f"Failed to create admin '{subject}'.", "danger")
+        return redirect(url_for("step.admins"))
 
     admins = client.list_admins()
+    if admins is None:
+        flash("Could not load the admins from the CA.", "danger")
     provisioner_map = get_active_provisioner_map(get_step_provisioners())
 
-    return render_template("step/admin.html", title="StepCA Admins", admins=admins["admins"], provisioners=provisioner_map)
+    return render_template("step/admin.html", title="StepCA Admins", admins=(admins or {}).get("admins", []), provisioners=provisioner_map)
+
+
+@bp.route("/admin/<id>/update", methods=["POST"])
+@login_required
+def update_admin(id):
+    admin_type = request.form.get("type", type=int)
+    if admin_type not in (1, 2) or not client.update_admin(id, admin_type):
+        flash(f"Failed to update admin '{id}'.", "danger")
+    else:
+        flash(f"Admin '{id}' updated.", "success")
+    return redirect(url_for("step.admins"))
 
 
 @bp.route("/admin/<id>/delete", methods=["POST"])

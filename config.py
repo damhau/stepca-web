@@ -1,7 +1,6 @@
 import json
 import os
-import random
-import string
+from datetime import timedelta
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -54,9 +53,9 @@ class Config:
     # Local backend: users and password hashes live outside the source tree
     LOCAL_USERS_FILE = os.environ.get('LOCAL_USERS_FILE', 'local_users.json')
     # OIDC, SAML, RADIUS config can be added similarly
-    SECRET_KEY = os.environ.get("SECRET_KEY") or "".join(
-        random.choice(string.ascii_letters) for _ in range(32)
-    )
+    # Required: signs the session cookie, must be the same for every worker and restart
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=int(os.environ.get("SESSION_LIFETIME_HOURS", "8")))
 
     SQLALCHEMY_DATABASE_URI = (
         os.environ.get("SQLALCHEMY_DATABASE_URI") or

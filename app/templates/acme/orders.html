@@ -80,9 +80,8 @@
               <td>{{ data.createdAt or '—' }}</td>
               <td>{{ data.expiresAt or '—' }}</td>
               <td>
-                {% if data.certificate %}
-                <a href="#" onclick="loadCert('{{ data.certificate }}')" data-toggle="modal"
-                  data-target="#certModal">View</a>
+                {% if cert_serials.get(data.certificate) %}
+                <a href="{{ url_for('x509.cert_detail', serial=cert_serials[data.certificate]) }}">View</a>
                 {% else %}
                 <em>—</em>
                 {% endif %}

@@ -13,7 +13,9 @@ def accounts():
 @bp.route("/orders")
 def orders():
     orders = get_acme_orders()
-    return render_template("acme/orders.html", title="ACME Orders", orders=orders)
+    # ACME certificate id -> decimal serial, to link each order to its certificate's page
+    cert_serials = {c["data"].get("id"): c["data"].get("serial_dec") for c in get_acme_certs()}
+    return render_template("acme/orders.html", title="ACME Orders", orders=orders, cert_serials=cert_serials)
 
 @bp.route("/certs")
 def certs():

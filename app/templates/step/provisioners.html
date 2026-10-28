@@ -91,8 +91,8 @@
               <td>
                 <!-- Inside <td> for Actions -->
                 <button class="btn btn-sm btn-info" data-toggle="modal" data-target="#viewModal"
-                  data-prov='{{ p | tojson | safe }}'>
-                  <i class="fas fa-edit"></i>
+                  data-prov='{{ p | tojson | forceescape }}' aria-label="View provisioner {{ p.name }}">
+                  <i class="fas fa-eye"></i>
                 </button>
 
                 <form method="POST" action="{{ url_for('step.delete_provisioner', name=p.name) }}" class="d-inline"
@@ -119,13 +119,10 @@
             </button>
           </div>
           <div class="modal-body">
-            <form id="jsonForm" class="form-horizontal">
-              <!-- Form fields will be dynamically injected here -->
-            </form>
+            <pre id="provJson" class="mb-0" style="white-space: pre-wrap;"></pre>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-            <button type="submit" form="jsonForm" class="btn btn-primary">Save changes</button>
           </div>
         </div>
       </div>
@@ -242,124 +239,26 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-  $(document).ready(function () {
-    $('#viewModal').on('show.bs.modal', function (event) {
-      console.log("🧪 Modal triggered");
-
-      const button = event.relatedTarget;  // This is the button that was clicked
-      console.log("🧪 Trigger button:", button);
-
-      const prov = $(button).data('prov');  // Get the provisioner data passed as JSON
-      console.log("🧪 Loaded provisioner data:", prov);
-
-      const modalContent = $('#jsonForm');
-      modalContent.empty();  // Clear previous content in the form
-
-      if (prov) {
-        // Generate form dynamically based on the JSON data
-        generateForm(prov, modalContent);
-        console.log("🧪 Form generated for modal");
-
-        // Optionally, handle form submission to save data
-        $('#jsonForm').submit(function (event) {
-          event.preventDefault();
-          const updatedData = gatherFormData(modalContent);
-          console.log("🧪 Updated data:", updatedData);
-          // Send the updated data back to the server
-        });
-      } else {
-        modalContent.html("❌ Failed to load provisioner data.");
-        console.warn("⚠️ No provisioner data found in button");
-      }
-    });
+  $('#viewModal').on('show.bs.modal', function (event) {
+    const prov = $(event.relatedTarget).data('prov');
+    // textContent: provisioner fields (templates, names) are never interpreted as HTML
+    document.getElementById('provJson').textContent = prov ? JSON.stringify(prov, null, 2) : 'Failed to load provisioner data.';
   });
 
-  // Function to generate form fields based on JSON structure
-  function generateForm(data, container) {
-    for (let key in data) {
-      if (data.hasOwnProperty(key)) {
-        const value = data[key];
-        let inputElement;
-
-        // Handle nested objects
-        if (typeof value === 'object' && !Array.isArray(value)) {
-          inputElement = $('<div class="form-group"></div>');
-          inputElement.append(`<label>${key}</label>`);
-          const nestedContainer = $('<div></div>');
-          generateForm(value, nestedContainer);  // Recursive call for nested objects
-          inputElement.append(nestedContainer);
-        }
-        // Handle arrays
-        else if (Array.isArray(value)) {
-          inputElement = $('<div class="form-group"></div>');
-          inputElement.append(`<label>${key}</label>`);
-          const arrayContainer = $('<div class="checkbox-list"></div>');
-          value.forEach((item, idx) => {
-            const checkboxId = `${key}_${idx}`;
-            const checkboxElement = $('<div class="custom-control custom-checkbox"></div>');
-            checkboxElement.append(`
-              <input type="checkbox" class="custom-control-input" id="${checkboxId}" name="${key}" value="${item}" ${item ? 'checked' : ''}>
-              <label class="custom-control-label" for="${checkboxId}">${item}</label>
-            `);
-            arrayContainer.append(checkboxElement);
-          });
-          inputElement.append(arrayContainer);
-        }
-        // Handle boolean values as a select dropdown
-        else if (typeof value === 'boolean') {
-          inputElement = $('<div class="form-group"></div>');
-          inputElement.append(`<label for="${key}">${key}</label>`);
-          inputElement.append(`
-            <select class="form-control" id="${key}" name="${key}">
-              <option value="true" ${value === true ? 'selected' : ''}>True</option>
-              <option value="false" ${value === false ? 'selected' : ''}>False</option>
-            </select>
-          `);
-        }
-        // Handle other data types like string, number, etc.
-        else {
-          inputElement = $('<div class="form-group"></div>');
-          inputElement.append(`<label for="${key}">${key}</label>`);
-          inputElement.append(`<input type="text" class="form-control" id="${key}" name="${key}" value="${value}">`);
-        }
-
-        container.append(inputElement);
-      }
+  // Only the fields of the selected type are shown, required and submitted
+  function toggleFields() {
+    const type = document.getElementById("provType").value;
+    for (const [id, active] of [["acmeFields", type === "ACME"], ["jwkFields", type === "JWK"]]) {
+      const block = document.getElementById(id);
+      block.style.display = active ? "block" : "none";
+      block.querySelectorAll("input").forEach(input => { input.disabled = !active; });
     }
   }
 
-
-  // Function to gather form data and return as an object
-  function gatherFormData(container) {
-    let formData = {};
-
-    container.find('input').each(function () {
-      const key = $(this).attr('name');
-      const value = $(this).val();
-      formData[key] = value;
-    });
-
-    container.find('input[type="checkbox"]:checked').each(function () {
-      const key = $(this).attr('name');
-      const value = $(this).val();
-      if (!formData[key]) formData[key] = [];
-      formData[key].push(value);
-    });
-
-    return formData;
-  }
-  function toggleFields() {
-    const type = document.getElementById("provType").value;
-    document.getElementById("acmeFields").style.display = (type === "ACME") ? "block" : "none";
-    document.getElementById("jwkFields").style.display = (type === "JWK") ? "block" : "none";
-  }
-
   document.addEventListener("DOMContentLoaded", () => {
-    const selector = document.getElementById("provType");
-    selector.addEventListener("change", toggleFields);
-    toggleFields(); // initialize on load
+    document.getElementById("provType").addEventListener("change", toggleFields);
+    toggleFields();
   });
-
 </script>
 
 {% endblock javascripts %}

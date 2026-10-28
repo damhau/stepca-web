@@ -11,6 +11,8 @@ def create_app(config_class=Config):
     app = Flask(__name__)
 
     app.config.from_object(config_class)
+    if not app.config.get("SECRET_KEY"):
+        raise RuntimeError('SECRET_KEY is not set. Generate one with: python -c "import secrets; print(secrets.token_hex(32))"')
 
     # Initialize Flask extensions here
     db.init_app(app)

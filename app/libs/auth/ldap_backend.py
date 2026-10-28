@@ -1,4 +1,5 @@
 from ldap3 import ALL, SIMPLE, SUBTREE, Connection, Server
+from ldap3.utils.conv import escape_filter_chars
 
 from .base import AuthBackend
 
@@ -15,7 +16,9 @@ class LDAPAuthBackend(AuthBackend):
         print(f"Using Ldap Backend. url: {self.ldap_url}")
 
     def authenticate(self, username, password):
-
+        # An empty password would be an anonymous bind, which many servers accept
+        if not username or not password:
+            return None
         ldap_user = username + "@" + self.domain
         try:
 
@@ -26,7 +29,7 @@ class LDAPAuthBackend(AuthBackend):
 
                 conn.search(
                     search_base=self.user_search_base,
-                    search_filter=self.user_search_filter.format(username=username),
+                    search_filter=self.user_search_filter.format(username=escape_filter_chars(username)),
                     search_scope=SUBTREE,
                     attributes=['*']
                 )
@@ -58,7 +61,7 @@ class LDAPAuthBackend(AuthBackend):
             conn = Connection(server, auto_bind=True)
             conn.search(
                 search_base=self.user_search_base,
-                search_filter=self.user_search_filter.format(username=user_id),
+                search_filter=self.user_search_filter.format(username=escape_filter_chars(user_id)),
                 search_scope=SUBTREE,
                 attributes=['*']
             )

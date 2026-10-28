@@ -12,6 +12,9 @@ def login():
         backend = get_auth_backend(current_app.config)
         user = backend.authenticate(username, password)
         if user:
+            # Start from an empty session: nothing set before login survives it
+            session.clear()
+            session.permanent = True
             session['user_id'] = user.get('id', username)
             return redirect(url_for('home.index'))
         return render_template('auth/login.html', error='Invalid credentials')
@@ -19,5 +22,5 @@ def login():
 
 @auth_bp.route('/logout')
 def logout():
-    session.pop('user_id', None)
+    session.clear()
     return redirect(url_for('auth.login'))

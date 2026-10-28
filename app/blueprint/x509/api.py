@@ -9,7 +9,6 @@ from app.libs.db_x509 import *
 @login_required
 def api_get_x509_certs_by_id(id):
     cert = get_x509_certs_by_id(id)
-
     if cert:
         return jsonify(cert)
     return jsonify({"error": "Certificate not found"}), 404
@@ -20,6 +19,4 @@ def api_get_x509_certs_by_id(id):
 def api_get_x509_certs():
     certs = get_x509_certs()
 
-    if certs:
-        return jsonify(certs)
-    return jsonify({"error": "Certificates not found"}), 404
+    return jsonify(certs)

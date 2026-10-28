@@ -1,0 +1,89 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} {{ title }} {% endblock %}
+
+{% block body_class %} sidebar-mini {% endblock body_class %}
+
+{% block stylesheets %}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
+<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
+{% endblock stylesheets %}
+
+{% block content %}
+{% set data = cert.data %}
+<div class="content-wrapper">
+  <div class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-6">
+          <h1 class="m-0 text-dark">{{ data.subject }}</h1>
+        </div>
+        <div class="col-sm-6">
+          <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('x509.all_certs') }}">Certificates</a></li>
+            <li class="breadcrumb-item active">{{ cert.nkey }}</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="content">
+    <div class="container-fluid">
+      {% include "includes/flashes.html" %}
+      <div class="card">
+        <div class="card-header d-flex align-items-center">
+          <h3 class="card-title mr-auto">
+            {% if revocation %}
+            <span class="badge badge-danger">Revoked</span>
+            {% elif status == "expired" %}
+            <span class="badge badge-secondary">Expired</span>
+            {% elif status == "not yet valid" %}
+            <span class="badge badge-info">Not yet valid</span>
+            {% else %}
+            <span class="badge badge-success">Valid</span>
+            <span class="badge {{ 'badge-danger' if days_left < 7 else 'badge-warning' if days_left < 30 else 'badge-light' }}">{{ days_left }} days left</span>
+            {% endif %}
+          </h3>
+          <a href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success ml-2">
+            <i class="fas fa-download"></i> Download PEM
+          </a>
+          {% if not revocation %}
+          <button type="button" class="btn btn-sm btn-danger ml-2" data-toggle="modal" data-target="#revokeModal"
+            data-cert-id="{{ cert.nkey }}" data-cert-subject="{{ data.subject }}">
+            <i class="fas fa-ban"></i> Revoke
+          </button>
+          {% endif %}
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr><th style="width: 220px;">Subject</th><td>{{ data.subject }}</td></tr>
+              <tr><th>Issuer</th><td>{{ data.issuer }}</td></tr>
+              <tr><th>Serial (decimal)</th><td><code>{{ cert.nkey }}</code></td></tr>
+              <tr><th>Serial (hex)</th><td><code>{{ data.serial }}</code></td></tr>
+              <tr><th>Valid from</th><td>{{ data.not_before }}</td></tr>
+              <tr><th>Valid to</th><td>{{ data.not_after }}</td></tr>
+              <tr><th>DNS names</th><td>{{ data.dns_names | join(", ") if data.dns_names else "—" }}</td></tr>
+              <tr><th>Key</th><td>{{ data.key_size }}{% if data.key_size is number %} bit{% endif %}</td></tr>
+              <tr><th>Issued via provisioner</th><td>{{ cert.provisioner.name or "—" }}</td></tr>
+              {% if revocation %}
+              <tr><th>Revoked at</th><td>{{ revocation.RevokedAt }}</td></tr>
+              <tr><th>Revocation reason</th><td>{{ revocation.Reason or "—" }} ({{ revocation.ReasonCode }})</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+  {% include "x509/_revoke_modal.html" %}
+</div>
+{% endblock content %}
+
+{% block javascripts %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock javascripts %}

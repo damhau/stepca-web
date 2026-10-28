@@ -22,7 +22,43 @@ def test_revoke_sends_the_decimal_serial_to_step_ca(client, ca_client, step_db):
     step_db.add_cert(SERIAL)
     response = client.post("/x509/revoke", data={"cert_id": str(SERIAL), "passphrase": "pw", "csrf_token": csrf_token(client)})
     assert response.status_code == 302
-    ca_client.revoke.assert_called_once_with(str(SERIAL), "pw")
+    ca_client.revoke.assert_called_once_with(str(SERIAL), "pw", reason_code=0, reason="Unspecified")
+    assert response.headers["Location"].endswith(f"/x509/cert/{SERIAL}")
+
+
+def test_revoke_with_a_reason(client, ca_client, step_db):
+    step_db.add_cert(SERIAL)
+    token = csrf_token(client)
+    client.post("/x509/revoke", data={"cert_id": str(SERIAL), "passphrase": "pw", "reason": "4", "csrf_token": token})
+    ca_client.revoke.assert_called_once_with(str(SERIAL), "pw", reason_code=4, reason="Superseded")
+    # Codes that make no sense for a passive revocation (certificateHold, removeFromCRL, CA compromise) are refused
+    for code in ("2", "6", "8", "11", "x"):
+        client.post("/x509/revoke", data={"cert_id": str(SERIAL), "passphrase": "pw", "reason": code, "csrf_token": token})
+    assert ca_client.revoke.call_count == 1
+
+
+def test_certificate_detail_page(client, step_db):
+    step_db.add_cert(SERIAL, "detail.test")
+    html = client.get(f"/x509/cert/{SERIAL}").get_data(as_text=True)
+    assert "CN=detail.test" in html
+    assert format(SERIAL, "x") in html
+    assert "Admin JWK" in html
+    assert 'data-target="#revokeModal"' in html
+
+    step_db.add_revocation(SERIAL)
+    html = client.get(f"/x509/cert/{SERIAL}").get_data(as_text=True)
+    assert "Revoked" in html
+    assert 'data-target="#revokeModal"' not in html
+    assert client.get("/x509/cert/999").status_code == 302
+
+
+def test_certificate_fields_are_escaped(client, step_db):
+    """Subjects come from CSRs: they must never be rendered as HTML."""
+    step_db.add_cert(SERIAL, "<img src=x onerror=alert(1)>.test")
+    for path in (f"/x509/cert/{SERIAL}", "/x509/active", "/x509/all"):
+        html = client.get(path).get_data(as_text=True)
+        assert "<img src=x" not in html, path
+        assert "&lt;img src=x" in html, path
 
 
 def test_revoke_of_unknown_serial_does_not_call_the_ca(client, ca_client, step_db):

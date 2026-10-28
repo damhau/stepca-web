@@ -1,5 +1,6 @@
 import atexit
 import base64
+import fcntl
 import json
 import os
 import secrets
@@ -18,7 +19,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
-from jose import jwk, jwt
+from jose import jwt
 from jwcrypto import jwa
 from jwcrypto import jwe as jwcrypto_jwe
 from jwcrypto import jwk as jwcrypto_jwk
@@ -48,22 +49,6 @@ class CAToken:
         print("🔍 jwt_body:", self.jwt_body)
         key = ECAlgorithm(ECAlgorithm.SHA256).from_jwk(jwk_privkey)
         self.token = python_jwt.encode(self.jwt_body(), key=key, headers={"kid": jwk_privkey["kid"]}, algorithm="ES256")
-
-    def decrypt_and_merge(self, jwk_public: dict, encrypted_key: str, passphrase: str) -> dict:
-        # Decrypt the encrypted private key
-        jwetoken = jwcrypto_jwe.JWE()
-        jwetoken.deserialize(encrypted_key)
-        jwetoken.decrypt(jwk.JWK.from_password(passphrase))
-
-        # Get private JWK
-        private_jwk_json = jwetoken.plaintext.decode("utf-8")
-        private_jwk = json.loads(private_jwk_json)
-
-        # Merge 'd' from private JWK into the public JWK
-        full_jwk = jwk_public.copy()
-        full_jwk["d"] = private_jwk["d"]
-
-        return full_jwk
 
     def jwt_body(self):
         body = {
@@ -166,15 +151,34 @@ class StepCAClient:
 
     def _is_cert_valid(self, cert_path, min_validity_hours=1):
         with open(cert_path, "rb") as f:
-            cert_data = f.read()
-            cert = x509.load_pem_x509_certificate(cert_data, default_backend())
+            cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+        return cert.not_valid_after_utc - datetime.now(UTC) > timedelta(hours=min_validity_hours)
 
-        not_after = cert.not_valid_after_utc.replace(tzinfo=None)
-        now = datetime.utcnow()
-        remaining = not_after - now
-        remaining_hours = remaining.total_seconds() / 3600
+    @staticmethod
+    def _write_atomic(path, content, mode=0o644):
+        """Write a file in one step, so a reader never sees it half written."""
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)))
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
 
-        return remaining_hours > min_validity_hours
+    def _admin_credentials(self):
+        """The admin certificate chain and key, renewed when missing or close to expiry.
+
+        A file lock stops several gunicorn workers from renewing at the same time, and from
+        reading a certificate and a key that come from two different renewals.
+        """
+        with open(f"{self.cert_file}.lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if not (os.path.exists(self.cert_file) and os.path.exists(self.key_file) and self._is_cert_valid(self.cert_file)):
+                print("📁 Missing or expiring admin certificate — requesting a new one.")
+                self._request_new_certificate()
+            with open(self.cert_file, "rb") as f:
+                pem_cert = f.read()
+            with open(self.key_file, "rb") as f:
+                pem_key = f.read()
+        return pem_cert, pem_key
 
     # --- Placeholder for your certificate request function ---
     def _request_new_certificate(self):
@@ -210,44 +214,23 @@ class StepCAClient:
 
         response = requests.post(f"{self.ca_url}/sign", json=payload, verify=self._ca_root(), timeout=TIMEOUT)
 
-        if response.status_code == 201:
-            data = response.json()
-            print("✅ Certificate issued!\n")
+        if response.status_code != 201:
+            raise RuntimeError(f"step-ca refused the admin certificate ({response.status_code}): {response.text}")
+        data = response.json()
 
-        else:
-            print(f"❌ Error: {response.status_code}\n{response.text}")
-
-        fullchain = data["crt"] + "\n" + data["ca"]
-
-        # Save fullchain as admin.crt
-        with open("admin.crt", "w") as f:
-            f.write(fullchain)
-
-        print("✅ Full chain saved to admin.crt")
-
-        # Save private key
-        with open("admin.key", "w") as f:
-            f.write(
-                subject_key.private_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PrivateFormat.PKCS8,
-                    encryption_algorithm=serialization.NoEncryption(),  # or use a password here
-                ).decode()
-            )
-
-        print("✅ Private key saved to admin.key")
+        # Key first: a certificate is only usable once its key is in place
+        key_pem = subject_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode()
+        self._write_atomic(self.key_file, key_pem, mode=0o600)
+        self._write_atomic(self.cert_file, data["crt"] + "\n" + data["ca"])
+        print(f"✅ Admin certificate saved to {self.cert_file}")
 
     def _get_jwt_token(self, audience):
-        if not os.path.exists(self.cert_file) or not os.path.exists(self.key_file) or not self._is_cert_valid(self.cert_file):
-            print("📁 Missing or invalid cert — requesting a new one.")
-            self._request_new_certificate()
-
-        with open(self.cert_file, "rb") as f:
-            pem_cert = f.read()
-
-        with open(self.key_file, "rb") as f:
-            pem_key = f.read()
-            private_key = serialization.load_pem_private_key(pem_key, password=None)
+        pem_cert, pem_key = self._admin_credentials()
+        private_key = serialization.load_pem_private_key(pem_key, password=None)
 
         certs = [
             x509.load_pem_x509_certificate(c + b"-----END CERTIFICATE-----")
@@ -445,6 +428,14 @@ class StepCAClient:
         else:
             return False
 
+    def update_admin(self, id, admin_type):
+        """step-ca only lets the type of an admin change (1 = ADMIN, 2 = SUPER_ADMIN)."""
+        response = self._request("PATCH", f"/admin/admins/{id}", json_payload={"type": admin_type})
+        if response.ok:
+            return response.json()
+        print(f"❌ Error: {response.status_code} - {response.text}")
+        return None
+
     def list_admins(self):
         admins = self._list_all("/admin/admins", "admins")
         return {"admins": admins} if admins is not None else None
@@ -528,24 +519,13 @@ class StepCAClient:
         else:
             token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk).token
 
-        payload = {
-            "csr": csr,
-            "ott": token,
-            "templateData": {
-                "subject": {"country": "US", "organization": "Coyote Corporation", "commonName": "{{ .Subject.CommonName }}"},
-                "sans": sans,
-            },
-        }
+        payload = {"csr": csr, "ott": token}
         response = self._request_noauth("POST", "/1.0/sign", json_payload=payload)
         if response.status_code == 201:
             return x509.load_pem_x509_certificate(str.encode(response.json()["crt"]))
         else:
             print(f"❌ Error: {response.status_code} - {response.text}")
             return None
-
-    def health(self):
-        with requests.get(urljoin(self.url, "health"), verify=self.cert_bundle_fn) as r:
-            print(r.json())
 
     def generate_default_key_pair(self, passphrase: bytes):
         if not passphrase:

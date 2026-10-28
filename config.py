@@ -36,7 +36,13 @@ CA_URL = get_config("ca.url")
 CA_FINGERPRINT = get_config("ca.fingerprint")
 # Optional path to the CA root PEM; otherwise it is downloaded once and pinned with CA_FINGERPRINT
 CA_ROOT = get_config("ca.root")
-CA_ADMIN_PROVISIONER_NAME = get_config("ca.admin_provisioner_name")
+CA_ADMIN_PROVISIONER_NAME = get_config("ca.admin_provisioner_name", "Admin JWK")
+# The app's own admin on the CA: this subject on CA_ADMIN_PROVISIONER_NAME
+CA_ADMIN_SUBJECT = get_config("ca.admin_subject", "step")
+# Password of CA_ADMIN_PROVISIONER_NAME (a file, e.g. a Docker secret): its key is then decrypted in memory
+# instead of being read from jwk_key.json
+CA_ADMIN_PASSWORD_FILE = get_config("ca.admin_password_file")
+CA_ADMIN_PASSWORD = os.environ.get("CA_ADMIN_PASSWORD")
 
 print(DB_HOST, DB_USER, CA_URL)
 

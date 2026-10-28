@@ -22,7 +22,7 @@ def test_revoke_sends_the_decimal_serial_to_step_ca(client, ca_client, step_db):
     step_db.add_cert(SERIAL)
     response = client.post("/x509/revoke", data={"cert_id": str(SERIAL), "passphrase": "pw", "csrf_token": csrf_token(client)})
     assert response.status_code == 302
-    ca_client.revoke.assert_called_once_with(str(SERIAL), "pw", reason_code=0, reason="Unspecified")
+    ca_client.revoke.assert_called_once_with(str(SERIAL), reason_code=0, reason="Unspecified")
     assert response.headers["Location"].endswith(f"/x509/cert/{SERIAL}")
 
 
@@ -30,7 +30,7 @@ def test_revoke_with_a_reason(client, ca_client, step_db):
     step_db.add_cert(SERIAL)
     token = csrf_token(client)
     client.post("/x509/revoke", data={"cert_id": str(SERIAL), "passphrase": "pw", "reason": "4", "csrf_token": token})
-    ca_client.revoke.assert_called_once_with(str(SERIAL), "pw", reason_code=4, reason="Superseded")
+    ca_client.revoke.assert_called_once_with(str(SERIAL), reason_code=4, reason="Superseded")
     # Codes that make no sense for a passive revocation (certificateHold, removeFromCRL, CA compromise) are refused
     for code in ("2", "6", "8", "11", "x"):
         client.post("/x509/revoke", data={"cert_id": str(SERIAL), "passphrase": "pw", "reason": code, "csrf_token": token})

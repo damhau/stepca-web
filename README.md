@@ -67,9 +67,11 @@ stepca-web/
 │   │   └── ... (Jinja2 HTML templates)
 │   └── static/
 │       └── ... (CSS, JS, icons)
-├── requirements.txt
-├── README.md
-└── jwk_key.json
+├── tests/                 # unit tests; tests/e2e/run.sh runs them against a real step-ca
+├── pyproject.toml / uv.lock
+├── requirements.txt       # exported from uv.lock, for Dockerfile.pip
+├── Dockerfile / Dockerfile.pip / docker-compose.yml
+└── README.md
 ```
 
 ## Backend: Python API and Endpoints
@@ -186,17 +188,7 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
 
 3. **Create a read-only database role** for the app (see [Database Connection](#database-connection)).
 
-4. **Generate the `jwk_key.json` file**
-
-   This file is required for admin JWT authentication with Step CA.  
-   Run the following command (replace `"Admin JWK"` with your provisioner name if different):
-
-   ```bash
-   step ca provisioner list \
-     | jq -r '.[] | select(.name == "Admin JWK") | .encryptedKey' \
-     | step crypto jwe decrypt \
-     | jq > jwk_key.json
-   ```
+4. **Give the app its own identity on the CA** (see [CA identity](#ca-identity)).
 
 5. **Configure the database and CA connection**
 
@@ -252,7 +244,7 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
 
 The image runs the app with gunicorn as a non-root user. All configuration comes from environment variables (`settings.json` is optional).
 
-1. **Generate `jwk_key.json`** in the project root (see step 4 above). It is mounted read-only into the container and must be readable by uid 1000.
+1. **Create the app's identity on the CA** (see [CA identity](#ca-identity)) and put its provisioner password in `ca_admin_password.txt` next to `docker-compose.yml`. It is mounted as a Docker secret and must be readable by uid 1000 (e.g. `chmod 640` and group 1000, or `chmod 644` on a host only you use).
 
 2. **Create the `.env` file**
 
@@ -279,6 +271,39 @@ Notes:
 - `admin.crt`, `admin.key`, `ca_root.crt`, the app's SQLite database `stepca-web.db` and any `settings.json` saved from `/system/config` live in the `stepca-web-data` volume.
 - The Step CA service control page (`sudo` + systemd) does not work inside the container.
 
+
+## CA identity
+
+The app manages provisioners and admins through step-ca's Admin API, and revokes certificates, as an admin of the CA. Give it its own admin rather than the super admin `step` you use yourself:
+
+```bash
+# A JWK provisioner and an ADMIN for the app (asks for the "Admin JWK" password)
+step ca provisioner add stepca-web --type JWK --create --password-file stepca-web.pass \
+  --admin-subject step --admin-provisioner "Admin JWK"
+step ca admin add stepca-web stepca-web \
+  --admin-subject step --admin-provisioner "Admin JWK"
+```
+
+Then configure the app:
+
+```bash
+CA_ADMIN_PROVISIONER_NAME=stepca-web
+CA_ADMIN_SUBJECT=stepca-web
+CA_ADMIN_PASSWORD_FILE=/run/secrets/ca_admin_password   # contents of stepca-web.pass
+```
+
+- **The key never touches the disk.** On first use the app fetches the provisioner's encrypted key from the CA and decrypts it in memory with the password from `CA_ADMIN_PASSWORD_FILE`. Revoking needs no passphrase.
+- **Least privilege.** An ADMIN can manage provisioners but not admins: the Admins page becomes read-only, and you manage admins with `step ca admin`. Note that an ADMIN can still create provisioners, so it can still issue certificates: protect the app accordingly.
+- **Switching identity** is safe: the app re-issues its admin certificate (`admin.crt` in the working directory) when it doesn't match `CA_ADMIN_SUBJECT` and `CA_ADMIN_PROVISIONER_NAME`.
+- **Revocations** are made with the app's provisioner, so the Revoked list shows `stepca-web` under "Revoked via".
+- **Legacy setup:** without `CA_ADMIN_PASSWORD_FILE`, the app reads the provisioner's decrypted key from `jwk_key.json` in the working directory:
+
+  ```bash
+  step ca provisioner list \
+    | jq -r '.[] | select(.name == "Admin JWK") | .encryptedKey' \
+    | step crypto jwe decrypt \
+    | jq > jwk_key.json
+  ```
 
 ## Roles
 

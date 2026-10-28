@@ -56,3 +56,11 @@ class TestLDAP:
         backend, _, connect = ldap
         assert backend.authenticate("bob", password) is None
         connect.assert_not_called()
+
+
+def test_app_refuses_to_start_without_ca_url(monkeypatch):
+    import app as app_package
+
+    monkeypatch.setattr(app_package, "CA_URL", None)
+    with pytest.raises(RuntimeError, match="CA_URL"):
+        create_app(Config)

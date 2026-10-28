@@ -98,8 +98,12 @@ def ca_client(monkeypatch):
         "admins": [{"id": "adm-1", "subject": "step", "provisionerId": ADMIN_JWK["id"], "type": "SUPER_ADMIN"}]
     }
     fake.revoke.return_value = {"status": "ok"}
-    for module in ("app.blueprint.step.routes", "app.blueprint.x509.routes"):
+    fake.admin_key_source.return_value = "encrypted key from the CA, decrypted in memory"
+    for module in ("app.libs.ca", "app.blueprint.step.routes", "app.blueprint.x509.routes"):
         monkeypatch.setattr(f"{module}.client", fake)
+    # The app's identity on the CA; tests change it with fake.identity = "ADMIN"
+    fake.identity = "SUPER_ADMIN"
+    monkeypatch.setattr("app.libs.ca.app_identity_type", lambda: fake.identity)
     return fake
 
 

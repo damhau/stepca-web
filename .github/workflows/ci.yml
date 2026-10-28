@@ -20,12 +20,16 @@ jobs:
           git diff --exit-code requirements.txt
 
   e2e:
-    name: End-to-end (${{ matrix.dockerfile }})
+    name: End-to-end (${{ matrix.dockerfile }}, ${{ matrix.identity }} identity)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        dockerfile: [Dockerfile, Dockerfile.pip]
+        include:
+          - dockerfile: Dockerfile
+            identity: admin
+          - dockerfile: Dockerfile.pip
+            identity: super
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -33,3 +37,4 @@ jobs:
       - run: tests/e2e/run.sh
         env:
           DOCKERFILE: ${{ matrix.dockerfile }}
+          E2E_IDENTITY: ${{ matrix.identity }}

@@ -24,6 +24,7 @@ docker-compose.yml
 settings.json
 jwk_key.json
 local_users.json
+ca_admin_password.txt
 stepca-web.db
 ca_root.crt
 admin.crt

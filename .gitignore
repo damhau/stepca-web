@@ -182,6 +182,7 @@ settings.json
 svc.crt
 svc.key
 local_users.json
+ca_admin_password.txt
 stepca-web.db
 ca_root.crt
 *.key

@@ -7,12 +7,10 @@ from app.auth.decorator import login_required
 from app.auth.roles import role_required
 from app.blueprint.x509 import bp
 from app.libs.audit import audit
+from app.libs.ca import client
 from app.libs.db_step import *
 from app.libs.db_x509 import *
 from app.libs.stepapi import *
-from config import CA_URL
-
-client = StepCAClient(CA_URL)
 
 # RFC 5280 reasons that make sense for a passive revocation
 REVOCATION_REASONS = [
@@ -146,7 +144,6 @@ def sign_cert():
 @role_required("operator")
 def revoke_cert():
     cert_id = request.form.get("cert_id", "")
-    passphrase = request.form.get("passphrase")
     reasons = dict(REVOCATION_REASONS)
     reason = request.form.get("reason", "0")
     reason_code = int(reason) if reason.isascii() and reason.isdigit() else None
@@ -161,7 +158,7 @@ def revoke_cert():
         return redirect(url_for("x509.active_certs"))
 
     try:
-        client.revoke(cert_id, passphrase, reason_code=reason_code, reason=reasons[reason_code])
+        client.revoke(cert_id, reason_code=reason_code, reason=reasons[reason_code])
         audit("revoke", cert_id, detail=reasons[reason_code])
         flash(f"Certificate {cert_id} has been revoked successfully.", "success")
     except Exception as e:

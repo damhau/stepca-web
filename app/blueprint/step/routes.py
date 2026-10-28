@@ -5,12 +5,11 @@ from flask import abort, current_app, flash, jsonify, redirect, render_template,
 from app.auth.decorator import login_required
 from app.auth.roles import role_required
 from app.blueprint.step import bp
+from app.libs import ca
 from app.libs.audit import audit
+from app.libs.ca import client
 from app.libs.db_step import *
 from app.libs.stepapi import *
-from config import CA_URL
-
-client = StepCAClient(CA_URL)
 
 
 @bp.route("/provisioners", methods=["GET", "POST"])
@@ -95,12 +94,26 @@ def delete_provisioner(name):
         return redirect("/step/provisioners")
 
 
+def admins_manageable():
+    """Only a SUPER_ADMIN may change admins on step-ca: with a dedicated ADMIN identity they are read-only."""
+    return ca.app_identity_type() == "SUPER_ADMIN"
+
+
+def refuse_unless_admins_manageable():
+    if admins_manageable():
+        return None
+    flash("The app's identity on the CA is not a SUPER_ADMIN: manage admins with `step ca admin`.", "danger")
+    return redirect(url_for("step.admins"))
+
+
 @bp.route("/admins", methods=["GET", "POST"])
 @login_required
 @role_required("admin", methods={"POST"})
 def admins():
 
     if request.method == "POST":
+        if refused := refuse_unless_admins_manageable():
+            return refused
         subject = request.form.get("subject")
         provisioner_id = request.form.get("provisioner")
         admin_type = int(request.form.get("type"))
@@ -124,7 +137,7 @@ def admins():
         title="StepCA Admins",
         admins=(admins or {}).get("admins", []),
         provisioners=provisioner_map,
-        manage_admins=True,
+        manage_admins=admins_manageable(),
     )
 
 
@@ -132,6 +145,8 @@ def admins():
 @login_required
 @role_required("admin")
 def update_admin(id):
+    if refused := refuse_unless_admins_manageable():
+        return refused
     admin_type = request.form.get("type", type=int)
     ok = admin_type in (1, 2) and bool(client.update_admin(id, admin_type))
     audit("update_admin", id, success=ok, detail=f"type={admin_type}")
@@ -146,6 +161,8 @@ def update_admin(id):
 @login_required
 @role_required("admin")
 def delete_admin(id):
+    if refused := refuse_unless_admins_manageable():
+        return refused
     resp = client.delete_admin(id)
     audit("delete_admin", id, success=bool(resp))
 

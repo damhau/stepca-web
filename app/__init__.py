@@ -5,7 +5,7 @@ from flask import Flask
 from app.extensions import csrf, db
 from app.models.audit import AuditEvent  # noqa: F401  registers the model for create_all
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
-from config import Config
+from config import CA_URL, DB_HOST, Config
 
 
 def create_app(config_class=Config):
@@ -14,6 +14,9 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
     if not app.config.get("SECRET_KEY"):
         raise RuntimeError('SECRET_KEY is not set. Generate one with: python -c "import secrets; print(secrets.token_hex(32))"')
+    missing = [name for name, value in (("CA_URL", CA_URL), ("DATABASE_HOST", DB_HOST)) if not value]
+    if missing:
+        raise RuntimeError(f"Missing configuration: {', '.join(missing)} (see .env.example)")
 
     # Initialize Flask extensions here
     db.init_app(app)

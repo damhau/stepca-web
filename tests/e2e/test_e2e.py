@@ -11,6 +11,7 @@ from cryptography import x509
 
 BASE_URL = os.environ.get("E2E_BASE_URL")
 COMPOSE = os.environ.get("E2E_COMPOSE", "tests/e2e/compose.yml")
+IDENTITY = os.environ.get("E2E_IDENTITY", "admin")
 CA = ["--ca-url", "https://localhost:9000", "--root", "/home/step/certs/root_ca.crt"]
 
 pytestmark = pytest.mark.skipif(not BASE_URL, reason="needs the stack started by tests/e2e/run.sh")
@@ -90,9 +91,7 @@ def test_sign_download_and_revoke(session):
     renew = ["ca", "renew", "--force", *CA, "--out", "/tmp/renewed.crt", "/tmp/ui.crt", "/tmp/ui.key"]
     assert step(*renew).returncode == 0, "renewal must work before the revocation"
 
-    html = session.post(
-        f"{BASE_URL}/x509/revoke", data={"cert_id": serial, "passphrase": "testpass", "reason": "4", "csrf_token": session.csrf}
-    ).text
+    html = session.post(f"{BASE_URL}/x509/revoke", data={"cert_id": serial, "reason": "4", "csrf_token": session.csrf}).text
     assert ("success", f"Certificate {serial} has been revoked successfully.") in flashes(html)
     assert "Superseded (4)" in html, "the revocation reason recorded by step-ca is shown on the certificate page"
     assert step(*renew).returncode != 0, "step-ca must refuse to renew a revoked certificate"
@@ -113,9 +112,10 @@ def test_lists_are_not_truncated_at_20(session):
             },
         )
     html = session.get(f"{BASE_URL}/step/provisioners").text
-    assert len(re.findall(r'action="/step/provisioner/[^"]+/delete"', html)) == 26
+    assert len(re.findall(r'action="/step/provisioner/acme-\d\d/delete"', html)) == 25
 
 
+@pytest.mark.skipif(IDENTITY != "super", reason="only a SUPER_ADMIN identity can change admins")
 def test_admin_type_can_be_changed(session):
     def admin_row(subject):
         rows = re.findall(r"<tr>(.*?)</tr>", session.get(f"{BASE_URL}/step/admins").text, re.S)
@@ -131,3 +131,31 @@ def test_admin_type_can_be_changed(session):
     assert ("success", f"Admin '{admin_id}' updated.") in flashes(html)
     assert "SUPER_ADMIN" in admin_row("e2e-ops")
     assert len(re.findall(r"<td>e2e-ops</td>", session.get(f"{BASE_URL}/step/admins").text)) == 1, "editing must not duplicate the admin"
+
+
+@pytest.mark.skipif(IDENTITY != "admin", reason="dedicated ADMIN identity only")
+def test_dedicated_admin_identity(session):
+    """The app acts as the ADMIN 'stepca-web', with a key decrypted in memory only."""
+    html = session.get(f"{BASE_URL}/step/admins").text
+    assert "admins are read-only here" in html
+    assert "Add Admin" not in html
+    html = session.post(
+        f"{BASE_URL}/step/admins", data={"subject": "x", "provisioner": "Admin JWK", "type": "2", "csrf_token": session.csrf}
+    ).text
+    assert "manage admins with `step ca admin`" in unescape(html)
+    assert "<td>x</td>" not in session.get(f"{BASE_URL}/step/admins").text
+
+    config = unescape(session.get(f"{BASE_URL}/system/config").text)
+    assert "stepca-web on provisioner stepca-web" in config
+    assert "<code>ADMIN</code>" in config
+    assert "decrypted in memory" in config
+
+    check = compose_exec(
+        "stepca-web",
+        "python",
+        "-c",
+        "import os; from cryptography import x509; from app.libs.stepapi import issuing_provisioner; "
+        "c = x509.load_pem_x509_certificate(open('/data/admin.crt', 'rb').read()); "
+        "print(c.subject.rfc4514_string(), issuing_provisioner(c), os.path.exists('/data/jwk_key.json'))",
+    )
+    assert check.stdout.splitlines()[-1].split() == ["CN=stepca-web", "stepca-web", "False"], check.stderr

@@ -157,3 +157,41 @@ def test_config_page_never_shows_the_db_password(client):
     assert "Password" in html and "set" in html
     assert "test-secret" not in html
     assert "<form" not in html.split("Configuration")[-1] or 'name="db_password"' not in html
+
+
+def test_admins_are_read_only_with_an_admin_identity(client, ca_client):
+    ca_client.identity = "ADMIN"
+    html = client.get("/step/admins").get_data(as_text=True)
+    assert "admins are read-only here" in html
+    assert "Add Admin" not in html and "editAdminModal" not in html
+    token = csrf_token(client)
+    response = client.post(
+        "/step/admins", data={"csrf_token": token, "subject": "x", "provisioner": "Admin JWK", "type": "1"}, follow_redirects=True
+    )
+    assert "manage admins with `step ca admin`" in response.get_data(as_text=True)
+    client.post("/step/admin/adm-1/update", data={"csrf_token": token, "type": "2"})
+    client.post("/step/admin/adm-1/delete", data={"csrf_token": token})
+    ca_client.create_admin.assert_not_called()
+    ca_client.update_admin.assert_not_called()
+    ca_client.delete_admin.assert_not_called()
+
+
+def test_app_identity_type_from_the_admin_list_and_the_db(app, step_db, monkeypatch):
+    """The Admin API gives admins a provisioner id; provisioner names come from step-ca's database."""
+    from app.libs import ca
+
+    step_db.add_provisioner("prov-web", "stepca-web")
+    fake = mock.MagicMock(subject="stepca-web", provisioner_name="stepca-web")
+    fake.list_admins.return_value = {
+        "admins": [
+            {"subject": "step", "provisioner_id": "prov-admin-jwk", "type": 2},
+            {"subject": "stepca-web", "provisioner_id": "prov-web", "type": 1},
+        ]
+    }
+    monkeypatch.setattr(ca, "client", fake)
+    monkeypatch.setattr(ca, "_identity", (float("-inf"), None))
+    assert ca.app_identity_type() == "ADMIN"
+    fake.subject, fake.provisioner_name = "step", "Admin JWK"
+    assert ca.app_identity_type() == "ADMIN", "cached"
+    monkeypatch.setattr(ca, "_identity", (float("-inf"), None))
+    assert ca.app_identity_type() == "SUPER_ADMIN"

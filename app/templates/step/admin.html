@@ -227,6 +227,7 @@
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+{% if can("admin") and manage_admins %}
 <script>
   const provisionerNames = {{ provisioners | tojson }};
   const updateUrl = {{ url_for('step.update_admin', id='__ID__') | tojson }};
@@ -238,5 +239,6 @@
     $('#editAdminType').val(String(admin.type === 'SUPER_ADMIN' || admin.type === 2 ? 2 : 1));
   });
 </script>
+{% endif %}
 
 {% endblock javascripts %}

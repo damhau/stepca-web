@@ -3,9 +3,11 @@ from flask import current_app, render_template
 from app.auth.decorator import login_required
 from app.auth.roles import role_required
 from app.blueprint.system import bp
+from app.libs import ca
 from app.libs.audit import recent_events
 from config import (
     CA_ADMIN_PROVISIONER_NAME,
+    CA_ADMIN_SUBJECT,
     CA_FINGERPRINT,
     CA_ROOT,
     CA_URL,
@@ -37,7 +39,9 @@ def effective_settings():
                 ("URL", CA_URL),
                 ("Root fingerprint", CA_FINGERPRINT or "not set"),
                 ("Root certificate", CA_ROOT or "downloaded from the CA and pinned with the fingerprint"),
-                ("Admin provisioner", CA_ADMIN_PROVISIONER_NAME),
+                ("App identity", f"{CA_ADMIN_SUBJECT} on provisioner {CA_ADMIN_PROVISIONER_NAME}"),
+                ("App identity type", ca.app_identity_type() or "unknown (CA unreachable or admin not found)"),
+                ("Admin provisioner key", ca.client.admin_key_source()),
             ],
         ),
         (

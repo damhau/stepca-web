@@ -1,0 +1,5 @@
+# Legacy setup (E2E_IDENTITY=super): the admin provisioner's decrypted key in jwk_key.json
+services:
+  stepca-web:
+    volumes:
+      - ./work/jwk_key.json:/data/jwk_key.json:ro

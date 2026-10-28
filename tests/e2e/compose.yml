@@ -30,8 +30,8 @@ services:
       - "127.0.0.1:${E2E_PORT:-15000}:5000"
     volumes:
       - web-data:/data
-      - ./work/jwk_key.json:/data/jwk_key.json:ro
       - ./work/local_users.json:/data/local_users.json:ro
+      - ./work/secrets:/run/secrets:ro
     depends_on:
       db:
         condition: service_healthy

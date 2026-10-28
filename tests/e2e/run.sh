@@ -3,17 +3,23 @@
 #   1. step-ca with remote management, its database on PostgreSQL
 #   2. stepca-web connected with a read-only role, TLS pinned with the root fingerprint
 #   3. pytest tests/e2e against the running app
-# Usage: tests/e2e/run.sh            (KEEP=1 leaves the stack running, DOCKERFILE=Dockerfile.pip tests the pip image)
+# Usage: tests/e2e/run.sh
+#   E2E_IDENTITY=admin (default)  the app is a dedicated ADMIN "stepca-web"; its key is decrypted in memory
+#                                 from a password file (the recommended setup)
+#   E2E_IDENTITY=super            the app is the super admin "step" with a decrypted jwk_key.json (legacy setup)
+#   DOCKERFILE=Dockerfile.pip     test the pip image;  KEEP=1  leave the stack running
 set -euo pipefail
 cd "$(dirname "$0")"
 
 PORT="${E2E_PORT:-15000}"
+IDENTITY="${E2E_IDENTITY:-admin}"
 DC="docker compose -f compose.yml"
+[ "$IDENTITY" = super ] && DC="$DC -f compose.legacy-key.yml"
 STEP="$DC exec -T step-ca step"
 CA="--ca-url https://localhost:9000 --root /home/step/certs/root_ca.crt"
 
 # compose needs these files to exist before the stack is configured
-mkdir -p work
+mkdir -p work/secrets
 echo "SECRET_KEY=placeholder" > work/app.env
 echo '{}' > work/jwk_key.json
 echo '{}' > work/local_users.json
@@ -54,10 +60,21 @@ $DC exec -T db psql -q -U step-ca -d step_ca_db -c "
   GRANT SELECT ON ALL TABLES IN SCHEMA public TO stepca_web_ro;
   ALTER DEFAULT PRIVILEGES FOR ROLE \"step-ca\" IN SCHEMA public GRANT SELECT ON TABLES TO stepca_web_ro;"
 
-echo "== App credentials: decrypted admin JWK and a local user"
-$STEP ca provisioner list $CA > work/provisioners.json
-python3 -c 'import json; print(next(p["encryptedKey"] for p in json.load(open("work/provisioners.json")) if p["name"] == "Admin JWK"))' \
-  | $DC exec -T step-ca step crypto jwe decrypt --password-file /home/step/secrets/password > work/jwk_key.json
+if [ "$IDENTITY" = super ]; then
+  echo "== App identity: super admin 'step', decrypted key in jwk_key.json"
+  PROVISIONER="Admin JWK"; SUBJECT=step; PASSWORD_FILE=
+  $STEP ca provisioner list $CA > work/provisioners.json
+  python3 -c 'import json; print(next(p["encryptedKey"] for p in json.load(open("work/provisioners.json")) if p["name"] == "Admin JWK"))' \
+    | $DC exec -T step-ca step crypto jwe decrypt --password-file /home/step/secrets/password > work/jwk_key.json
+else
+  echo "== App identity: dedicated ADMIN 'stepca-web' (the commands from the README)"
+  PROVISIONER=stepca-web; SUBJECT=stepca-web; PASSWORD_FILE=/run/secrets/ca_admin_password
+  printf 'stepca-web-pass' > work/secrets/ca_admin_password
+  $DC exec -T step-ca sh -c 'printf stepca-web-pass > /tmp/stepca-web.pass'
+  AUTH=(--admin-subject step --admin-provisioner "Admin JWK" --admin-password-file /home/step/secrets/password)
+  $STEP ca provisioner add stepca-web --type JWK --create --password-file /tmp/stepca-web.pass "${AUTH[@]}" $CA >/dev/null
+  $STEP ca admin add stepca-web stepca-web "${AUTH[@]}" $CA >/dev/null
+fi
 HASH=$($DC run --rm --no-deps -T --entrypoint python stepca-web -c \
   "from werkzeug.security import generate_password_hash as g; print(g('testpw'))")
 python3 -c 'import json, sys; json.dump({"admin": {"password_hash": sys.argv[1], "role": "admin"}}, open("work/local_users.json", "w"))' "$HASH"
@@ -70,7 +87,9 @@ DATABASE_PASSWORD=ro
 DATABASE_NAME=step_ca_db
 CA_URL=https://step-ca:9000
 CA_FINGERPRINT=$($STEP certificate fingerprint /home/step/certs/root_ca.crt)
-CA_ADMIN_PROVISIONER_NAME=Admin JWK
+CA_ADMIN_PROVISIONER_NAME=$PROVISIONER
+CA_ADMIN_SUBJECT=$SUBJECT
+CA_ADMIN_PASSWORD_FILE=$PASSWORD_FILE
 AUTH_BACKEND=local
 EOF
 
@@ -82,4 +101,5 @@ docker inspect -f '{{.State.Health.Status}}' "$WEB" | grep -qx healthy || { $DC 
 
 echo "== Running the end-to-end tests"
 cd ../..
-E2E_BASE_URL="http://127.0.0.1:$PORT" E2E_COMPOSE="tests/e2e/compose.yml" uv run pytest tests/e2e -v -p no:cacheprovider
+E2E_BASE_URL="http://127.0.0.1:$PORT" E2E_COMPOSE="tests/e2e/compose.yml" E2E_IDENTITY="$IDENTITY" \
+  uv run pytest tests/e2e -v -p no:cacheprovider

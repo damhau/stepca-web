@@ -48,8 +48,7 @@ def test_ca_token_claims():
 
 def test_revoke_token_subject_is_the_decimal_serial(ca_client, monkeypatch):
     """step-ca requires the token subject to equal the decimal serial (INT-1)."""
-    monkeypatch.setattr(ca_client, "public_get_provisioner_by_name", lambda name: {"key": {}, "encryptedKey": ""})
-    monkeypatch.setattr(ca_client, "decrypt_and_merge", lambda **kwargs: private_jwk())
+    monkeypatch.setattr(ca_client, "_admin_jwk", private_jwk)
     sent = {}
 
     def fake_request(method, path, json_payload=None, params=None):
@@ -57,22 +56,22 @@ def test_revoke_token_subject_is_the_decimal_serial(ca_client, monkeypatch):
         return response(200, {"status": "ok"})
 
     monkeypatch.setattr(ca_client, "_request_noauth", fake_request)
-    ca_client.revoke("0119960802063269571811733802872440608485", "pw")
+    ca_client.revoke("0119960802063269571811733802872440608485", reason_code=4, reason="Superseded")
 
     serial = "119960802063269571811733802872440608485"
     assert sent["path"] == "/1.0/revoke"
     assert sent["payload"]["serial"] == serial
+    assert (sent["payload"]["reasonCode"], sent["payload"]["reason"]) == (4, "Superseded")
     claims = jwt.decode(sent["payload"]["ott"], options={"verify_signature": False})
     assert claims["sub"] == serial
     assert claims["aud"] == f"{CA_URL}/1.0/revoke"
 
 
 def test_revoke_raises_with_the_ca_error(ca_client, monkeypatch):
-    monkeypatch.setattr(ca_client, "public_get_provisioner_by_name", lambda name: {"key": {}, "encryptedKey": ""})
-    monkeypatch.setattr(ca_client, "decrypt_and_merge", lambda **kwargs: private_jwk())
+    monkeypatch.setattr(ca_client, "_admin_jwk", private_jwk)
     monkeypatch.setattr(ca_client, "_request_noauth", lambda *a, **k: response(400, {"message": "already revoked"}))
     with pytest.raises(RuntimeError, match="already revoked"):
-        ca_client.revoke("42", "pw")
+        ca_client.revoke("42")
 
 
 def test_admin_token_audience_excludes_the_query_string(ca_client, monkeypatch):
@@ -161,3 +160,64 @@ class TestRootPinning:
         client.ca_fingerprint = ""
         with pytest.raises(ConnectionError, match="CA_FINGERPRINT"):
             client._ca_root()
+
+
+def admin_cert(common_name, provisioner, days=1):
+    """A certificate like the one step-ca issues to the app, with step's provisioner extension."""
+    import datetime
+
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    name = provisioner.encode()
+    # SEQUENCE { INTEGER 1 (JWK), OCTET STRING name, OCTET STRING credential id, SEQUENCE {} }
+    body = b"\x02\x01\x01" + b"\x04" + bytes([len(name)]) + name + b"\x04\x00" + b"\x30\x00"
+    extension = b"\x30" + bytes([len(body)]) + body
+    key = ec.generate_private_key(ec.SECP256R1())
+    now = datetime.datetime.now(datetime.UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)]))
+        .issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Test CA")]))
+        .public_key(key.public_key())
+        .serial_number(1)
+        .not_valid_before(now - datetime.timedelta(minutes=1))
+        .not_valid_after(now + datetime.timedelta(days=days))
+        .add_extension(x509.UnrecognizedExtension(stepapi.STEP_PROVISIONER_OID, extension), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    return cert
+
+
+def test_issuing_provisioner_is_read_from_the_step_extension():
+    assert stepapi.issuing_provisioner(admin_cert("stepca-web", "stepca-web")) == "stepca-web"
+    assert stepapi.issuing_provisioner(x509.load_der_x509_certificate(make_cert(1, "plain.test"))) is None
+
+
+@pytest.mark.parametrize(
+    "common_name, provisioner, days, usable",
+    [
+        ("stepca-web", "stepca-web", 1, True),
+        ("step", "stepca-web", 1, False),  # certificate of the old subject
+        ("stepca-web", "Admin JWK", 1, False),  # issued by the old provisioner
+        ("stepca-web", "stepca-web", 0, False),  # expiring within the hour
+    ],
+)
+def test_cached_admin_certificate_must_match_the_identity(tmp_path, common_name, provisioner, days, usable):
+    client = StepCAClient(CA_URL, subject="stepca-web", provisioner_name="stepca-web")
+    path = tmp_path / "admin.crt"
+    path.write_bytes(admin_cert(common_name, provisioner, days).public_bytes(serialization.Encoding.PEM))
+    assert client._is_cert_valid(str(path)) is usable
+
+
+def test_admin_key_is_decrypted_in_memory(tmp_path, ca_client, monkeypatch):
+    public_jwk, encrypted = ca_client.generate_default_key_pair(b"provisioner-password")
+    password_file = tmp_path / "password"
+    password_file.write_text("provisioner-password\n")
+    monkeypatch.setattr(stepapi, "CA_ADMIN_PASSWORD_FILE", str(password_file))
+    monkeypatch.setattr(ca_client, "public_get_provisioner_by_name", lambda name: {"key": public_jwk, "encryptedKey": encrypted})
+    jwk = ca_client._admin_jwk()
+    assert jwk["kid"] == public_jwk["kid"] and "d" in jwk
+    assert not (tmp_path / "jwk_key.json").exists()
+    assert ca_client._admin_jwk() is jwk  # decrypted once

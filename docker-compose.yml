@@ -9,18 +9,19 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      # A random per-process key breaks sessions across restarts and workers
+      # Signs the session cookie: required, the same for every worker and restart
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      # Password of the app's provisioner: its key is decrypted in memory (see README, CA identity)
+      CA_ADMIN_PASSWORD_FILE: /run/secrets/ca_admin_password
     ports:
       # Bound to localhost by default: put a TLS reverse proxy in front before
       # exposing it, or set STEPCA_WEB_BIND=0.0.0.0
       - "${STEPCA_WEB_BIND:-127.0.0.1}:${STEPCA_WEB_PORT:-5000}:5000"
+    secrets:
+      - ca_admin_password
     volumes:
-      # Working directory: admin.crt/admin.key are generated here, and
-      # /system/config writes settings.json here
+      # Working directory: admin.crt/admin.key, ca_root.crt and the app's SQLite database
       - stepca-web-data:/data
-      # Decrypted admin provisioner JWK (see README)
-      - ./jwk_key.json:/data/jwk_key.json:ro
       # Users for AUTH_BACKEND=local (see README)
       # - ./local_users.json:/data/local_users.json:ro
     extra_hosts:
@@ -28,6 +29,11 @@ services:
       - "host.docker.internal:host-gateway"
       # CA_URL must use one of the CA's DNS names (TLS is verified), e.g.
       # - "ca.example.com:host-gateway"
+
+secrets:
+  ca_admin_password:
+    # Must be readable by uid 1000
+    file: ./ca_admin_password.txt
 
 volumes:
   stepca-web-data:

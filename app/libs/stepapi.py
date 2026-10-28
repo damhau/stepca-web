@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import tempfile
+import threading
 import time
 import uuid
 import warnings
@@ -18,7 +19,7 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import NameOID, ObjectIdentifier
 from jose import jwt
 from jwcrypto import jwa
 from jwcrypto import jwe as jwcrypto_jwe
@@ -26,12 +27,40 @@ from jwcrypto import jwk as jwcrypto_jwk
 from jwt.algorithms import ECAlgorithm
 
 from app.libs.cert_utils import extract_sans_from_csr
-from config import CA_ADMIN_PROVISIONER_NAME, CA_FINGERPRINT, CA_ROOT
+from config import CA_ADMIN_PASSWORD, CA_ADMIN_PASSWORD_FILE, CA_ADMIN_PROVISIONER_NAME, CA_ADMIN_SUBJECT, CA_FINGERPRINT, CA_ROOT
 
 jwa.default_max_pbkdf2_iterations = 10000000
 
 # Seconds before a request to the CA is abandoned
 TIMEOUT = 30
+# step-ca's certificate extension naming the provisioner that issued a certificate
+STEP_PROVISIONER_OID = ObjectIdentifier("1.3.6.1.4.1.37476.9000.64.1")
+
+
+def _der_element(data, pos):
+    """One DER element at `pos`: (contents, position after it)."""
+    length = data[pos + 1]
+    pos += 2
+    if length & 0x80:
+        size = length & 0x7F
+        length = int.from_bytes(data[pos : pos + size], "big")
+        pos += size
+    return data[pos : pos + length], pos + length
+
+
+def issuing_provisioner(cert):
+    """Name of the step-ca provisioner that issued `cert`, or None.
+
+    The extension is SEQUENCE { type INTEGER, name OCTET STRING, credentialID, keyValuePairs }.
+    """
+    try:
+        raw = cert.extensions.get_extension_for_oid(STEP_PROVISIONER_OID).value.value
+    except x509.ExtensionNotFound:
+        return None
+    sequence, _ = _der_element(raw, 0)
+    _, pos = _der_element(sequence, 0)
+    name, _ = _der_element(sequence, pos)
+    return name.decode()
 
 
 class CAToken:
@@ -71,7 +100,13 @@ class CAToken:
 
 class StepCAClient:
     def __init__(
-        self, ca_url, cert_file="admin.crt", key_file="admin.key", subject="step", provisioner_name=CA_ADMIN_PROVISIONER_NAME, not_after="24h"
+        self,
+        ca_url,
+        cert_file="admin.crt",
+        key_file="admin.key",
+        subject=CA_ADMIN_SUBJECT,
+        provisioner_name=CA_ADMIN_PROVISIONER_NAME,
+        not_after="24h",
     ):
         self.ca_url = ca_url.rstrip("/")
         self.cert_file = cert_file
@@ -79,7 +114,9 @@ class StepCAClient:
         self.subject = subject
         self.provisioner_name = provisioner_name
         self.not_after = not_after
-        self.jwk_key = self._load_jwk_key_from_file("jwk_key.json")
+        # The admin provisioner's private key, decrypted in memory on first use (see _admin_jwk)
+        self._jwk = None
+        self._jwk_lock = threading.Lock()
         # CA root that TLS is verified against: CA_ROOT if set, else bootstrapped from CA_FINGERPRINT
         self.ca_fingerprint = (CA_FINGERPRINT or "").replace(":", "").lower()
         self.root_file = CA_ROOT or "ca_root.crt"
@@ -139,6 +176,33 @@ class StepCAClient:
         self._root_verified = True
         return self.root_file
 
+    def admin_key_source(self):
+        if CA_ADMIN_PASSWORD_FILE or CA_ADMIN_PASSWORD:
+            return "encrypted key from the CA, decrypted in memory"
+        return "jwk_key.json (decrypted key on disk, legacy)"
+
+    def _admin_jwk(self):
+        """The private JWK of the admin provisioner, used for the admin certificate and for revocations.
+
+        With CA_ADMIN_PASSWORD_FILE (or CA_ADMIN_PASSWORD), the provisioner's encrypted key is fetched
+        from the CA and decrypted in memory: no plaintext key on disk. Otherwise jwk_key.json is read.
+        """
+        with self._jwk_lock:
+            if self._jwk is None:
+                if CA_ADMIN_PASSWORD_FILE or CA_ADMIN_PASSWORD:
+                    password = CA_ADMIN_PASSWORD
+                    if CA_ADMIN_PASSWORD_FILE:
+                        with open(CA_ADMIN_PASSWORD_FILE) as f:
+                            password = f.read().strip()
+                    provisioner = self.public_get_provisioner_by_name(self.provisioner_name)
+                    self._jwk = self.decrypt_and_merge(jwk_public=provisioner["key"], encrypted_key=provisioner["encryptedKey"], passphrase=password)
+                    print(f"✅ Key of provisioner '{self.provisioner_name}' decrypted in memory")
+                else:
+                    self._jwk = self._load_jwk_key_from_file("jwk_key.json")
+                    if self._jwk is None:
+                        raise RuntimeError("Set CA_ADMIN_PASSWORD_FILE (or provide jwk_key.json) to act on the CA")
+            return self._jwk
+
     def _load_jwk_key_from_file(self, filename):
         try:
             with open(filename) as json_file:
@@ -150,9 +214,16 @@ class StepCAClient:
             return None
 
     def _is_cert_valid(self, cert_path, min_validity_hours=1):
+        """Valid for at least another hour, and issued to the configured subject by the configured
+        provisioner: after switching identity, a certificate of the old one must not be reused."""
         with open(cert_path, "rb") as f:
             cert = x509.load_pem_x509_certificate(f.read(), default_backend())
-        return cert.not_valid_after_utc - datetime.now(UTC) > timedelta(hours=min_validity_hours)
+        common_names = [a.value for a in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)]
+        return (
+            cert.not_valid_after_utc - datetime.now(UTC) > timedelta(hours=min_validity_hours)
+            and common_names == [self.subject]
+            and issuing_provisioner(cert) == self.provisioner_name
+        )
 
     @staticmethod
     def _write_atomic(path, content, mode=0o644):
@@ -172,7 +243,7 @@ class StepCAClient:
         with open(f"{self.cert_file}.lock", "w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             if not (os.path.exists(self.cert_file) and os.path.exists(self.key_file) and self._is_cert_valid(self.cert_file)):
-                print("📁 Missing or expiring admin certificate — requesting a new one.")
+                print(f"📁 No valid admin certificate for '{self.subject}' from '{self.provisioner_name}' — requesting one.")
                 self._request_new_certificate()
             with open(self.cert_file, "rb") as f:
                 pem_cert = f.read()
@@ -205,9 +276,8 @@ class StepCAClient:
             "jti": base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="),
         }
 
-        jwt_headers = {"kid": self.jwk_key["kid"]}
-
-        token = jwt.encode(claims=jwt_payload, key=self.jwk_key, algorithm="ES256", headers=jwt_headers)
+        admin_jwk = self._admin_jwk()
+        token = jwt.encode(claims=jwt_payload, key=admin_jwk, algorithm="ES256", headers={"kid": admin_jwk["kid"]})
 
         # --- Send to CA ---
         payload = {"csr": csr_pem, "ott": token, "notAfter": self.not_after}
@@ -483,15 +553,12 @@ class StepCAClient:
                 return provisioner
         raise ValueError(f"Provisioner '{name}' not found on the CA")
 
-    def revoke(self, serial, passphrase, reason_code=1, reason="revoked"):
+    def revoke(self, serial, reason_code=0, reason="Unspecified"):
+        """Revoke with a one-time token from the admin provisioner (any provisioner can revoke any serial)."""
         # step-ca normalises the serial to decimal and requires the token subject to match it
         serial = str(int(serial, 10))
-        provisioner_name=CA_ADMIN_PROVISIONER_NAME
-        provisioner = self.public_get_provisioner_by_name(provisioner_name)
-
-        full_jwk = self.decrypt_and_merge(
-            jwk_public=provisioner["key"], encrypted_key=provisioner["encryptedKey"], passphrase=passphrase
-        )
+        full_jwk = self._admin_jwk()
+        provisioner_name = self.provisioner_name
 
         token = CAToken(self.ca_url, "/1.0/revoke", CA_FINGERPRINT, provisioner_name, serial, full_jwk).token
 

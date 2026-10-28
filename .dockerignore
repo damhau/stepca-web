@@ -24,6 +24,7 @@ settings.json
 jwk_key.json
 local_users.json
 stepca-web.db
+ca_root.crt
 admin.crt
 admin.key
 svc.crt

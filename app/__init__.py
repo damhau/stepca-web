@@ -2,7 +2,7 @@ from datetime import datetime
 from flask import Flask
 
 from config import Config
-from app.extensions import db
+from app.extensions import db, csrf
 
 
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
@@ -17,6 +17,8 @@ def create_app(config_class=Config):
 
     # Initialize Flask extensions here
     db.init_app(app)
+    # Every POST/PUT/PATCH/DELETE must carry the session's CSRF token
+    csrf.init_app(app)
 
     # Every route requires a session unless explicitly listed as public
     from app.auth.decorator import require_login

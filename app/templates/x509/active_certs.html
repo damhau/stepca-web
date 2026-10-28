@@ -139,6 +139,7 @@
       aria-hidden="true">
       <div class="modal-dialog" role="document">
         <form method="POST" action="{{ url_for('x509.revoke_cert') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="modal-content">
             <div class="modal-header">
               <h5 class="modal-title" id="revokeModalLabel">Revoke Certificate</h5>
@@ -166,6 +167,7 @@
       aria-hidden="true">
       <div class="modal-dialog" role="document">
         <form method="POST" action="{{ url_for('x509.sign_cert') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="modal-content">
             <div class="modal-header">
               <h5 class="modal-title" id="newCertModalLabel">Submit Certificate Signing Request (CSR)</h5>

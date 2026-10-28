@@ -271,8 +271,9 @@ The image runs the app with gunicorn as a non-root user. All configuration comes
 
 Notes:
 
+- The app verifies the CA's TLS certificate. On first use it downloads the root from `CA_URL/root/<CA_FINGERPRINT>`, checks its SHA-256 against `CA_FINGERPRINT`, and saves it as `ca_root.crt`. You can provide the root yourself with `CA_ROOT`. The host in `CA_URL` must be one of the CA's DNS names.
 - To reach a step-ca or PostgreSQL running on the Docker host, use `host.docker.internal` as the hostname. PostgreSQL must listen on the Docker bridge interface and allow the connection in `pg_hba.conf`.
-- `admin.crt`, `admin.key`, the app's SQLite database `stepca-web.db` and any `settings.json` saved from `/system/config` live in the `stepca-web-data` volume.
+- `admin.crt`, `admin.key`, `ca_root.crt`, the app's SQLite database `stepca-web.db` and any `settings.json` saved from `/system/config` live in the `stepca-web-data` volume.
 - The Step CA service control page (`sudo` + systemd) does not work inside the container.
 
 

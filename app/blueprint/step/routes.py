@@ -67,7 +67,8 @@ def provisioner():
     return render_template("step/provisioners.html", title="StepCA Provisioners", provisioners=provisioners["provisioners"])
 
 
-@bp.route("/provisioner/<name>/delete")
+@bp.route("/provisioner/<name>/delete", methods=["POST"])
+@login_required
 def delete_provisioner(name):
     resp = client.delete_provisioner(name)
     if resp:
@@ -99,7 +100,8 @@ def admins():
     return render_template("step/admin.html", title="StepCA Admins", admins=admins["admins"], provisioners=provisioner_map)
 
 
-@bp.route("/admin/<id>/delete")
+@bp.route("/admin/<id>/delete", methods=["POST"])
+@login_required
 def delete_admin(id):
     resp = client.delete_admin(id)
 

@@ -183,5 +183,6 @@ svc.crt
 svc.key
 local_users.json
 stepca-web.db
+ca_root.crt
 *.key
 *.pem

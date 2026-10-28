@@ -35,6 +35,8 @@ DB_NAME = get_config("database.name")
 DB_PORT = get_config("database.port")
 CA_URL = get_config("ca.url")
 CA_FINGERPRINT = get_config("ca.fingerprint")
+# Optional path to the CA root PEM; otherwise it is downloaded once and pinned with CA_FINGERPRINT
+CA_ROOT = get_config("ca.root")
 CA_ADMIN_PROVISIONER_NAME = get_config("ca.admin_provisioner_name")
 
 print(DB_HOST, DB_USER, CA_URL)
@@ -69,3 +71,11 @@ class Config:
     }
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Session cookie is not sent on cross-site POSTs or subresource requests
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_HTTPONLY = True
+    # Set to true when the UI is served over HTTPS
+    SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+    # CSRF tokens stay valid for the whole session instead of 1 hour
+    WTF_CSRF_TIME_LIMIT = None

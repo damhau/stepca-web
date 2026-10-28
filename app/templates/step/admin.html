@@ -96,10 +96,11 @@
                   data-admin='{{ admin | tojson | safe }}'>
                   <i class="fas fa-edit"></i>
                 </button>
-                <a href="/step/admin/{{ admin.id }}/delete" class="btn btn-sm btn-danger"
-                  onclick="return confirm('Are you sure you want to delete this provisioner?')">
-                  <i class="fas fa-trash"></i>
-                </a>
+                <form method="POST" action="{{ url_for('step.delete_admin', id=admin.id) }}" class="d-inline"
+                  onsubmit="return confirm('Are you sure you want to delete this admin?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                </form>
               </td>
             </tr>
             {% endfor %}
@@ -122,6 +123,7 @@
           </div>
           <div class="modal-body">
             <form method="POST" action="{{ url_for('step.admins') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <div class="form-group">
                 <label>Subject</label>
                 <input type="text" name="subject" class="form-control" required>
@@ -168,6 +170,7 @@
           </div>
           <div class="modal-body">
             <form id="editAdminForm" method="POST" action="{{ url_for('step.admins') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="admin_id" id="editAdminId">
               <div class="form-group">
                 <label>Subject</label>

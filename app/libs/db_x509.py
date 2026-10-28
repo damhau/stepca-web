@@ -24,23 +24,45 @@ def _misdirected_serial(serial):
     return bytes.fromhex(serial).decode("ascii")
 
 
-def get_x509_certs():
-    certs = []
-    for row in X509Cert.query.all():
+def _x509_metadata(serials=None):
+    """x509_certs_data rows as {serial: data}, in a single query (all rows, or only `serials`)."""
+    query = X509CertData.query
+    if serials is not None:
+        query = query.filter(X509CertData.nkey.in_([s.encode("ascii") for s in serials]))
+    metadata = {}
+    for row in query.all():
         try:
-            cert_id = _serial(row.nkey)
-            cert_bytes = row.nvalue
-            parsed = parse_cert_from_bytes(cert_bytes)
-            cert_metadata = get_x509_certs_data_by_id(cert_id)
-            certs.append({"nkey": cert_id, "data": parsed, "provisioner": cert_metadata["data"]["provisioner"]})
-        except Exception as e:
-            certs.append({"nkey": _serial(row.nkey), "data": {"subject": "[error decoding cert]", "error": str(e)}})
-    return certs
+            metadata[_serial(row.nkey)] = json.loads(row.nvalue)
+        except ValueError:
+            pass
+    return metadata
+
+
+def _cert_entry(row, metadata):
+    serial = _serial(row.nkey)
+    try:
+        parsed = parse_cert_from_bytes(row.nvalue)
+        return {"nkey": serial, "data": parsed, "provisioner": metadata.get(serial, {}).get("provisioner") or {}}
+    except Exception as e:
+        return {"nkey": serial, "data": {"subject": "[error decoding cert]", "error": str(e)}, "provisioner": {}}
+
+
+def _get_x509_certs_by_serials(serials):
+    rows = X509Cert.query.filter(X509Cert.nkey.in_([s.encode("ascii") for s in serials])).all()
+    metadata = _x509_metadata(serials)
+    return [_cert_entry(row, metadata) for row in rows]
+
+
+def get_x509_certs():
+    metadata = _x509_metadata()
+    return [_cert_entry(row, metadata) for row in X509Cert.query.all()]
 
 
 def get_x509_certs_by_id(cert_id):
-    all_certs = get_x509_certs()
-    return next((c for c in all_certs if c["nkey"] == cert_id), None)
+    if not (cert_id.isascii() and cert_id.isdigit()):
+        return None
+    certs = _get_x509_certs_by_serials([cert_id])
+    return certs[0] if certs else None
 
 
 def get_x509_certs_data():
@@ -53,18 +75,6 @@ def get_x509_certs_data():
         except Exception as e:
             results.append({"nkey": _serial(row.nkey), "data": {"error": str(e)}})
     return results
-
-
-def get_x509_certs_data_by_id(cert_id):
-    for row in X509CertData.query.all():
-        try:
-            serial = _serial(row.nkey)
-            value = json.loads(row.nvalue)
-            if serial == cert_id:
-                return {"nkey": serial, "data": value}
-        except Exception as e:
-            pass
-    return None
 
 
 def get_revoked_x509_certs():
@@ -82,7 +92,10 @@ def get_revoked_x509_certs():
 def get_revoked_x509_with_cert_info():
     revocations = []
     rows = RevokedX509Cert.query.all()
-    cert_map = {c["nkey"]: c["data"] for c in get_x509_certs()}
+    # Only load the certificates these revocations refer to
+    keys = [_serial(row.nkey) for row in rows]
+    wanted = set(keys) | {m for m in map(_misdirected_serial, keys) if m}
+    cert_map = {c["nkey"]: c["data"] for c in _get_x509_certs_by_serials(wanted)} if wanted else {}
     prov_map = {p["data"]["id"]: p["data"]["name"] for p in get_step_provisioners() if "data" in p}
 
     for row in rows:
@@ -113,10 +126,11 @@ def save_generated_cert(serial, common_name, provisioner, csr_pem):
     db.session.commit()
 
 
-def get_x509_active_certs():
-    x509_certs = get_x509_certs()
-    revoked_certs = get_revoked_x509_certs()
-    revoked_serials = {cert["nkey"] for cert in revoked_certs}
+def get_x509_active_certs(x509_certs=None):
+    """Valid, non-revoked certificates. Pass the result of get_x509_certs() to avoid loading them twice."""
+    if x509_certs is None:
+        x509_certs = get_x509_certs()
+    revoked_serials = {_serial(nkey) for (nkey,) in db.session.query(RevokedX509Cert.nkey)}
     now = datetime.utcnow().replace(tzinfo=pytz.UTC)
     active = []
 

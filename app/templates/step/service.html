@@ -87,7 +87,7 @@
 <script>
   function controlService(action) {
     document.getElementById("serviceOutput").textContent = "Running...";
-    fetch(`/step/service/${action}`, { method: "POST" })
+    fetch(`/step/service/${action}`, { method: "POST", headers: { "X-CSRFToken": "{{ csrf_token() }}" } })
       .then(resp => resp.json())
       .then(data => {
         if (data.success) {

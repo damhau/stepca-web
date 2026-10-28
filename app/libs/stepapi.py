@@ -23,7 +23,7 @@ import json
 from urllib.parse import urljoin
 from datetime import timezone, datetime, timedelta
 import uuid
-from config import CA_FINGERPRINT, CA_ADMIN_PROVISIONER_NAME
+from config import CA_FINGERPRINT, CA_ADMIN_PROVISIONER_NAME, CA_ROOT
 
 from jwcrypto import jwk as jwcrypto_jwk, jwe as jwcrypto_jwe, jwa
 
@@ -32,8 +32,10 @@ from app.libs.cert_utils import extract_sans_from_csr
 
 import tempfile
 import atexit
+import warnings
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# Seconds before a request to the CA is abandoned
+TIMEOUT = 30
 
 
 class CAToken:
@@ -98,6 +100,10 @@ class StepCAClient:
         self.provisioner_name = provisioner_name
         self.not_after = not_after
         self.jwk_key = self._load_jwk_key_from_file("jwk_key.json")
+        # CA root that TLS is verified against: CA_ROOT if set, else bootstrapped from CA_FINGERPRINT
+        self.ca_fingerprint = (CA_FINGERPRINT or "").replace(":", "").lower()
+        self.root_file = CA_ROOT or "ca_root.crt"
+        self._root_verified = bool(CA_ROOT)
 
     def _save_tempfile(self, contents):
         f = tempfile.NamedTemporaryFile(mode="w", delete=False)
@@ -116,6 +122,42 @@ class StepCAClient:
         cert = x509.load_pem_x509_certificate(str.encode(pem))
         if cert.fingerprint(hashes.SHA256()) != bytes.fromhex(fingerprint):
             raise ConnectionError("WARNING: fingerprints do not match")
+
+    def _ca_root(self):
+        """Path of the CA root every request is verified against.
+
+        Like `step ca bootstrap`: download the root once, check that it matches
+        CA_FINGERPRINT, then keep it in the working directory.
+        """
+        if self._root_verified:
+            return self.root_file
+        if not self.ca_fingerprint:
+            raise ConnectionError("Set CA_FINGERPRINT (or CA_ROOT) to verify the CA's TLS certificate")
+
+        if os.path.exists(self.root_file):
+            try:
+                with open(self.root_file) as f:
+                    self._compare_fingerprints(f.read(), self.ca_fingerprint)
+                self._root_verified = True
+                return self.root_file
+            except (ConnectionError, ValueError):
+                pass  # root of another CA: download it again
+
+        # The root isn't trusted yet, so this request can't be verified: the fingerprint check protects it
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", urllib3.exceptions.InsecureRequestWarning)
+            resp = requests.get(f"{self.ca_url}/root/{self.ca_fingerprint}", verify=False, timeout=TIMEOUT)
+        resp.raise_for_status()
+        pem = resp.json()["ca"]
+        self._compare_fingerprints(pem, self.ca_fingerprint)
+
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(self.root_file)))
+        with os.fdopen(fd, "w") as f:
+            f.write(pem)
+        os.replace(tmp, self.root_file)
+        print(f"✅ CA root verified against fingerprint and saved to {self.root_file}")
+        self._root_verified = True
+        return self.root_file
 
     def _load_jwk_key_from_file(self, filename):
         try:
@@ -171,7 +213,7 @@ class StepCAClient:
         # --- Send to CA ---
         payload = {"csr": csr_pem, "ott": token, "notAfter": self.not_after}
 
-        response = requests.post(f"{self.ca_url}/sign", json=payload, verify=False)
+        response = requests.post(f"{self.ca_url}/sign", json=payload, verify=self._ca_root(), timeout=TIMEOUT)
 
         if response.status_code == 201:
             data = response.json()
@@ -246,18 +288,23 @@ class StepCAClient:
         )
         return jwt_token
 
-    def _request(self, method, path, json_payload=None):
+    def _request(self, method, path, json_payload=None, params=None):
         url = f"{self.ca_url}/{path.lstrip('/')}"
+        # step-ca checks the token audience against the path only, so the query string goes in params
         token = self._get_jwt_token(url)
         headers = {"Authorization": token, "Content-Type": "application/json"}
 
-        resp = requests.request(method, url, json=json_payload, headers=headers, verify=False)
+        resp = requests.request(
+            method, url, params=params, json=json_payload, headers=headers, verify=self._ca_root(), timeout=TIMEOUT
+        )
         return resp
 
-    def _request_noauth(self, method, path, json_payload=None):
+    def _request_noauth(self, method, path, json_payload=None, params=None):
         url = f"{self.ca_url}/{path.lstrip('/')}"
         headers = {"Content-Type": "application/json"}
-        resp = requests.request(method, url, json=json_payload, headers=headers, verify=False)
+        resp = requests.request(
+            method, url, params=params, json=json_payload, headers=headers, verify=self._ca_root(), timeout=TIMEOUT
+        )
         if not resp.ok:
             print(f"❌ Error {resp.status_code}: {resp.text}")
         return resp
@@ -281,10 +328,28 @@ class StepCAClient:
 
         return subject.rfc4514_string()
 
+    def _list_all(self, path, key, auth=True):
+        """Every item of a step-ca list: it returns at most 100 per page plus a nextCursor."""
+        send = self._request if auth else self._request_noauth
+        items, cursor, seen = [], None, set()
+        while True:
+            params = {"limit": 100}
+            if cursor:
+                params["cursor"] = cursor
+            response = send("GET", path, params=params)
+            if not response.ok:
+                return None
+            data = response.json()
+            items.extend(data.get(key) or [])
+            cursor = data.get("nextCursor")
+            if not cursor or cursor in seen:
+                return items
+            seen.add(cursor)
+
     # List all provisioners
     def list_provisioners(self):
-        response = self._request("GET", "/admin/provisioners")
-        return response.json() if response.ok else None
+        provisioners = self._list_all("/admin/provisioners", "provisioners")
+        return {"provisioners": provisioners} if provisioners is not None else None
 
     # Get a specific provisioner by name
     def get_provisioner(self, name):
@@ -318,7 +383,6 @@ class StepCAClient:
         claims: optional claims dict
         """
         print(f"🔍 Creating JWK provisioner with name: {name}")
-        print(f"🔍 Password: {password}")
         public_jwk, encrypted_jwk = self.generate_default_key_pair(password.encode())
         public_jwk_bytes = json.dumps(public_jwk).encode("utf-8")
         encrypted_jwk_bytes = encrypted_jwk.encode("utf-8")
@@ -387,7 +451,8 @@ class StepCAClient:
             return False
 
     def list_admins(self):
-        return self._request("GET", "/admin/admins").json()
+        admins = self._list_all("/admin/admins", "admins")
+        return {"admins": admins} if admins is not None else None
 
     def create_admin(self, subject, provisioner, admin_type=1):
         payload = {"subject": subject, "provisioner": provisioner, "type": admin_type}
@@ -427,17 +492,10 @@ class StepCAClient:
     #     return data
 
     def public_get_provisioner_by_name(self, name):
-        response = self._request("GET", f"/provisioners")
-
-        try:
-            data = response.json()
-        except Exception as e:
-            print(f"❌ Failed to parse JSON: {e}")
-            data = []
-
-        for provisioner in data["provisioners"]:
+        for provisioner in self._list_all("/provisioners", "provisioners", auth=False) or []:
             if provisioner["name"] == name:
                 return provisioner
+        raise ValueError(f"Provisioner '{name}' not found on the CA")
 
     def revoke(self, serial, passphrase, reason_code=1, reason="revoked"):
         # step-ca normalises the serial to decimal and requires the token subject to match it
@@ -484,7 +542,6 @@ class StepCAClient:
                 "sans": sans,
             },
         }
-        print("🔍 Payload:", payload)
         response = self._request_noauth("POST", "/1.0/sign", json_payload=payload)
         if response.status_code == 201:
             return x509.load_pem_x509_certificate(str.encode(response.json()["crt"]))

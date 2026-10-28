@@ -9,7 +9,7 @@ from app.auth.decorator import login_required
 @login_required
 def index():
     certs = get_x509_certs()
-    active_certs = get_x509_active_certs()
+    active_certs = get_x509_active_certs(certs)
     acme_certs = get_acme_certs()
     revoked = get_revoked_x509_certs()
     provisioners = get_step_provisioners()

@@ -1,7 +1,8 @@
 # --- Build stage: install Python dependencies into a venv ---
 FROM python:3.12-slim AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /usr/local/bin/uv
+# uv from PyPI, so the build only needs Docker Hub and PyPI
+RUN pip install --no-cache-dir uv==0.9.5
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \

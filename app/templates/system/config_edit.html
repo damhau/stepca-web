@@ -60,6 +60,7 @@
         <h2 class="mb-4">Edit Configuration</h2>
 
         <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="form-group">
             <label for="db_host">Database Host</label>
             <input type="text" class="form-control" id="db_host" name="db_host" value="{{ db_host }}" required>

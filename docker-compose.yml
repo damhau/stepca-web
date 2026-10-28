@@ -23,6 +23,8 @@ services:
     extra_hosts:
       # Lets the container reach a step-ca / PostgreSQL running on the host
       - "host.docker.internal:host-gateway"
+      # CA_URL must use one of the CA's DNS names (TLS is verified), e.g.
+      # - "ca.example.com:host-gateway"
 
 volumes:
   stepca-web-data:

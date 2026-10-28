@@ -1,5 +1,6 @@
 from functools import wraps
-from flask import session, redirect, url_for, request, jsonify
+
+from flask import jsonify, redirect, request, session, url_for
 
 # Endpoints reachable without a session, everything else requires login
 PUBLIC_ENDPOINTS = {"auth.login", "auth.logout", "static"}

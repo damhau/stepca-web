@@ -186,3 +186,4 @@ stepca-web.db
 ca_root.crt
 *.key
 *.pem
+tests/e2e/work/

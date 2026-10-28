@@ -1,5 +1,6 @@
 from app.extensions import db
 
+
 class AcmeAccount(db.Model):
     __tablename__ = 'acme_accounts'
     nkey = db.Column(db.LargeBinary, primary_key=True)

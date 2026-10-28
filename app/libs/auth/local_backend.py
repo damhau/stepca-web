@@ -1,8 +1,9 @@
 import json
 import os
 
-from .base import AuthBackend
 from werkzeug.security import check_password_hash
+
+from .base import AuthBackend
 
 
 def load_users(path):

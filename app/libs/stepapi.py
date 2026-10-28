@@ -1,38 +1,33 @@
+import atexit
 import base64
-import secrets
-import time
 import json
+import os
+import secrets
+import tempfile
+import time
+import uuid
+import warnings
+from datetime import UTC, datetime, timedelta
+from urllib.parse import urljoin
+
+import jwt as python_jwt
 import requests
-from jose import jwk, jwt
-from cryptography.hazmat.backends import default_backend
+import urllib3
 from cryptography import x509
-from cryptography.x509.oid import NameOID
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from jose import jwt
-from cryptography import x509
 from cryptography.x509.oid import NameOID
-from cryptography.hazmat.primitives import serialization
-from datetime import datetime
-import os
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-import jwt as python_jwt
+from jose import jwk, jwt
+from jwcrypto import jwa
+from jwcrypto import jwe as jwcrypto_jwe
+from jwcrypto import jwk as jwcrypto_jwk
 from jwt.algorithms import ECAlgorithm
-import urllib3
-import json
-from urllib.parse import urljoin
-from datetime import timezone, datetime, timedelta
-import uuid
-from config import CA_FINGERPRINT, CA_ADMIN_PROVISIONER_NAME, CA_ROOT
 
-from jwcrypto import jwk as jwcrypto_jwk, jwe as jwcrypto_jwe, jwa
+from app.libs.cert_utils import extract_sans_from_csr
+from config import CA_ADMIN_PROVISIONER_NAME, CA_FINGERPRINT, CA_ROOT
 
 jwa.default_max_pbkdf2_iterations = 10000000
-from app.libs.cert_utils import extract_sans_from_csr
-
-import tempfile
-import atexit
-import warnings
 
 # Seconds before a request to the CA is abandoned
 TIMEOUT = 30
@@ -74,9 +69,9 @@ class CAToken:
         body = {
             "aud": urljoin(self.ca_url, self.ca_path),
             "sha": self.ca_fingerprint,
-            "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=5),
-            "iat": datetime.now(tz=timezone.utc),
-            "nbf": datetime.now(tz=timezone.utc),
+            "exp": datetime.now(tz=UTC) + timedelta(minutes=5),
+            "iat": datetime.now(tz=UTC),
+            "nbf": datetime.now(tz=UTC),
             "jti": str(uuid.uuid4()),
             "iss": self.provisioner_name,
             "sub": self.subject,
@@ -161,7 +156,7 @@ class StepCAClient:
 
     def _load_jwk_key_from_file(self, filename):
         try:
-            with open(filename, "r") as json_file:
+            with open(filename) as json_file:
                 jwk_key = json.load(json_file)
                 print(f"✅ JWK key loaded from {filename}")
                 return jwk_key
@@ -529,7 +524,6 @@ class StepCAClient:
 
             print("🔍 Subject:", subject)
             print("🔍 SANS:", " ".join(sans))
-            sans_str = str(",".join(sans))
             token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk, sans).token
         else:
             token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk).token
@@ -550,7 +544,7 @@ class StepCAClient:
             return None
 
     def health(self):
-        with requests.get(urljoin(self.url, f"health"), verify=self.cert_bundle_fn) as r:
+        with requests.get(urljoin(self.url, "health"), verify=self.cert_bundle_fn) as r:
             print(r.json())
 
     def generate_default_key_pair(self, passphrase: bytes):

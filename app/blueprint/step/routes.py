@@ -1,10 +1,12 @@
-from flask import render_template, request, flash, redirect, jsonify
-from app.libs.db_step import *
+import subprocess
+
+from flask import flash, jsonify, redirect, render_template, request
+
+from app.auth.decorator import login_required
 from app.blueprint.step import bp
+from app.libs.db_step import *
 from app.libs.stepapi import *
 from config import CA_URL
-import subprocess
-from app.auth.decorator import login_required
 
 client = StepCAClient(CA_URL)
 

@@ -1,4 +1,5 @@
-from flask import Blueprint, request, session, redirect, url_for, render_template, current_app
+from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+
 from app.auth.factory import get_auth_backend
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')

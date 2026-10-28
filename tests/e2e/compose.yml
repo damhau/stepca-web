@@ -1,0 +1,41 @@
+# End-to-end stack: step-ca on PostgreSQL and stepca-web on a read-only role. Started by run.sh.
+name: stepca-e2e
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: step-ca
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: step_ca_db
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "step-ca"]
+      interval: 2s
+      retries: 15
+
+  step-ca:
+    image: smallstep/step-ca:0.30.2
+    volumes:
+      - step:/home/step
+    depends_on:
+      db:
+        condition: service_healthy
+
+  stepca-web:
+    build:
+      context: ../..
+      dockerfile: ${DOCKERFILE:-Dockerfile}
+    env_file: work/app.env
+    ports:
+      - "127.0.0.1:${E2E_PORT:-15000}:5000"
+    volumes:
+      - web-data:/data
+      - ./work/jwk_key.json:/data/jwk_key.json:ro
+      - ./work/local_users.json:/data/local_users.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  step: {}
+  web-data: {}

@@ -157,8 +157,8 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
 
 ## Requirements
 
-- Python 3.9+
-- Linux with `systemd` (for service management)
+- Python 3.12+ and [uv](https://docs.astral.sh/uv/) (or Docker, see below)
+- Linux with `systemd`, only for the optional service control page
 - Step CA installed and configured
 - PostgreSQL database with Step CA data
 - A configured admin provisioner (JWK)
@@ -173,18 +173,15 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
    cd stepca-web
    ```
 
-2. **Create a virtual environment**
+2. **Install the dependencies**
 
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
+   uv sync --no-dev
    ```
 
-3. **Install dependencies**
+   This installs the exact versions pinned in `uv.lock` into `.venv`. Without uv, `pip install --require-hashes -r requirements.txt` installs the same versions.
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+3. **Create a read-only database role** for the app (see [Database Connection](#database-connection)).
 
 4. **Generate the `jwk_key.json` file**
 
@@ -207,7 +204,7 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
 6. **Run the app**
 
    ```bash
-   flask run
+   uv run flask --app app run
    ```
 
    Then open your browser at: [http://localhost:5000](http://localhost:5000)
@@ -323,6 +320,11 @@ Use this when you want a self-contained login without an external identity provi
 
 ## Development
 
+- Install everything, including the test tools: `uv sync`.
+- Lint: `uv run ruff check .`
+- Unit tests: `uv run pytest`. They use in-memory SQLite with the same table layout as step-ca, and a fake CA client.
+- End-to-end tests: `tests/e2e/run.sh` starts a real step-ca on PostgreSQL, runs the app on a read-only role and tests signing, revoking, CSRF and pagination against it. Needs Docker. `KEEP=1` leaves the stack running; `DOCKERFILE=Dockerfile.pip` tests the pip image.
+- After changing dependencies in `pyproject.toml`, run `uv lock` and `uv export --frozen --no-dev --no-emit-project -o requirements.txt`. CI checks both are in sync.
 - Use the built-in Flask dev server for local testing.
 - For UI, modify `app/templates/` and `app/static/`.
 - To add new pages, extend `layout.html` and register routes in the appropriate blueprint.

@@ -1,13 +1,10 @@
 from datetime import datetime
+
 from flask import Flask
 
-from config import Config
-from app.extensions import db, csrf
-
-
+from app.extensions import csrf, db
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
-
-
+from config import Config
 
 
 def create_app(config_class=Config):

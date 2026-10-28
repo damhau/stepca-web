@@ -1,19 +1,16 @@
 
 import base64
 import json
-from .db_conn import get_connection
+
+from app.models.step import StepAdmin, StepProvisioner
 
 
 def get_step_provisioners():
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT nkey, nvalue FROM provisioners")
     accounts = []
-    for row in cur.fetchall():
+    for row in StepProvisioner.query.all():
         try:
-            # Assume nkey is stored as UTF-8 text; if not, adjust accordingly.
-            key = bytes(row[0]).decode('utf-8', errors='ignore')
-            value = json.loads(bytes(row[1]))
+            key = bytes(row.nkey).decode('utf-8', errors='ignore')
+            value = json.loads(bytes(row.nvalue))
 
             details_bytes = base64.b64decode(value["details"])
             # Step 2: parse JSON
@@ -28,7 +25,6 @@ def get_step_provisioners():
             })
         except Exception as e:
             print("Error parsing account:", e)
-    conn.close()
     return accounts
 
 def get_active_provisioner_map(provisioners):
@@ -53,15 +49,11 @@ def get_active_provisioner_map(provisioners):
 
 
 def get_step_admins():
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT nkey, nvalue FROM admins")
     admins = []
-    for row in cur.fetchall():
-        
+    for row in StepAdmin.query.all():
         try:
-            key = bytes(row[0]).decode("utf-8", errors="ignore")
-            value = json.loads(bytes(row[1]))
+            key = bytes(row.nkey).decode("utf-8", errors="ignore")
+            value = json.loads(bytes(row.nvalue))
             if value.get("deletedAt", "") == "0001-01-01T00:00:00Z":
 
                 admins.append({
@@ -70,6 +62,5 @@ def get_step_admins():
                 })
         except Exception as e:
             print("Error parsing admin:", e)
-    conn.close()
     return admins
 

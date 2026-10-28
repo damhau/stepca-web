@@ -32,3 +32,6 @@ svc.crt
 svc.key
 **/*.key
 **/*.pem
+tests
+.github
+.pre-commit-config.yaml

@@ -1,9 +1,10 @@
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-from cryptography.x509.oid import ExtensionOID, NameOID
-from cryptography.hazmat.primitives.asymmetric import rsa, ec
 import base64
 import re
+
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.x509.oid import ExtensionOID, NameOID
 
 
 def format_pretty_date(dt):
@@ -31,7 +32,8 @@ def parse_cert(leaf_b64):
 
         # Extract Subject components
         subject = cert.subject
-        get_attr = lambda oid: next((v.value for v in subject.get_attributes_for_oid(oid)), None)
+        def get_attr(oid):
+            return next((v.value for v in subject.get_attributes_for_oid(oid)), None)
 
         # Key Size
         pubkey = cert.public_key()

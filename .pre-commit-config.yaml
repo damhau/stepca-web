@@ -4,3 +4,8 @@ repos:
     rev: v8.29.1
     hooks:
       - id: gitleaks
+  # Lint with the same ruff version and rules as CI
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff

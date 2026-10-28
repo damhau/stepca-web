@@ -1,9 +1,7 @@
 from flask import jsonify
 
-from app.libs.db_acme import *
-
 from app.blueprint.acme import api_bp
-
+from app.libs.db_acme import *
 
 
 @api_bp.route("/accounts")

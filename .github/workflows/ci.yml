@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run pytest
+      - name: requirements.txt is in sync with uv.lock
+        run: |
+          uv export --frozen --no-dev --no-emit-project -o requirements.txt
+          git diff --exit-code requirements.txt
+
+  e2e:
+    name: End-to-end (${{ matrix.dockerfile }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile: [Dockerfile, Dockerfile.pip]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - run: tests/e2e/run.sh
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}

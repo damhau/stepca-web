@@ -1,5 +1,5 @@
-import os
 import json
+import os
 import random
 import string
 
@@ -60,8 +60,7 @@ class Config:
 
     SQLALCHEMY_DATABASE_URI = (
         os.environ.get("SQLALCHEMY_DATABASE_URI") or
-        # Explicit driver: SQLAlchemy 2.1+ defaults postgresql:// to psycopg 3
-        f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     )
 
     # The app's own data lives in SQLite (in the working directory), so step-ca's

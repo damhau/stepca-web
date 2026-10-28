@@ -1,5 +1,7 @@
+from ldap3 import ALL, SIMPLE, SUBTREE, Connection, Server
+
 from .base import AuthBackend
-from ldap3 import Server, Connection, ALL, SIMPLE, SUBTREE
+
 
 class LDAPAuthBackend(AuthBackend):
     def __init__(self, config):
@@ -65,5 +67,5 @@ class LDAPAuthBackend(AuthBackend):
             if user_info:
                 return {'id': user_id, 'attributes': user_info.entry_attributes_as_dict}
             return None
-        except Exception as e:
+        except Exception:
             return None

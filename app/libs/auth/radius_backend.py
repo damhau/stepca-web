@@ -1,5 +1,6 @@
 from .base import AuthBackend
 
+
 class RadiusAuthBackend(AuthBackend):
     def __init__(self, config):
         self.config = config

@@ -8,17 +8,12 @@ RUN pip install --no-cache-dir uv==0.9.5
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=never
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/opt/venv
 
-# psycopg2 is built from source: needs a compiler and the libpq headers
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN uv venv /opt/venv \
-    && uv pip install --python /opt/venv/bin/python --no-cache -r requirements.txt
+# Exact versions from uv.lock; all dependencies ship prebuilt wheels, so no compiler is needed
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-cache
 
 
 # --- Runtime stage ---
@@ -31,10 +26,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH=/app \
     GUNICORN_CMD_ARGS="--bind 0.0.0.0:5000 --workers 1 --threads 4 --access-logfile -"
-
-# libpq runtime library for psycopg2
-RUN apt-get update && apt-get install -y --no-install-recommends libpq5 \
-    && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin app \
     && mkdir /data \

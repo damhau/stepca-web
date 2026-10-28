@@ -1,5 +1,6 @@
 from app.extensions import db
 
+
 class X509Cert(db.Model):
     __tablename__ = 'x509_certs'
     nkey = db.Column(db.LargeBinary, primary_key=True)

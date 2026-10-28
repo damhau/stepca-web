@@ -1,15 +1,13 @@
 import re
 
-from flask import render_template, flash, redirect, make_response, url_for, request
+from flask import flash, make_response, redirect, render_template, request, url_for
 
-from app.libs.db_x509 import *
-from app.libs.db_step import *
-from app.libs.stepapi import *
-
-from app.blueprint.x509 import bp
-from config import CA_URL
 from app.auth.decorator import login_required
-
+from app.blueprint.x509 import bp
+from app.libs.db_step import *
+from app.libs.db_x509 import *
+from app.libs.stepapi import *
+from config import CA_URL
 
 client = StepCAClient(CA_URL)
 
@@ -82,7 +80,7 @@ def sign_cert():
             flash(f"Certificate {serial_number} created successfully", "success")
             return redirect(url_for("x509.active_certs"))
         else:
-            flash(f"Failed to sign certificate", "danger")
+            flash("Failed to sign certificate", "danger")
     except Exception as e:
         flash(f"Failed to sign certificate with error {e}", "danger")
 
@@ -98,7 +96,7 @@ def revoke_cert():
     cert = get_x509_certs_by_id(cert_id)
 
     if not cert:
-        flash(f"Certificate not found", "danger")
+        flash("Certificate not found", "danger")
         return redirect(url_for("x509.active_certs"))
 
     try:

@@ -3,12 +3,15 @@
 import json
 import re
 from datetime import datetime
+
 import pytz
 from cryptography import x509
+
 from app.extensions import db
+from app.models.x509 import GeneratedCert, RevokedX509Cert, X509Cert, X509CertData
+
 from .cert_utils import parse_cert_from_bytes
 from .db_step import get_step_provisioners
-from app.models.x509 import X509Cert, X509CertData, RevokedX509Cert, GeneratedCert
 
 
 def _serial(nkey):

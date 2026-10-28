@@ -30,7 +30,7 @@ def active_certs():
 
 
 @bp.route("/revoked")
-
+@login_required
 def revoked_certs():
     revoked = get_revoked_x509_with_cert_info()
     return render_template("x509/revoked_certs.html", title="Revoked X.509 Certificates", revoked=revoked)
@@ -89,7 +89,7 @@ def sign_cert():
 
 
 @bp.route("/revoke", methods=["POST"])
-
+@login_required
 def revoke_cert():
     cert_id = request.form.get("cert_id")
     passphrase = request.form.get("passphrase")

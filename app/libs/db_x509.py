@@ -1,6 +1,7 @@
 # services/x509_service.py
 
 import json
+import re
 from datetime import datetime
 import pytz
 from app.extensions import db
@@ -9,17 +10,30 @@ from .db_step import get_step_provisioners
 from app.models.x509 import X509Cert, X509CertData, RevokedX509Cert, GeneratedCert
 
 
+def _serial(nkey):
+    """step-ca keys its x509 tables by the decimal serial number as ASCII bytes."""
+    return bytes(nkey).decode("ascii", errors="backslashreplace")
+
+
+def _misdirected_serial(serial):
+    """Before the revoke fix, the UI sent the hex of the ASCII serial (e.g. "3132" for "12"),
+    so step-ca revoked a serial that was never issued. Return the serial that was meant."""
+    if not re.fullmatch(r"(3[0-9])+", serial):
+        return None
+    return bytes.fromhex(serial).decode("ascii")
+
+
 def get_x509_certs():
     certs = []
     for row in X509Cert.query.all():
         try:
-            cert_id = row.nkey.hex()
+            cert_id = _serial(row.nkey)
             cert_bytes = row.nvalue
             parsed = parse_cert_from_bytes(cert_bytes)
             cert_metadata = get_x509_certs_data_by_id(cert_id)
             certs.append({"nkey": cert_id, "data": parsed, "provisioner": cert_metadata["data"]["provisioner"]})
         except Exception as e:
-            certs.append({"nkey": row.nkey.hex(), "data": {"subject": "[error decoding cert]", "error": str(e)}})
+            certs.append({"nkey": _serial(row.nkey), "data": {"subject": "[error decoding cert]", "error": str(e)}})
     return certs
 
 
@@ -32,18 +46,18 @@ def get_x509_certs_data():
     results = []
     for row in X509CertData.query.all():
         try:
-            serial = row.nkey.hex()
+            serial = _serial(row.nkey)
             value = json.loads(row.nvalue)
             results.append({"nkey": serial, "data": value})
         except Exception as e:
-            results.append({"nkey": row.nkey.hex(), "data": {"error": str(e)}})
+            results.append({"nkey": _serial(row.nkey), "data": {"error": str(e)}})
     return results
 
 
 def get_x509_certs_data_by_id(cert_id):
     for row in X509CertData.query.all():
         try:
-            serial = row.nkey.hex()
+            serial = _serial(row.nkey)
             value = json.loads(row.nvalue)
             if serial == cert_id:
                 return {"nkey": serial, "data": value}
@@ -56,11 +70,11 @@ def get_revoked_x509_certs():
     certs = []
     for row in RevokedX509Cert.query.all():
         try:
-            serial = row.nkey.hex()
+            serial = _serial(row.nkey)
             value = json.loads(row.nvalue)
             certs.append({"nkey": serial, "data": value})
         except Exception as e:
-            certs.append({"nkey": row.nkey.hex(), "data": {"error": str(e)}})
+            certs.append({"nkey": _serial(row.nkey), "data": {"error": str(e)}})
     return certs
 
 
@@ -72,14 +86,17 @@ def get_revoked_x509_with_cert_info():
 
     for row in rows:
         try:
-            key = row.nkey.hex()
+            key = _serial(row.nkey)
             value = json.loads(row.nvalue)
-            serial_hex = value.get("Serial", "").lower()
-            cert_info = cert_map.get(serial_hex)
+            cert_info = cert_map.get(key)
+            if cert_info is None:
+                intended = _misdirected_serial(key)
+                if intended in cert_map:
+                    value["misdirected_serial"] = intended
             value["provisioner_name"] = prov_map.get(value.get("ProvisionerID"), "—")
             revocations.append({"nkey": key, "data": value, "cert": cert_info})
         except Exception as e:
-            revocations.append({"nkey": row.nkey.hex(), "data": {"error": str(e)}})
+            revocations.append({"nkey": _serial(row.nkey), "data": {"error": str(e)}})
     return revocations
 
 
@@ -122,7 +139,7 @@ def save_generated_cert(serial, common_name, provisioner, csr_pem, cert_pem):
 def get_x509_active_certs():
     x509_certs = get_x509_certs()
     revoked_certs = get_revoked_x509_certs()
-    revoked_serials = {cert["data"]["Serial"] for cert in revoked_certs}
+    revoked_serials = {cert["nkey"] for cert in revoked_certs}
     now = datetime.utcnow().replace(tzinfo=pytz.UTC)
     active = []
 

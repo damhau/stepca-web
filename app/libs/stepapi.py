@@ -440,6 +440,8 @@ class StepCAClient:
                 return provisioner
 
     def revoke(self, serial, passphrase, reason_code=1, reason="revoked"):
+        # step-ca normalises the serial to decimal and requires the token subject to match it
+        serial = str(int(serial, 10))
         provisioner_name=CA_ADMIN_PROVISIONER_NAME
         provisioner = self.public_get_provisioner_by_name(provisioner_name)
 
@@ -450,13 +452,10 @@ class StepCAClient:
         token = CAToken(self.ca_url, "/1.0/revoke", CA_FINGERPRINT, provisioner_name, serial, full_jwk).token
 
         payload = {"serial": serial, "ott": token, "passive": True, "reasonCode": reason_code, "reason": reason}
-        print(payload)
         response = self._request_noauth("POST", "/1.0/revoke", json_payload=payload)
-        print(response.text)
         if response.status_code == 200:
             return response.json()
-        else:
-            return None
+        raise RuntimeError(f"step-ca returned {response.status_code}: {response.text}")
 
     def sign(self, csr, provisioner_name, passphrase):
 

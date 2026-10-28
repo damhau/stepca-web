@@ -181,3 +181,6 @@ jwk_key.json
 settings.json
 svc.crt
 svc.key
+local_users.json
+*.key
+*.pem

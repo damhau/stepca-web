@@ -5,7 +5,6 @@ from config import Config
 from app.extensions import db
 
 
-from sqlalchemy import inspect
 from app.models.x509 import GeneratedCert
 
 
@@ -19,11 +18,14 @@ def create_app(config_class=Config):
     # Initialize Flask extensions here
     db.init_app(app)
 
+    # Every route requires a session unless explicitly listed as public
+    from app.auth.decorator import require_login
+    app.before_request(require_login)
+
 
     with app.app_context():
-        insp = inspect(db.engine)
-        if "generated_certs" not in insp.get_table_names():
-            GeneratedCert.__table__.create(bind=db.engine, checkfirst=True)
+        # Only the app's own SQLite tables: step-ca's database is never modified
+        db.create_all(bind_key="app")
 
 
     # Register blueprints here

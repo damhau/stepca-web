@@ -1,0 +1,28 @@
+services:
+  stepca-web:
+    build: .
+    image: stepca-web:latest
+    container_name: stepca-web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # A random per-process key breaks sessions across restarts and workers
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+    ports:
+      # Bound to localhost by default: put a TLS reverse proxy in front before
+      # exposing it, or set STEPCA_WEB_BIND=0.0.0.0
+      - "${STEPCA_WEB_BIND:-127.0.0.1}:${STEPCA_WEB_PORT:-5000}:5000"
+    volumes:
+      # Working directory: admin.crt/admin.key are generated here, and
+      # /system/config writes settings.json here
+      - stepca-web-data:/data
+      # Decrypted admin provisioner JWK (see README)
+      - ./jwk_key.json:/data/jwk_key.json:ro
+      # Users for AUTH_BACKEND=local (see README)
+      # - ./local_users.json:/data/local_users.json:ro
+    extra_hosts:
+      # Lets the container reach a step-ca / PostgreSQL running on the host
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  stepca-web-data:

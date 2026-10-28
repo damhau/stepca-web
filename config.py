@@ -5,9 +5,11 @@ import string
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# Load settings.json as fallback
-with open("settings.json") as f:
-    config = json.load(f)
+# Load settings.json as fallback (optional when everything is set via env vars)
+config = {}
+if os.path.exists("settings.json"):
+    with open("settings.json") as f:
+        config = json.load(f)
 
 def get_config(key_path: str, default=None):
     """Get configuration from env first, fallback to settings.json."""
@@ -47,6 +49,8 @@ class Config:
     LDAP_USER_SEARCH_FILTER = os.environ.get('LDAP_USER_SEARCH_FILTER') or get_config('ldap.user_search_filter', '(uid={username})')
     LDAP_USER_SEARCH_BASE = os.environ.get('LDAP_USER_SEARCH_BASE') or get_config('ldap.user_search_base', LDAP_BASE_DN)
     LDAP_REQUIRED_GROUP_DN = os.environ.get('LDAP_REQUIRED_GROUP_DN') or get_config('ldap.ldap_required_group_dn', LDAP_BASE_DN)
+    # Local backend: users and password hashes live outside the source tree
+    LOCAL_USERS_FILE = os.environ.get('LOCAL_USERS_FILE', 'local_users.json')
     # OIDC, SAML, RADIUS config can be added similarly
     SECRET_KEY = os.environ.get("SECRET_KEY") or "".join(
         random.choice(string.ascii_letters) for _ in range(32)
@@ -54,7 +58,14 @@ class Config:
 
     SQLALCHEMY_DATABASE_URI = (
         os.environ.get("SQLALCHEMY_DATABASE_URI") or
-        f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        # Explicit driver: SQLAlchemy 2.1+ defaults postgresql:// to psycopg 3
+        f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     )
+
+    # The app's own data lives in SQLite (in the working directory), so step-ca's
+    # database is only ever read and a read-only role is enough
+    SQLALCHEMY_BINDS = {
+        "app": os.environ.get("APP_DATABASE_URI") or f"sqlite:///{os.path.abspath('stepca-web.db')}"
+    }
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False

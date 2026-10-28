@@ -235,13 +235,42 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
   ```
 
 
+## Docker Deployment
+
+The image runs the app with gunicorn as a non-root user. All configuration comes from environment variables (`settings.json` is optional).
+
+1. **Generate `jwk_key.json`** in the project root (see step 4 above). It is mounted read-only into the container and must be readable by uid 1000.
+
+2. **Create the `.env` file**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Fill in `SECRET_KEY`, the step-ca database credentials and the CA URL. Env var names follow the `settings.json` keys: `database.host` → `DATABASE_HOST`, `ca.url` → `CA_URL`, and so on.
+
+3. **Start it**
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+   The UI listens on `127.0.0.1:5000` by default. Put a TLS reverse proxy in front of it, or set `STEPCA_WEB_BIND=0.0.0.0` in `.env` to expose it directly.
+
+Notes:
+
+- To reach a step-ca or PostgreSQL running on the Docker host, use `host.docker.internal` as the hostname. PostgreSQL must listen on the Docker bridge interface and allow the connection in `pg_hba.conf`.
+- `admin.crt`, `admin.key` and any `settings.json` saved from `/system/config` live in the `stepca-web-data` volume.
+- The Step CA service control page (`sudo` + systemd) does not work inside the container.
+
+
 ## Authentication
 
 The app supports several auth backends, selected via the `AUTH_BACKEND` environment variable (`config.py`): `ldap` (default), `radius`, `saml`, `oidc`, `local`. The factory dispatching the choice lives in `app/auth/factory.py`.
 
 ### Local auth setup
 
-Use this when you want a self-contained login without an external identity provider. Users are stored in-memory in `app/libs/auth/local_backend.py`.
+Use this when you want a self-contained login without an external identity provider. Users are read from `local_users.json` in the working directory (override the path with `LOCAL_USERS_FILE`). The file is git-ignored: never commit it.
 
 1. **Generate a password hash**
 
@@ -253,20 +282,20 @@ Use this when you want a self-contained login without an external identity provi
 
    The command prompts for a password (input is hidden) and prints a hash like `scrypt:32768:8:1$...`.
 
-2. **Add the user to the local backend**
+2. **Create `local_users.json`**
 
-   Edit `app/libs/auth/local_backend.py` and update the `USERS` dict with your username and the hash from step 1:
+   Add your username and the hash from step 1:
 
-   ```python
-   USERS = {
-       'admin': {
-           'id': 'admin',
-           'username': 'admin',
-           'password_hash': 'scrypt:32768:8:1$...PASTE_HERE...',
-           'attributes': {'role': 'admin'}
-       },
+   ```json
+   {
+     "admin": {
+       "password_hash": "scrypt:32768:8:1$...PASTE_HERE...",
+       "attributes": {"role": "admin"}
+     }
    }
    ```
+
+   With Docker, uncomment the `local_users.json` volume in `docker-compose.yml`. The file must be readable by uid 1000.
 
 3. **Select the local backend and run the app**
 

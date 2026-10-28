@@ -1,0 +1,31 @@
+# VCS, editors, tooling
+.git
+.gitignore
+.claude
+.idea
+.vscode
+.ruff_cache
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+
+# Not needed in the image
+docs
+README.md
+Dockerfile
+.dockerignore
+docker-compose.yml
+.env.example
+
+# Secrets and runtime state: mount these at runtime, never bake them in
+.env
+settings.json
+jwk_key.json
+local_users.json
+admin.crt
+admin.key
+svc.crt
+svc.key
+**/*.key
+**/*.pem

@@ -54,7 +54,15 @@
           <tbody>
             {% for r in revoked %}
             <tr>
-              <td><code>{{ r.data.Serial }}</code></td>
+              <td>
+                <code>{{ r.data.Serial }}</code>
+                {% if r.data.misdirected_serial %}
+                <br><span class="badge badge-warning"
+                  title="Revoked by an older version of this UI with a wrong serial. Certificate {{ r.data.misdirected_serial }} is still valid: revoke it again from the Active list.">
+                  Ineffective: certificate {{ r.data.misdirected_serial }} is still valid
+                </span>
+                {% endif %}
+              </td>
               <td>{{ r.cert.serial if r.cert else "—" }}</td>
               <td>{{ r.data.RevokedAt }}</td>
               <td>{{ r.cert.subject if r.cert else "—" }}</td>

@@ -1,28 +1,33 @@
+import json
+import os
+
 from .base import AuthBackend
 from werkzeug.security import check_password_hash
 
-USERS = {
-    'admin': {
-        'id': 'admin',
-        'username': 'admin',
-        'password_hash': 'REDACTED-rotated-password-hash',
-        'attributes': {'role': 'admin'}
-    },
-}
+
+def load_users(path):
+    """Load users from a JSON file: {"<username>": {"password_hash": "...", "attributes": {...}}}."""
+    if not os.path.exists(path):
+        print(f"❌ Local users file {path} not found, no local user can log in.")
+        return {}
+    with open(path) as f:
+        return json.load(f)
+
 
 class LocalAuthBackend(AuthBackend):
     def __init__(self, config):
         print("Using LocalAuthBackend")
         self.config = config
+        self.users = load_users(config.get('LOCAL_USERS_FILE', 'local_users.json'))
 
     def authenticate(self, username, password):
-        user = USERS.get(username)
+        user = self.users.get(username)
         if user and check_password_hash(user['password_hash'], password):
-            return {'id': user['id'], 'attributes': user.get('attributes', {})}
+            return {'id': username, 'attributes': user.get('attributes', {})}
         return None
 
     def get_user(self, user_id):
-        user = USERS.get(user_id)
+        user = self.users.get(user_id)
         if user:
-            return {'id': user['id'], 'attributes': user.get('attributes', {})}
+            return {'id': user_id, 'attributes': user.get('attributes', {})}
         return None

@@ -68,7 +68,7 @@ def test_signing_in_and_out(page):
     sign_in(page, "/provisioners")
     # Back where the sign-in started
     expect(page.get_by_role("heading", name="Provisioners", exact=True)).to_be_visible()
-    page.get_by_role("button", name="admin").click()
+    page.get_by_role("button", name="Signed in as admin").click()
     page.get_by_role("menuitem", name="Sign out").click()
     expect(page.get_by_role("button", name="Sign in")).to_be_visible()
     page.goto("/certificates")

@@ -196,7 +196,7 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2">
+        <Button variant="ghost" size="sm" className="gap-2" aria-label={`Signed in as ${session.user}`}>
           <span
             className="grid size-6 place-items-center rounded-full bg-accent text-xs font-semibold text-accent-foreground uppercase"
             aria-hidden

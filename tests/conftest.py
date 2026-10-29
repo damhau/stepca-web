@@ -95,7 +95,7 @@ def ca_client(monkeypatch):
     fake = mock.MagicMock()
     fake.list_provisioners.return_value = {"provisioners": [{"name": "Admin JWK", "type": "JWK", "id": ADMIN_JWK["id"]}]}
     fake.list_admins.return_value = {
-        "admins": [{"id": "adm-1", "subject": "step", "provisionerId": ADMIN_JWK["id"], "type": "SUPER_ADMIN"}]
+        "admins": [{"id": "adm-1", "subject": "step", "provisioner_id": ADMIN_JWK["id"], "type": 2}]
     }
     fake.revoke.return_value = {"status": "ok"}
     fake.admin_key_source.return_value = "encrypted key from the CA, decrypted in memory"
@@ -167,6 +167,7 @@ def step_db(app):
                 "subject": subject,
                 "provisionerID": provisioner_id,
                 "type": admin_type,
+                "createdAt": "2026-10-29T12:30:08Z",
                 "deletedAt": "0001-01-01T00:00:00Z",
             }
             db.session.add(StepAdmin(nkey=admin_id.encode(), nvalue=json.dumps(value).encode()))

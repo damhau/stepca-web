@@ -5,16 +5,6 @@
 <!-- Element injected in the BODY element -->
 {% block body_class %} sidebar-mini {% endblock body_class %}
 
-<!-- Specific Page CSS goes HERE  -->
-{% block stylesheets %}
-<!-- Google Font: Source Sans Pro -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-<!-- Font Awesome -->
-<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
-<!-- Theme style -->
-<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
-{% endblock stylesheets %}
-
 {% block content %}
 
 <div class="content-wrapper">
@@ -37,35 +27,22 @@
   </div>
   <!-- /.content-header -->
 
-  <!-- Flash Message -->
-  <div class="content">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    {% for category, message in messages %}
-    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-      {{ message }}
-      <button type="button" class="close" data-dismiss="alert">&times;</button>
-    </div>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
-  </div>
-  <!-- Flash Message -->
 
 
   <!-- Main content -->
   <section class="content">
+    {% include "includes/flashes.html" %}
     <div class="container-fluid">
       <div class="card">
         <div class="card-body table-responsive p-0">
           <table class="table table-hover table-striped text-sm" data-table-tools>
             <thead>
-              <tr><th>Time (UTC)</th><th>User</th><th>Role</th><th>Action</th><th>Target</th><th>Result</th><th>Detail</th></tr>
+              <tr><th>Time</th><th>User</th><th>Role</th><th>Action</th><th>Target</th><th>Result</th><th>Detail</th></tr>
             </thead>
             <tbody>
               {% for event in events %}
               <tr>
-                <td>{{ event.created_at }}</td>
+                <td data-sort-value="{{ event.created_at.isoformat() }}">{{ event.created_at | datetime }}</td>
                 <td>{{ event.user }}</td>
                 <td>{{ event.role or "—" }}</td>
                 <td>{{ event.action }}</td>

@@ -5,15 +5,6 @@
 <!-- Element injected in the BODY element -->
 {% block body_class %} sidebar-mini {% endblock body_class %}
 
-<!-- Specific Page CSS goes HERE  -->
-{% block stylesheets %}
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-<!-- Font Awesome -->
-<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
-<!-- Theme style -->
-<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
-{% endblock stylesheets %}
-
 {% block content %}
 
 <div class="content-wrapper">
@@ -34,24 +25,11 @@
     </div>
   </div>
 
-  <!-- Flash Message -->
-  <div class="content">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    {% for category, message in messages %}
-    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-      {{ message }}
-      <button type="button" class="close" data-dismiss="alert">&times;</button>
-    </div>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
-  </div>
-  <!-- Flash Message -->
 
 
   <!-- Main content -->
   <section class="content">
+    {% include "includes/flashes.html" %}
 
 
     {% if can("admin") %}
@@ -99,13 +77,15 @@
 
 {% if can("admin") %}
                 <form method="POST" action="{{ url_for('step.delete_provisioner', name=p.name) }}" class="d-inline"
-                  onsubmit="return confirm('Are you sure you want to delete this provisioner?')">
+                  data-confirm="Delete the provisioner {{ p.name }}? Certificates can no longer be issued with it.">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
                 </form>
                 {% endif %}
               </td>
             </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted">No provisioners could be loaded.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -211,7 +191,7 @@
               </div>
 
               <!-- JWK specific -->
-              <div id="jwkFields" style="display: none;">
+              <div id="jwkFields" hidden>
                 <div class="form-group">
                   <label for="passphrase">Provisioner Passphrase</label>
                   <input type="password" class="form-control" id="passphrase" name="passphrase" required>
@@ -242,29 +222,6 @@
 {% block javascripts %}
 
 
-<script>
-  $('#viewModal').on('show.bs.modal', function (event) {
-    const prov = $(event.relatedTarget).data('prov');
-    // textContent: provisioner fields (templates, names) are never interpreted as HTML
-    document.getElementById('provJson').textContent = prov ? JSON.stringify(prov, null, 2) : 'Failed to load provisioner data.';
-  });
-
-  // Only the fields of the selected type are shown, required and submitted
-  function toggleFields() {
-    const type = document.getElementById("provType").value;
-    for (const [id, active] of [["acmeFields", type === "ACME"], ["jwkFields", type === "JWK"]]) {
-      const block = document.getElementById(id);
-      block.style.display = active ? "block" : "none";
-      block.querySelectorAll("input").forEach(input => { input.disabled = !active; });
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", () => {
-    const selector = document.getElementById("provType");
-    if (!selector) return;  // the create form is only rendered for admins
-    selector.addEventListener("change", toggleFields);
-    toggleFields();
-  });
-</script>
+<script src="/static/assets/js/provisioners.js"></script>
 
 {% endblock javascripts %}

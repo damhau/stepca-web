@@ -2,124 +2,68 @@ import base64
 import re
 
 from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.x509.oid import ExtensionOID, NameOID
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
+
+PEM_CERTIFICATE = re.compile(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.S)
 
 
-def format_pretty_date(dt):
-    return dt.strftime("%B %d, %Y")
+def load_certificate(data):
+    """The first certificate in PEM bytes, or the certificate in DER bytes."""
+    data = bytes(data)
+    match = PEM_CERTIFICATE.search(data)
+    if match:
+        return x509.load_pem_x509_certificate(match.group(0))
+    return x509.load_der_x509_certificate(data)
 
 
-def parse_cert(leaf_b64):
+def key_description(cert):
+    """RSA key size in bits (an int), or the curve name."""
+    key = cert.public_key()
+    if isinstance(key, rsa.RSAPublicKey):
+        return key.key_size
+    if isinstance(key, ec.EllipticCurvePublicKey):
+        return key.curve.name
+    if isinstance(key, ed25519.Ed25519PublicKey):
+        return "Ed25519"
+    return "Unknown"
+
+
+def describe_certificate(cert):
+    """The fields the certificate lists and pages show."""
     try:
-        pem_bytes = base64.b64decode(leaf_b64)
-        pem_str = pem_bytes.decode("utf-8", errors="ignore")
+        dns_names = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName)
+    except x509.ExtensionNotFound:
+        dns_names = []
+    return {
+        "subject": cert.subject.rfc4514_string(),
+        "issuer": cert.issuer.rfc4514_string(),
+        "not_before": cert.not_valid_before_utc.isoformat(),
+        "not_after": cert.not_valid_after_utc.isoformat(),
+        "serial": format(cert.serial_number, "x"),
+        "serial_dec": str(cert.serial_number),
+        "key_size": key_description(cert),
+        "dns_names": dns_names,
+    }
 
-        match = re.search(r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----", pem_str, re.DOTALL)
-        if not match:
-            return {"subject": "[invalid PEM format]"}
 
-        cert_pem = f"-----BEGIN CERTIFICATE-----{match.group(1)}-----END CERTIFICATE-----"
-        cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"), default_backend())
-
-        # Extract SANs
-        try:
-            san_ext = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
-            san = san_ext.value.get_values_for_type(x509.DNSName)
-        except x509.ExtensionNotFound:
-            san = []
-
-        # Extract Subject components
-        subject = cert.subject
-        def get_attr(oid):
-            return next((v.value for v in subject.get_attributes_for_oid(oid)), None)
-
-        # Key Size
-        pubkey = cert.public_key()
-        if isinstance(pubkey, rsa.RSAPublicKey):
-            key_size = pubkey.key_size
-        elif isinstance(pubkey, ec.EllipticCurvePublicKey):
-            key_size = pubkey.curve.name
-        else:
-            key_size = "Unknown"
-
-        return {
-            "subject": subject.rfc4514_string(),
-            "issuer": cert.issuer.rfc4514_string(),
-            "not_before": cert.not_valid_before_utc.isoformat(),
-            "not_after": cert.not_valid_after_utc.isoformat(),
-            "not_before_pretty": format_pretty_date(cert.not_valid_before_utc),
-            "not_after_pretty": format_pretty_date(cert.not_valid_after_utc),
-            "serial": format(cert.serial_number, "x"),
-            "serial_dec": str(cert.serial_number),
-            "organization": get_attr(NameOID.ORGANIZATION_NAME),
-            "organizational_unit": get_attr(NameOID.ORGANIZATIONAL_UNIT_NAME),
-            "locality": get_attr(NameOID.LOCALITY_NAME),
-            "state": get_attr(NameOID.STATE_OR_PROVINCE_NAME),
-            "country": get_attr(NameOID.COUNTRY_NAME),
-            "key_size": key_size,
-            "dns_names": san,
-        }
-
-    except Exception as e:
+def parse_cert_from_bytes(cert_bytes):
+    """describe_certificate() of PEM or DER bytes, or an error entry for a row that doesn't parse."""
+    try:
+        return describe_certificate(load_certificate(cert_bytes))
+    except (ValueError, TypeError) as e:
         return {"subject": "[error decoding cert]", "error": str(e)}
 
 
-def parse_cert_from_bytes(cert_bytes: bytes):
+def parse_cert(leaf_b64):
+    """An ACME certificate's "leaf": the base64 of its PEM chain."""
     try:
-
-        def get_attr(name, oid):
-            return next((v.value for v in name.get_attributes_for_oid(oid)), None)
-
-        def format_date(dt):
-            return dt.strftime("%B %d, %Y")
-
-        try:
-            cert = x509.load_pem_x509_certificate(cert_bytes, default_backend())
-        except ValueError:
-            cert = x509.load_der_x509_certificate(cert_bytes, default_backend())
-
-        # Extract SANs
-        try:
-            san_ext = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
-            san = san_ext.value.get_values_for_type(x509.DNSName)
-        except x509.ExtensionNotFound:
-            san = []
-
-        # Public key info
-        pubkey = cert.public_key()
-        if isinstance(pubkey, rsa.RSAPublicKey):
-            key_size = pubkey.key_size
-        elif isinstance(pubkey, ec.EllipticCurvePublicKey):
-            key_size = pubkey.curve.name
-        else:
-            key_size = "Unknown"
-
-        return {
-            "subject": cert.subject.rfc4514_string(),
-            "issuer": cert.issuer.rfc4514_string(),
-            "organization": get_attr(cert.subject, NameOID.ORGANIZATION_NAME),
-            "organizational_unit": get_attr(cert.subject, NameOID.ORGANIZATIONAL_UNIT_NAME),
-            "locality": get_attr(cert.subject, NameOID.LOCALITY_NAME),
-            "state": get_attr(cert.subject, NameOID.STATE_OR_PROVINCE_NAME),
-            "country": get_attr(cert.subject, NameOID.COUNTRY_NAME),
-            "not_before": cert.not_valid_before_utc.isoformat(),
-            "not_after": cert.not_valid_after_utc.isoformat(),
-            "not_before_pretty": format_date(cert.not_valid_before_utc),
-            "not_after_pretty": format_date(cert.not_valid_after_utc),
-            "serial": format(cert.serial_number, "x"),
-            "serial_dec": str(cert.serial_number),
-            "key_size": key_size,
-            "dns_names": san,
-        }
-
-    except Exception as e:
+        return parse_cert_from_bytes(base64.b64decode(leaf_b64))
+    except (ValueError, TypeError) as e:
         return {"subject": "[error decoding cert]", "error": str(e)}
 
 
 def extract_sans_from_csr(csr_pem):
-    csr = x509.load_pem_x509_csr(csr_pem.encode("utf-8"), default_backend())
+    csr = x509.load_pem_x509_csr(csr_pem.encode("utf-8"))
     try:
         san_ext = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
         sans = san_ext.value.get_values_for_type(x509.DNSName)

@@ -1,6 +1,7 @@
 """Roles (viewer / operator / admin), the audit log, expiry, service control and the config page."""
 
 import datetime
+import re
 from unittest import mock
 
 import pytest
@@ -132,7 +133,7 @@ def test_expiring_certificates(client, step_db):
     assert "in-60-days.test" not in html and "revoked.test" not in html
     assert html.index("in-5-days.test") < html.index("in-20-days.test")
     assert "in-20-days.test" not in client.get("/x509/expiring?days=7").get_data(as_text=True)
-    assert "<h3>2</h3>\n\n              <p>Expiring within 30 days</p>" in client.get("/").get_data(as_text=True)
+    assert re.search(r"<h3>2</h3>\s*<p>Expiring within 30 days</p>", client.get("/").get_data(as_text=True))
 
 
 class TestServiceControl:

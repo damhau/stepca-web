@@ -5,15 +5,6 @@
 <!-- Element injected in the BODY element -->
 {% block body_class %} sidebar-mini {% endblock body_class %}
 
-<!-- Specific Page CSS goes HERE  -->
-{% block stylesheets %}
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-<!-- Font Awesome -->
-<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
-<!-- Theme style -->
-<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
-{% endblock stylesheets %}
-
 {% block content %}
 
 <div class="content-wrapper">
@@ -38,16 +29,16 @@
 
   <!-- Main content -->
   <section class="content">
+    {% include "includes/flashes.html" %}
     <div class="card">
       <div class="card-body table-responsive p-0">
         <table class="table table-hover table-striped text-sm" data-table-tools>
           <thead>
             <tr>
-              <th>Id</th>
-              <th>Serial</th>
-              <th>Revoked At</th>
+              <th title="Decimal, as used by step and step-ca's logs">Serial</th>
               <th>Subject</th>
-              <th>Issuer</th>
+              <th>Revoked</th>
+              <th>Reason</th>
               <th title="The provisioner whose token revoked the certificate (not the one that issued it)">Revoked via</th>
             </tr>
           </thead>
@@ -55,21 +46,25 @@
             {% for r in revoked %}
             <tr>
               <td>
-                <code>{{ r.data.Serial }}</code>
+                {% if r.cert %}
+                <a href="{{ url_for('x509.cert_detail', serial=r.nkey) }}"><code>{{ r.nkey }}</code></a>
+                {% else %}
+                <code>{{ r.nkey }}</code>
+                {% endif %}
                 {% if r.data.misdirected_serial %}
-                <br><span class="badge badge-warning"
-                  title="Revoked by an older version of this UI with a wrong serial. Certificate {{ r.data.misdirected_serial }} is still valid: revoke it again from the Active list.">
+                <br><a class="badge badge-warning" href="{{ url_for('x509.cert_detail', serial=r.data.misdirected_serial) }}"
+                  title="Revoked by an older version of this UI with a wrong serial. Certificate {{ r.data.misdirected_serial }} is still valid: revoke it again from its page.">
                   Ineffective: certificate {{ r.data.misdirected_serial }} is still valid
-                </span>
+                </a>
                 {% endif %}
               </td>
-              <td>{{ r.cert.serial if r.cert else "—" }}</td>
-              <td>{{ r.data.RevokedAt }}</td>
               <td>{{ r.cert.subject if r.cert else "—" }}</td>
-              <td>{{ r.cert.issuer if r.cert else "—" }}</td>
-              <td>{{ r.data.provisioner_name if r.data.provisioner_name else "—" }}</td>
-
+              <td data-sort-value="{{ r.data.RevokedAt }}">{{ r.data.RevokedAt | datetime }}</td>
+              <td>{{ r.data.Reason or reason_names.get(r.data.ReasonCode, "—") }}{% if r.data.ReasonCode is not none %} ({{ r.data.ReasonCode }}){% endif %}</td>
+              <td>{{ r.data.provisioner_name or "—" }}</td>
             </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-muted">No revoked certificates.</td></tr>
             {% endfor %}
           </tbody>
         </table>

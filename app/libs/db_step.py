@@ -2,7 +2,7 @@ import base64
 import json
 import logging
 
-from app.models.step import StepProvisioner
+from app.models.step import StepAdmin, StepProvisioner
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +31,23 @@ def get_step_provisioners():
             log.warning("Cannot parse provisioner: %s", e)
     return accounts
 
+
+# linkedca.Provisioner_Type, the number step-ca stores as a provisioner's "type"
+PROVISIONER_TYPES = {1: "JWK", 2: "OIDC", 3: "GCP", 4: "AWS", 5: "AZURE", 6: "ACME", 7: "X5C", 8: "K8SSA", 9: "SSHPOP", 10: "SCEP", 11: "NEBULA"}
+
+
+def provisioner_type(provisioner):
+    """The type name ("JWK", "ACME", ...) of a provisioner from get_step_provisioners()."""
+    stored = provisioner["data"].get("type")
+    return PROVISIONER_TYPES.get(stored, stored)
+
+
+def get_jwk_provisioner_names(provisioners):
+    """Active JWK provisioners: the only ones that sign a CSR with a password."""
+    active = get_active_provisioner_map(provisioners)
+    return sorted(p["data"]["name"] for p in provisioners if p["data"].get("id") in active and provisioner_type(p) == "JWK")
+
+
 def get_active_provisioner_map(provisioners):
     """
     Returns a map (dictionary) where the key is the 'id' and the value is the 'name'
@@ -46,3 +63,16 @@ def get_active_provisioner_map(provisioners):
         if provisioner['data'].get('deletedAt', '') == '0001-01-01T00:00:00Z'
     }
     return provisioner_map
+
+
+def get_admin_created_dates():
+    """{admin id: createdAt} from step-ca's admins table. The Admin API leaves created_at out
+    for admins added since the CA last started."""
+    dates = {}
+    for row in StepAdmin.query.all():
+        try:
+            admin = json.loads(bytes(row.nvalue))
+            dates[admin["id"]] = admin.get("createdAt")
+        except (ValueError, KeyError) as e:
+            log.warning("Cannot parse admin: %s", e)
+    return dates

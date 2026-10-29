@@ -8,7 +8,7 @@ from app.blueprint.step import bp
 from app.libs import ca
 from app.libs.audit import audit
 from app.libs.ca import client
-from app.libs.db_step import get_active_provisioner_map, get_step_provisioners
+from app.libs.db_step import get_active_provisioner_map, get_admin_created_dates, get_step_provisioners
 
 
 @bp.route("/provisioners", methods=["GET", "POST"])
@@ -136,6 +136,7 @@ def admins():
         title="StepCA Admins",
         admins=(admins or {}).get("admins", []),
         provisioners=provisioner_map,
+        created_dates=get_admin_created_dates(),
         manage_admins=admins_manageable(),
     )
 

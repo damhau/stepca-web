@@ -5,7 +5,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="/static/assets/favicon.ico" type="image/x-icon">
+  <!-- Loaded once for every page, from the app itself (no CDN) -->
+  <link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
   <link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
+  <link rel="stylesheet" href="/static/assets/css/app.css">
   <title>
     StepCA Admin - {% block title %}{% endblock %}
   </title>
@@ -38,6 +41,7 @@
   <script src="/static/assets/plugins/jquery/jquery.min.js"></script>
   <script src="/static/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="/static/assets/js/adminlte.min.js"></script>
+  <script src="/static/assets/js/app.js"></script>
   <script src="/static/assets/js/tables.js"></script>
 
   <!-- Specific Page JS goes HERE  -->

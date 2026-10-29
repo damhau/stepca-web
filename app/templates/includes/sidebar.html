@@ -30,119 +30,41 @@
     <!-- Sidebar Menu -->
     <nav class="mt-2">
       <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-
-        <li class="nav-item has-treeview {% if 'index' in segment %} menu-open {% endif %}">
-
-        <li class="nav-header">Dashboard</li>
+        {# (section, [(endpoint, icon, label)]); the current page is highlighted #}
+        {% set menu = [
+          ("Dashboard", [("home.index", "fas fa-chart-line", "Certificate Summary")]),
+          ("ACME", [
+            ("acme.accounts", "fas fa-user-shield", "Accounts"),
+            ("acme.orders", "fas fa-shopping-cart", "Orders"),
+            ("acme.certs", "fas fa-certificate", "Certificates"),
+            ("acme.authzs", "fas fa-check-circle", "Authorizations"),
+            ("acme.challenges", "fas fa-puzzle-piece", "Challenges"),
+          ]),
+          ("X.509 Certificates", [
+            ("x509.active_certs", "fas fa-check", "Active"),
+            ("x509.expiring_certs", "fas fa-hourglass-half", "Expiring"),
+            ("x509.revoked_certs", "fas fa-ban", "Revoked"),
+            ("x509.all_certs", "fas fa-list", "All"),
+          ]),
+          ("Step CA", [
+            ("step.provisioner", "fas fa-key", "Provisioners"),
+            ("step.admins", "fas fa-user-cog", "Admins"),
+          ] + ([("step.step_service", "fas fa-power-off", "Service")] if can("admin") and config.SERVICE_CONTROL_ENABLED else [])),
+        ] + ([("System", [
+            ("system.config", "fas fa-cogs", "Configuration"),
+            ("system.audit_log", "fas fa-clipboard-list", "Audit Log"),
+          ])] if can("admin") else []) %}
+        {% for section, items in menu %}
+        <li class="nav-header">{{ section }}</li>
+        {% for endpoint, icon, label in items %}
         <li class="nav-item">
-          <a href="/" class="nav-link">
-            <i class="nav-icon fas fa-chart-line"></i>
-            <p>Certificate Summary</p>
+          <a href="{{ url_for(endpoint) }}" class="nav-link{% if request.endpoint == endpoint %} active{% endif %}"{% if request.endpoint == endpoint %} aria-current="page"{% endif %}>
+            <i class="nav-icon {{ icon }}"></i>
+            <p>{{ label }}</p>
           </a>
         </li>
-
-        <!-- ACME -->
-        <li class="nav-header">ACME Management</li>
-        <li class="nav-item">
-          <a href="{{ url_for('acme.accounts') }}" class="nav-link">
-            <i class="nav-icon fas fa-user-shield"></i>
-            <p>Accounts</p>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="{{ url_for('acme.orders') }}" class="nav-link">
-            <i class="nav-icon fas fa-shopping-cart"></i>
-            <p>Orders</p>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="{{ url_for('acme.certs') }}" class="nav-link">
-            <i class="nav-icon fas fa-certificate"></i>
-            <p>Certificates</p>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="{{ url_for('acme.authzs') }}" class="nav-link">
-            <i class="nav-icon fas fa-check-circle"></i>
-            <p>Authorizations</p>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="{{ url_for('acme.challenges') }}" class="nav-link">
-            <i class="nav-icon fas fa-puzzle-piece"></i>
-            <p>Challenges</p>
-          </a>
-        </li>
-
-        <!-- x509 -->
-        <li class="nav-header">x509 Certificate Management</li>
-        <li class="nav-item">
-          <a href="{{ url_for('x509.active_certs') }}" class="nav-link">
-            <i class="far fa-list-alt nav-icon"></i>
-            <p>Active</p>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="{{ url_for('x509.expiring_certs') }}" class="nav-link">
-            <i class="fas fa-hourglass-half nav-icon"></i>
-            <p>Expiring</p>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="{{ url_for('x509.revoked_certs') }}" class="nav-link">
-            <i class="fas fa-user-plus nav-icon"></i>
-            <p>Revoked</p>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="{{ url_for('x509.all_certs') }}" class="nav-link">
-            <i class="fas fa-user-plus nav-icon"></i>
-            <p>All</p>
-          </a>
-        </li>
-
-        <!-- Management -->
-        <li class="nav-header">StepCA Management</li>
-        <li class="nav-item">
-          <a href="/step/provisioners" class="nav-link">
-            <i class="far fa-list-alt nav-icon"></i>
-            <p>Provisioners</p>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/step/admins" class="nav-link">
-            <i class="nav-icon fas fas fa-user-shield"></i>
-            <p>Admins</p>
-          </a>
-        </li>
-        {% if can("admin") and config.SERVICE_CONTROL_ENABLED %}
-        <li class="nav-item">
-          <a href="{{ url_for('step.step_service') }}" class="nav-link">
-            <i class="nav-icon fas fa-power-off"></i>
-            <p>Service</p>
-          </a>
-        </li>
-        {% endif %}
-
-        {% if can("admin") %}
-        <!-- Management -->
-        <li class="nav-header">System</li>
-        <li class="nav-item">
-          <a href="{{ url_for('system.config') }}" class="nav-link">
-            <i class="nav-icon fas fa-cogs"></i>
-            <p>Configuration</p>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="{{ url_for('system.audit_log') }}" class="nav-link">
-            <i class="nav-icon fas fa-clipboard-list"></i>
-            <p>Audit Log</p>
-          </a>
-        </li>
-        {% endif %}
-
-
-
+        {% endfor %}
+        {% endfor %}
       </ul>
     </nav>
     <!-- /.sidebar-menu -->

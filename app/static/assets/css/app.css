@@ -1,0 +1,20 @@
+/* stepca-web's own styles, on top of AdminLTE */
+
+.dashboard-chart {
+  height: 300px;
+  /* Flot draws the x-axis labels just below its 300px area */
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-chart .flot-svg svg {
+  overflow: visible;
+}
+
+/* Labels drawn by Flot inside the donut slices */
+.dashboard-chart-label {
+  font-size: 13px;
+  text-align: center;
+  padding: 2px;
+  color: #fff;
+  font-weight: 600;
+}

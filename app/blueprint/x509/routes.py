@@ -10,7 +10,7 @@ from app.auth.roles import role_required
 from app.blueprint.x509 import bp
 from app.libs.audit import audit
 from app.libs.ca import client
-from app.libs.db_step import get_active_provisioner_map, get_step_provisioners
+from app.libs.db_step import get_jwk_provisioner_names, get_step_provisioners
 from app.libs.db_x509 import (
     get_expiring_certs,
     get_revocation,
@@ -21,6 +21,20 @@ from app.libs.db_x509 import (
     get_x509_certs_by_id,
     save_generated_cert,
 )
+
+# Every RFC 5280 reason code, to name the ones step-ca recorded
+REASON_NAMES = {
+    0: "Unspecified",
+    1: "Key compromise",
+    2: "CA compromise",
+    3: "Affiliation changed",
+    4: "Superseded",
+    5: "Cessation of operation",
+    6: "Certificate hold",
+    8: "Remove from CRL",
+    9: "Privilege withdrawn",
+    10: "AA compromise",
+}
 
 # RFC 5280 reasons that make sense for a passive revocation
 REVOCATION_REASONS = [
@@ -45,12 +59,11 @@ def all_certs():
 @login_required
 def active_certs():
     certs = get_x509_active_certs()
-    provisioner_map = get_active_provisioner_map(get_step_provisioners())
     return render_template(
         "x509/active_certs.html",
         title="X.509 Active Certificates",
         certs=certs,
-        provisioners=provisioner_map,
+        signing_provisioners=get_jwk_provisioner_names(get_step_provisioners()),
         revocation_reasons=REVOCATION_REASONS,
     )
 
@@ -67,7 +80,7 @@ def expiring_certs():
 @login_required
 def revoked_certs():
     revoked = get_revoked_x509_with_cert_info()
-    return render_template("x509/revoked_certs.html", title="Revoked X.509 Certificates", revoked=revoked)
+    return render_template("x509/revoked_certs.html", title="Revoked X.509 Certificates", revoked=revoked, reason_names=REASON_NAMES)
 
 
 @bp.route("/cert/<serial>")
@@ -90,6 +103,7 @@ def cert_detail(serial):
         status=status,
         days_left=(not_after - now).days,
         revocation_reasons=REVOCATION_REASONS,
+        reason_names=REASON_NAMES,
     )
 
 
@@ -136,7 +150,7 @@ def sign_cert():
             audit("sign", serial_number, detail=f"cn={common_name} provisioner={provisioner_name}")
 
             flash(f"Certificate {serial_number} created successfully", "success")
-            return redirect(url_for("x509.active_certs"))
+            return redirect(url_for("x509.cert_detail", serial=serial_number))
         else:
             audit("sign", "", success=False, detail=f"provisioner={provisioner_name}")
             flash("Failed to sign certificate", "danger")

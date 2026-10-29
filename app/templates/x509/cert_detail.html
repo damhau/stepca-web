@@ -4,12 +4,6 @@
 
 {% block body_class %} sidebar-mini {% endblock body_class %}
 
-{% block stylesheets %}
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
-<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
-{% endblock stylesheets %}
-
 {% block content %}
 {% set data = cert.data %}
 <div class="content-wrapper">
@@ -64,14 +58,14 @@
               <tr><th>Issuer</th><td>{{ data.issuer }}</td></tr>
               <tr><th>Serial (decimal)</th><td><code>{{ cert.nkey }}</code></td></tr>
               <tr><th>Serial (hex)</th><td><code>{{ data.serial }}</code></td></tr>
-              <tr><th>Valid from</th><td>{{ data.not_before }}</td></tr>
-              <tr><th>Valid to</th><td>{{ data.not_after }}</td></tr>
+              <tr><th>Valid from</th><td>{{ data.not_before | datetime }}</td></tr>
+              <tr><th>Valid to</th><td>{{ data.not_after | datetime }}</td></tr>
               <tr><th>DNS names</th><td>{{ data.dns_names | join(", ") if data.dns_names else "—" }}</td></tr>
               <tr><th>Key</th><td>{{ data.key_size }}{% if data.key_size is number %} bit{% endif %}</td></tr>
               <tr><th>Issued via provisioner</th><td>{{ cert.provisioner.name or "—" }}</td></tr>
               {% if revocation %}
-              <tr><th>Revoked at</th><td>{{ revocation.RevokedAt }}</td></tr>
-              <tr><th>Revocation reason</th><td>{{ revocation.Reason or "—" }} ({{ revocation.ReasonCode }})</td></tr>
+              <tr><th>Revoked at</th><td>{{ revocation.RevokedAt | datetime }}</td></tr>
+              <tr><th>Revocation reason</th><td>{{ revocation.Reason or reason_names.get(revocation.ReasonCode, "—") }} ({{ revocation.ReasonCode }})</td></tr>
               {% endif %}
             </tbody>
           </table>

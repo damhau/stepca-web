@@ -5,16 +5,6 @@
 <!-- Element injected in the BODY element -->
 {% block body_class %} sidebar-mini {% endblock body_class %}
 
-<!-- Specific Page CSS goes HERE  -->
-{% block stylesheets %}
-<!-- Google Font: Source Sans Pro -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-<!-- Font Awesome -->
-<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
-<!-- Theme style -->
-<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
-{% endblock stylesheets %}
-
 {% block content %}
 
 <div class="content-wrapper">
@@ -39,32 +29,37 @@
 
   <!-- Main content -->
   <section class="content">
+    {% include "includes/flashes.html" %}
     <div class="card">
       <div class="card-body table-responsive p-0">
         <table class="table table-hover text-sm table-striped" data-table-tools>
           <thead>
             <tr>
-              <th>Cert ID</th>
+              <th title="Decimal">Serial</th>
               <th>Subject</th>
-              <th>Issuer</th>
-              <th>SAN</th>
-              <th>Not Before</th>
-              <th>Not After</th>
-              <th>Serial</th>
+              <th>DNS names</th>
+              <th>Valid from</th>
+              <th>Valid to</th>
+              <th>ACME certificate ID</th>
             </tr>
           </thead>
           <tbody>
             {% for cert in certs %}
             {% set data = cert.data %}
             <tr>
-              <td><code>{{ cert.nkey }}</code></td>
+              <td>
+                {% if data.serial_dec %}
+                <a href="{{ url_for('x509.cert_detail', serial=data.serial_dec) }}"><code>{{ data.serial_dec }}</code></a>
+                {% else %}—{% endif %}
+              </td>
               <td>{{ data.subject or '—' }}</td>
-              <td>{{ data.issuer or '—' }}</td>
-              <td>{{ data.dns_names or '—' }}</td>
-              <td>{{ data.not_before or '—' }}</td>
-              <td>{{ data.not_after or '—' }}</td>
-              <td>{{ data.serial or '—' }}</td>
+              <td>{{ data.dns_names | join(", ") if data.dns_names else '—' }}</td>
+              <td data-sort-value="{{ data.not_before }}">{{ data.not_before | datetime }}</td>
+              <td data-sort-value="{{ data.not_after }}">{{ data.not_after | datetime }}</td>
+              <td><code>{{ data.id or cert.nkey }}</code></td>
             </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-muted">No ACME certificates yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>

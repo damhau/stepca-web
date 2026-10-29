@@ -28,13 +28,3 @@
     </form>
   </div>
 </div>
-<script>
-  document.addEventListener("DOMContentLoaded", () => {
-    $('#revokeModal').on('show.bs.modal', function (event) {
-      const button = $(event.relatedTarget);
-      $('#modal_cert_id').val(button.data('cert-id'));
-      document.getElementById('modal_cert_serial').textContent = button.data('cert-id');
-      document.getElementById('modal_cert_subject').textContent = button.data('cert-subject') || '';
-    });
-  });
-</script>

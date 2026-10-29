@@ -21,6 +21,26 @@ def check_ldap_config(config):
         log.warning("LDAP_URL is ldap:// without LDAP_START_TLS: user passwords cross the network in cleartext. Use ldaps:// or set LDAP_START_TLS=true")
 
 
+def format_datetime(value):
+    """One format for every date shown: "2025-05-22 14:03 UTC".
+
+    Takes a datetime (naive ones are UTC), epoch seconds, or an ISO 8601 string such as Go's RFC 3339
+    with nanoseconds. Go's zero time, which step-ca uses for "never", shows as a dash.
+    """
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    elif isinstance(value, int | float):
+        value = datetime.fromtimestamp(value, UTC)
+    if not isinstance(value, datetime) or value.year == 1:
+        return "—"
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
 def create_app(config_class=Config):
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     app = Flask(__name__)
@@ -84,9 +104,6 @@ def create_app(config_class=Config):
     app.register_blueprint(system_bp)
 
 
-    @app.template_filter("format_date")
-    def format_date(value):
-        # Convert seconds to datetime object and return formatted string
-        return datetime.fromtimestamp(value, UTC).strftime("%Y-%m-%d %H:%M:%S")
+    app.add_template_filter(format_datetime, "datetime")
 
     return app

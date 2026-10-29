@@ -5,15 +5,6 @@
 <!-- Element injected in the BODY element -->
 {% block body_class %} sidebar-mini {% endblock body_class %}
 
-<!-- Specific Page CSS goes HERE  -->
-{% block stylesheets %}
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-<!-- Font Awesome -->
-<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
-<!-- Theme style -->
-<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
-{% endblock stylesheets %}
-
 {% block content %}
 
 <div class="content-wrapper">
@@ -34,23 +25,10 @@
     </div>
   </div>
 
-  <!-- Flash Message -->
-  <div class="content">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    {% for category, message in messages %}
-    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-      {{ message }}
-      <button type="button" class="close" data-dismiss="alert">&times;</button>
-    </div>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
-  </div>
-  <!-- Flash Message -->
 
   <!-- Main content -->
   <section class="content">
+    {% include "includes/flashes.html" %}
     {# Admins can only be managed by an admin user, and only when the app's own CA identity is a SUPER_ADMIN #}
     {% set manage = can("admin") and manage_admins %}
     {% if can("admin") and not manage_admins %}
@@ -71,50 +49,39 @@
         <table class="table table-hover text-sm table-striped" data-table-tools>
           <thead>
             <tr>
-              <th>Admin ID</th>
-              <th>ProvisionerID</th>
-              <th>Name</th>
+              <th>Subject</th>
+              <th>Provisioner</th>
               <th>Type</th>
-              <th>Created At</th>
+              <th>Created</th>
+              <th>Admin ID</th>
               <th style="width: 150px;" data-no-sort>Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for admin in admins %}
             <tr>
+              <td>{{ admin.subject or "—" }}</td>
+              <td>{{ provisioners.get(admin.provisioner_id, admin.provisioner_id) or "—" }}</td>
+              <td>{{ {1: "ADMIN", 2: "SUPER_ADMIN"}.get(admin.type, admin.type) }}</td>
+              <td>{{ (admin.get("created_at", {}).get("seconds") or created_dates.get(admin.id)) | datetime }}</td>
               <td><code>{{ admin.id }}</code></td>
-              <td>{{ admin.provisioner_id or "-" }}</td>
-              <td>{{ admin.subject or "n/a" }}</td>
-              <td>
-                {% if admin.type == 1 %}
-                ADMIN
-                {% elif admin.type == 2 %}
-                SUPER_ADMIN
-                {% else %}
-                {{ admin.type }}
-                {% endif %}
-              </td>
-              <td>{% set created_at_seconds = admin.get('created_at', {}).get('seconds', None) %}
-                {% if created_at_seconds %}
-                {{ created_at_seconds | format_date }}
-                {% else %}
-                No timestamp available
-                {% endif %}</td>
               <td>
                 {% if manage %}
-                <!-- Edit button triggers modal -->
                 <button class="btn btn-sm btn-info" data-toggle="modal" data-target="#editAdminModal"
-                  data-admin='{{ admin | tojson | safe }}'>
+                  data-admin='{{ admin | tojson }}' data-provisioner-name="{{ provisioners.get(admin.provisioner_id, '') }}"
+                  aria-label="Change the admin's type">
                   <i class="fas fa-edit"></i>
                 </button>
                 <form method="POST" action="{{ url_for('step.delete_admin', id=admin.id) }}" class="d-inline"
-                  onsubmit="return confirm('Are you sure you want to delete this admin?')">
+                  data-confirm="Delete the admin {{ admin.subject }}?">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                  <button type="submit" class="btn btn-sm btn-danger" aria-label="Delete the admin"><i class="fas fa-trash"></i></button>
                 </form>
                 {% endif %}
               </td>
             </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-muted">No admins could be loaded.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -174,7 +141,7 @@
     {% endif %}
 
     {% if can("admin") and manage_admins %}
-    <div class="modal fade" id="editAdminModal" tabindex="-1" role="dialog" aria-labelledby="editAdminModalLabel"
+    <div class="modal fade" id="editAdminModal" data-update-url="{{ url_for('step.update_admin', id='__ID__') }}" tabindex="-1" role="dialog" aria-labelledby="editAdminModalLabel"
       aria-hidden="true">
       <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -226,17 +193,7 @@
 {% block javascripts %}
 
 {% if can("admin") and manage_admins %}
-<script>
-  const provisionerNames = {{ provisioners | tojson }};
-  const updateUrl = {{ url_for('step.update_admin', id='__ID__') | tojson }};
-  $('#editAdminModal').on('show.bs.modal', function (event) {
-    const admin = $(event.relatedTarget).data('admin');
-    document.getElementById('editAdminForm').action = updateUrl.replace('__ID__', encodeURIComponent(admin.id));
-    $('#editAdminSubject').val(admin.subject);
-    $('#editAdminProvisioner').val(provisionerNames[admin.provisioner_id] || admin.provisioner_id);
-    $('#editAdminType').val(String(admin.type === 'SUPER_ADMIN' || admin.type === 2 ? 2 : 1));
-  });
-</script>
+<script src="/static/assets/js/admins.js"></script>
 {% endif %}
 
 {% endblock javascripts %}

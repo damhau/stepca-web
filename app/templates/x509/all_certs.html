@@ -5,15 +5,6 @@
 <!-- Element injected in the BODY element -->
 {% block body_class %} sidebar-mini {% endblock body_class %}
 
-<!-- Specific Page CSS goes HERE  -->
-{% block stylesheets %}
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-<!-- Font Awesome -->
-<link rel="stylesheet" href="/static/assets/plugins/fontawesome-free/css/all.min.css">
-<!-- Theme style -->
-<link rel="stylesheet" href="/static/assets/css/adminlte.min.css">
-{% endblock stylesheets %}
-
 {% block content %}
 
 <div class="content-wrapper">
@@ -36,19 +27,19 @@
 
   <!-- Main content -->
   <section class="content">
+    {% include "includes/flashes.html" %}
     <div class="card">
       <div class="card-body table-responsive p-0">
         <table class="table table-hover text-sm table-striped" data-table-tools>
           <thead>
             <tr>
-              <th>Id</th>
-              <th>Serial</th>
+              <th title="Decimal, as used by step and step-ca's logs">Serial</th>
+              <th>Serial (hex)</th>
               <th>Subject</th>
-              <th>Issuer</th>
-              <th>Valid From</th>
-              <th>Valid To</th>
-              <th>DNS Names</th>
-              <th>Key Size</th>
+              <th>Valid from</th>
+              <th>Valid to</th>
+              <th>DNS names</th>
+              <th>Key</th>
               <th style="width: 140px;" data-no-sort>Actions</th>
             </tr>
           </thead>
@@ -59,9 +50,8 @@
               <td><code>{{ cert.nkey }}</code></td>
               <td>{{ data.serial or "—" }}</td>
               <td>{{ data.subject or "—" }}</td>
-              <td>{{ data.issuer or "—" }}</td>
-              <td data-sort-value="{{ data.not_before }}">{{ data.not_before_pretty or "—" }}</td>
-              <td data-sort-value="{{ data.not_after }}">{{ data.not_after_pretty or "—" }}</td>
+              <td data-sort-value="{{ data.not_before }}">{{ data.not_before | datetime }}</td>
+              <td data-sort-value="{{ data.not_after }}">{{ data.not_after | datetime }}</td>
               <td>
                 {% if data.dns_names %}
                 {{ data.dns_names | join(", ") }}
@@ -76,6 +66,8 @@
                 </a>
               </td>
             </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-muted">No certificates yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>

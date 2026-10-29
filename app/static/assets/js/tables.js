@@ -57,7 +57,10 @@
       info.textContent = filtered.length ? `${start + 1}–${end} of ${filtered.length}` + (filtered.length !== rows.length ? ` (${rows.length} total)` : "") : "No match";
       prev.disabled = page === 0;
       next.disabled = page >= pages - 1;
-      bottom.style.display = rows.length > PAGE_SIZE || filtered.length !== rows.length ? "" : "none";
+      // Bootstrap's d-flex is !important: toggle classes, not style.display
+      const showBottom = rows.length > PAGE_SIZE || filtered.length !== rows.length;
+      bottom.classList.toggle("d-flex", showBottom);
+      bottom.classList.toggle("d-none", !showBottom);
     }
 
     function applyFilterAndSort() {

@@ -3,13 +3,17 @@ import os
 import threading
 from datetime import UTC, datetime
 
-from flask import Flask, render_template
+from flask import jsonify, render_template
+from flask_openapi3 import Info, OpenAPI
 from flask_talisman import Talisman
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from app.api.schemas import Error, ValidationProblem
 from app.extensions import CONTENT_SECURITY_POLICY, csrf, db, limiter
 from app.models.audit import AuditEvent  # noqa: F401  registers the model for create_all
+from app.models.inventory import InventoryCertificate  # noqa: F401  registers the models for create_all
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
+from app.services.inventory import InventoryState
 from app.settings import Settings, load_settings
 from app.stepca.client import StepCAClient
 
@@ -45,15 +49,40 @@ def format_datetime(value):
     return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
+def warm_up_inventory(app):
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from app.services import inventory
+
+    with app.app_context():
+        try:
+            added = inventory.refresh(force=True)
+            log.info("Certificate inventory ready: %d certificates and revocations added", added)
+        except SQLAlchemyError as e:
+            log.warning("Cannot build the certificate inventory yet (it is built on the next page): %s", e)
+
+
 def create_app(settings: Settings | None = None):
     """The app, from `settings` or else from the environment and settings.json (app.settings)."""
     settings = settings or load_settings()
     logging.basicConfig(level=settings.log_level.upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    app = Flask(__name__)
+    # Flask, plus the OpenAPI document of the JSON API (app.api), built from its pydantic models
+    from app.api import validation_error
+
+    app = OpenAPI(
+        __name__,
+        info=Info(title="stepca-web", version="1"),
+        # No documentation pages: the document is exported to frontend/openapi.json
+        doc_ui=False,
+        responses={401: Error},
+        validation_error_model=ValidationProblem,
+        validation_error_callback=validation_error,
+    )
     app.config.update(settings.flask_config())
     app.extensions["settings"] = settings
     # The one CA client: one admin certificate, one decrypted admin key
     app.extensions["stepca"] = StepCAClient.from_settings(settings)
+    app.extensions["inventory"] = InventoryState(refresh_seconds=settings.inventory_refresh_seconds)
     if app.config["AUTH_BACKEND"] == "ldap":
         check_ldap_config(app.config)
 
@@ -82,7 +111,17 @@ def create_app(settings: Settings | None = None):
 
     @app.errorhandler(429)
     def too_many_requests(error):
-        return render_template("auth/login.html", error="Too many failed sign-ins from your address: try again later."), 429
+        message = "Too many failed sign-ins from your address: try again later."
+        from app.api import is_api_request
+
+        if is_api_request():
+            return jsonify({"error": message}), 429
+        return render_template("auth/login.html", error=message), 429
+
+    @app.route("/healthz")
+    def healthz():
+        """For container health checks: the app answers (it doesn't check the CA or the databases)."""
+        return {"status": "ok"}
 
     # Every route requires a session unless explicitly listed as public
     from app.auth.decorator import require_login
@@ -106,6 +145,10 @@ def create_app(settings: Settings | None = None):
     with app.app_context():
         # Only the app's own SQLite tables: step-ca's database is never modified
         db.create_all(bind_key="app")
+
+    if not app.testing:
+        # Builds the certificate inventory, so that the first page doesn't wait for it
+        threading.Thread(target=warm_up_inventory, args=(app,), name="inventory", daemon=True).start()
 
 
     # Register blueprints here
@@ -134,6 +177,10 @@ def create_app(settings: Settings | None = None):
     from app.blueprint.system import bp as system_bp
 
     app.register_blueprint(system_bp)
+
+    from app import api
+
+    api.register(app)
 
 
     app.add_template_filter(format_datetime, "datetime")

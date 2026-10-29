@@ -285,12 +285,17 @@ flask==3.1.3 \
     --hash=sha256:f4bcbefc124291925f1a26446da31a5178f9483862233b23c0c96a20701f670c
     # via
     #   flask-limiter
+    #   flask-openapi3
     #   flask-sqlalchemy
     #   flask-wtf
     #   stepca-web
 flask-limiter==4.1.1 \
     --hash=sha256:ca11608fc7eec43dcea606964ca07c3bd4ec1ae89043a0f67f717899a4f48106 \
     --hash=sha256:e1ae13e06e6b3e39a4902e7d240b901586b25932c2add7bd5f5eeb4bdc11111b
+    # via stepca-web
+flask-openapi3==4.3.2 \
+    --hash=sha256:a53a74bd71f07f5fa491c9cc928c7fc2c005a62f21e06b6aa27cfc11aa9ae1bc \
+    --hash=sha256:edf118061f4866b973df0810e75915d2f79403b1be9d333851ab5ebb44e85483
     # via stepca-web
 flask-sqlalchemy==3.1.1 \
     --hash=sha256:4ba4be7f419dc72f4efd8802d69974803c37259dd42f3913b0dcf75c9447e0a0 \
@@ -515,7 +520,9 @@ pycparser==3.11 ; implementation_name != 'PyPy' and platform_python_implementati
 pydantic==2.14.1 \
     --hash=sha256:9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454 \
     --hash=sha256:94f478203dd03404682a1ada216965651dd74b1d2d5ffd62e00e0837caab5c26
-    # via pydantic-settings
+    # via
+    #   flask-openapi3
+    #   pydantic-settings
 pydantic-core==2.50.1 \
     --hash=sha256:0036473f5583e6a60e50b8b21651511564277a3f05cc5dab8cf579f552cd5f6c \
     --hash=sha256:009634b83993777ddcd69cad0ffcace43dabde692109528e35f0fde91e386a8b \

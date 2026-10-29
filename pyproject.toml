@@ -9,6 +9,7 @@ dependencies = [
     "cryptography>=45",
     "flask>=3.1",
     "flask-limiter>=3.12",
+    "flask-openapi3>=4.3",
     "flask-sqlalchemy>=3.1",
     "flask-talisman>=1.1",
     "flask-wtf>=1.2",

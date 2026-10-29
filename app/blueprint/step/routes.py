@@ -1,5 +1,4 @@
 import base64
-import subprocess
 
 from cryptography.hazmat.primitives import serialization
 from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, url_for
@@ -10,7 +9,16 @@ from app.blueprint.step import bp
 from app.libs.audit import audit
 from app.libs.provisioners import ACME_CHALLENGES, durations_from_form
 from app.libs.provisioners import edit_provisioner as edit_provisioner_record
-from app.services import ca, provisioners
+from app.services import ca, provisioners, system
+from app.stepca.client import CAError
+
+
+def attempt(call, *args, **kwargs):
+    """(succeeded, step-ca's message when it refused)"""
+    try:
+        return bool(call(*args, **kwargs)), ""
+    except CAError as e:
+        return False, str(e)
 
 
 @bp.route("/provisioners", methods=["GET", "POST"])
@@ -27,7 +35,7 @@ def provisioner():
             return redirect(url_for("step.provisioner"))
 
         if provisioner_type == "JWK":
-            resp = ca.client().create_provisioner_jwk(name, request.form.get("passphrase", ""), claims=claims)
+            resp, error = attempt(ca.client().create_provisioner_jwk, name, request.form.get("passphrase", ""), claims=claims)
         elif provisioner_type == "ACME":
             offered = [challenge for challenge, _ in ACME_CHALLENGES]
             details = {
@@ -37,16 +45,16 @@ def provisioner():
                     "challenges": [challenge for challenge in request.form.getlist("challenges") if challenge in offered],
                 }
             }
-            resp = ca.client().create_provisioner_acme(name=name, details=details, claims=claims)
+            resp, error = attempt(ca.client().create_provisioner_acme, name=name, details=details, claims=claims)
         else:
             flash(f"Unknown provisioner type '{provisioner_type}'.", "danger")
             return redirect(url_for("step.provisioner"))
 
-        audit("create_provisioner", name, success=bool(resp), detail=provisioner_type)
+        audit("create_provisioner", name, success=resp, detail=f"{provisioner_type} {error}".strip())
         if resp:
             flash(f"Provisioner '{name}' created successfully.", "success")
         else:
-            flash(f"Failed to create provisioner '{name}'.", "danger")
+            flash(f"Failed to create provisioner '{name}': {error}", "danger")
         return redirect(url_for("step.provisioner"))
 
     provisioners = ca.client().list_provisioners()
@@ -137,12 +145,12 @@ def ca_crl():
 @login_required
 @role_required("admin")
 def delete_provisioner(name):
-    resp = ca.client().delete_provisioner(name)
-    audit("delete_provisioner", name, success=bool(resp))
+    resp, error = attempt(ca.client().delete_provisioner, name)
+    audit("delete_provisioner", name, success=resp, detail=error)
     if resp:
         flash(f"Provisioner '{name}' deleted successfully.", "success")
     else:
-        flash(f"Failed to delete provisioner '{name}'.", "danger")
+        flash(f"Failed to delete provisioner '{name}': {error}", "danger")
     return redirect(url_for("step.provisioner"))
 
 
@@ -168,8 +176,8 @@ def admins():
             flash("An admin needs a subject and a type.", "danger")
             return redirect(url_for("step.admins"))
 
-        resp = ca.client().create_admin(subject=subject, provisioner=provisioner_id, admin_type=admin_type)
-        audit("create_admin", subject, success=bool(resp), detail=f"provisioner={provisioner_id} type={admin_type}")
+        resp, error = attempt(ca.client().create_admin, subject=subject, provisioner=provisioner_id, admin_type=admin_type)
+        audit("create_admin", subject, success=resp, detail=f"provisioner={provisioner_id} type={admin_type} {error}".strip())
 
         if resp:
             flash(f"Admin '{subject}' created successfully.", "success")
@@ -196,7 +204,7 @@ def update_admin(id):
     if refused := refuse_unless_admins_manageable():
         return refused
     admin_type = request.form.get("type", type=int)
-    ok = admin_type in (1, 2) and bool(ca.client().update_admin(id, admin_type))
+    ok = admin_type in (1, 2) and attempt(ca.client().update_admin, id, admin_type)[0]
     audit("update_admin", id, success=ok, detail=f"type={admin_type}")
     if not ok:
         flash(f"Failed to update admin '{id}'.", "danger")
@@ -211,8 +219,8 @@ def update_admin(id):
 def delete_admin(id):
     if refused := refuse_unless_admins_manageable():
         return refused
-    resp = ca.client().delete_admin(id)
-    audit("delete_admin", id, success=bool(resp))
+    resp, error = attempt(ca.client().delete_admin, id)
+    audit("delete_admin", id, success=resp, detail=error)
 
     if resp:
         flash(f"Admin '{id}' deleted successfully.", "success")
@@ -235,15 +243,7 @@ def stepca_service_action(action):
     if action not in ["start", "stop", "restart", "status"]:
         return jsonify({"error": "Invalid action"}), 400
 
-    try:
-        output = subprocess.check_output(["sudo", "/usr/local/bin/stepca_ctl.sh", action], stderr=subprocess.STDOUT, timeout=60)
-        result = {"success": True, "output": output.decode()}
-    except subprocess.CalledProcessError as e:
-        result = {"success": False, "error": e.output.decode()}
-    except (OSError, subprocess.TimeoutExpired) as e:
-        result = {"success": False, "error": f"Cannot run the service control script: {e}"}
-    if action != "status":
-        audit(f"service_{action}", "step-ca", success=result["success"], detail=result.get("error", ""))
+    result = system.service_action(action)
     return jsonify(result), 200 if result["success"] else 500
 
 

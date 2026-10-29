@@ -272,6 +272,11 @@ def certificate_count():
     return db.session.query(x509_tables.X509Cert).count()
 
 
+def certificate_serials():
+    """The decimal serials of every certificate, from the table keys alone."""
+    return {_serial(nkey) for (nkey,) in db.session.query(x509_tables.X509Cert.nkey)}
+
+
 def _revocation(serial, data):
     return Revocation(
         serial=data.get("Serial") or serial,
@@ -284,9 +289,13 @@ def _revocation(serial, data):
     )
 
 
-def revocations():
+def revocations(serials=None):
+    """Every revocation, or those of these decimal serials."""
+    query = db.session.query(x509_tables.RevokedX509Cert)
+    if serials is not None:
+        query = query.filter(x509_tables.RevokedX509Cert.nkey.in_([s.encode("ascii") for s in serials]))
     found = []
-    for row in db.session.query(x509_tables.RevokedX509Cert).all():
+    for row in query.all():
         serial = _serial(row.nkey)
         try:
             found.append(_revocation(serial, json.loads(bytes(row.nvalue))))
@@ -309,6 +318,10 @@ def revocation(serial):
 def revoked_serials():
     """The decimal serials step-ca has revoked, from the table keys alone."""
     return {_serial(nkey) for (nkey,) in db.session.query(x509_tables.RevokedX509Cert.nkey)}
+
+
+def revocation_count():
+    return db.session.query(x509_tables.RevokedX509Cert).count()
 
 
 # --- Provisioners and admins --------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from app.libs.provisioners import ACME_CHALLENGES
 from app.services import ca
 from app.stepca import store
 
@@ -93,3 +94,37 @@ def search_admins():
     """Admins from the database, with their provisioner's name, for the search page (no CA call)."""
     names = names_by_id()
     return [(admin, names.get(admin.provisioner_id)) for admin in store.admins()]
+
+
+def summary(provisioner, ids_by_name=None, app_provisioner=None):
+    """A provisioner as the Admin API returns it, with its settings the forms show."""
+    claims = provisioner.get("claims") or {}
+    x509 = claims.get("x509") or {}
+    acme = (provisioner.get("details") or {}).get("ACME")
+    created_at = provisioner.get("createdAt")
+    return {
+        "name": provisioner.get("name", ""),
+        "type": provisioner.get("type", ""),
+        "id": provisioner.get("id") or (ids_by_name or {}).get(provisioner.get("name")),
+        "x509_enabled": bool(x509.get("enabled")),
+        "durations": x509.get("durations") or {},
+        "disable_renewal": bool(claims.get("disableRenewal")),
+        "allow_renewal_after_expiry": bool(claims.get("allowRenewalAfterExpiry")),
+        "acme": None
+        if provisioner.get("type") != "ACME"
+        else {
+            # Only the ones the forms offer
+            "challenges": [c for c in (acme or {}).get("challenges", []) if c in {name for name, _ in ACME_CHALLENGES}],
+            "require_eab": bool((acme or {}).get("requireEab")),
+            "force_cn": bool((acme or {}).get("forceCn")),
+        },
+        "created_at": store.go_time(created_at) if isinstance(created_at, str) else None,
+        "is_app_provisioner": provisioner.get("name") == app_provisioner,
+        "raw": provisioner,
+    }
+
+
+def summaries(listed):
+    ids_by_name = {name: provisioner_id for provisioner_id, name in names_by_id().items()}
+    app_provisioner = ca.client().provisioner_name
+    return [summary(provisioner, ids_by_name, app_provisioner) for provisioner in listed]

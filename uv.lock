@@ -443,6 +443,19 @@ wheels = [
 ]
 
 [[package]]
+name = "flask-openapi3"
+version = "4.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flask" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/45/b3/37ccb1a3923193e35f226befd2f87c5284340b951ea2af731395f5d85398/flask_openapi3-4.3.2.tar.gz", hash = "sha256:a53a74bd71f07f5fa491c9cc928c7fc2c005a62f21e06b6aa27cfc11aa9ae1bc", size = 51480, upload-time = "2026-05-09T03:18:56.861Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/6a/54cd42aaa14dff3e9f3206f0506e260d3294fc1c1c3b4be282344441f7bf/flask_openapi3-4.3.2-py3-none-any.whl", hash = "sha256:edf118061f4866b973df0810e75915d2f79403b1be9d333851ab5ebb44e85483", size = 46441, upload-time = "2026-05-09T03:18:58.065Z" },
+]
+
+[[package]]
 name = "flask-sqlalchemy"
 version = "3.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1264,6 +1277,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "flask" },
     { name = "flask-limiter" },
+    { name = "flask-openapi3" },
     { name = "flask-sqlalchemy" },
     { name = "flask-talisman" },
     { name = "flask-wtf" },
@@ -1292,6 +1306,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=45" },
     { name = "flask", specifier = ">=3.1" },
     { name = "flask-limiter", specifier = ">=3.12" },
+    { name = "flask-openapi3", specifier = ">=4.3" },
     { name = "flask-sqlalchemy", specifier = ">=3.1" },
     { name = "flask-talisman", specifier = ">=1.1" },
     { name = "flask-wtf", specifier = ">=1.2" },

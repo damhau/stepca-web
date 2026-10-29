@@ -3,7 +3,7 @@
 import pytest
 
 from app.services import search
-from app.services.search import hex_serial
+from app.services.inventory import hex_serial
 
 
 @pytest.fixture

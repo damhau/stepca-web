@@ -69,6 +69,8 @@ def make_settings(data_dir, **overrides):
         "ca_fingerprint": "00" * 32,
         "ca_admin_provisioner_name": "Admin JWK",
         "auth_backend": "local",
+        # Every read sees the rows the test just added
+        "inventory_refresh_seconds": 0,
     }
     return IsolatedSettings(**{**values, **overrides})
 
@@ -224,3 +226,47 @@ def step_db(app):
     helper = StepDB()
     helper.add_provisioner(ADMIN_JWK["id"], ADMIN_JWK["name"])
     return helper
+
+
+class ApiClient:
+    """A test client of the JSON API: signs in through it and sends the CSRF token as the frontend does."""
+
+    def __init__(self, app, role=None):
+        self.client = app.test_client()
+        self.token = self.client.get("/api/v1/session").get_json()["csrf_token"]
+        if role:
+            response = self.post("/api/v1/session", json={"username": role, "password": PASSWORD})
+            assert response.status_code == 200, response.get_json()
+            # Signing in starts a new session, with a new token
+            self.token = response.get_json()["csrf_token"]
+
+    def get(self, path, **kwargs):
+        return self.client.get(path, **kwargs)
+
+    def _send(self, method, path, **kwargs):
+        headers = {"X-CSRFToken": self.token, **kwargs.pop("headers", {})}
+        return self.client.open(path, method=method, headers=headers, **kwargs)
+
+    def post(self, path, **kwargs):
+        return self._send("POST", path, **kwargs)
+
+    def put(self, path, **kwargs):
+        return self._send("PUT", path, **kwargs)
+
+    def patch(self, path, **kwargs):
+        return self._send("PATCH", path, **kwargs)
+
+    def delete(self, path, **kwargs):
+        return self._send("DELETE", path, **kwargs)
+
+
+@pytest.fixture
+def api(app, ca_client):
+    """The API, signed in as an admin."""
+    return ApiClient(app, "admin")
+
+
+@pytest.fixture
+def api_as(app, ca_client):
+    """The API signed in with a given role: api_as("viewer")."""
+    return lambda role: ApiClient(app, role)

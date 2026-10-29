@@ -45,6 +45,10 @@ def signing_key(jwk):
     return key
 
 
+class CAError(RuntimeError):
+    """step-ca refused a change; the message is step-ca's own."""
+
+
 class SignError(Exception):
     """Signing failed; the message is meant for the user."""
 
@@ -404,11 +408,8 @@ class StepCAClient:
 
         response = self._request("POST", "/admin/provisioners", json_payload=payload)
         if response.status_code == 201:
-
             return response.json()
-        else:
-            log.warning("step-ca returned %s: %s", response.status_code, response.text)
-            return None
+        raise CAError(self._error_message(response))
 
     def create_provisioner_jwk(self, name, password, claims=None):
         """
@@ -434,11 +435,8 @@ class StepCAClient:
 
         response = self._request("POST", "/admin/provisioners", json_payload=payload)
         if response.status_code == 201:
-
             return response.json()
-        else:
-            log.warning("step-ca returned %s: %s", response.status_code, response.text)
-            return None
+        raise CAError(self._error_message(response))
 
     @staticmethod
     def _provisioner_path(name):
@@ -447,25 +445,29 @@ class StepCAClient:
 
     @staticmethod
     def _error_message(response):
+        """step-ca's message about a refused request."""
         try:
-            return response.json().get("message") or response.text
+            data = response.json()
         except ValueError:
-            return response.text
+            data = None
+        message = data.get("message") if isinstance(data, dict) else None
+        return message or response.text.strip() or f"step-ca returned HTTP {response.status_code}"
 
     def get_provisioner(self, name):
-        """step-ca's full record of a provisioner (with its id, details and claims), or None."""
+        """step-ca's full record of a provisioner (with its id, details and claims), or None if there is none."""
         response = self._request("GET", self._provisioner_path(name))
         if response.ok:
             return response.json()
-        log.warning("step-ca returned %s: %s", response.status_code, response.text)
-        return None
+        if response.status_code == 404:
+            return None
+        raise CAError(self._error_message(response))
 
     def update_provisioner(self, name, provisioner):
         """Replace a provisioner with an edited copy of get_provisioner(). Raises with step-ca's message."""
         response = self._request("PUT", self._provisioner_path(name), json_payload=provisioner)
         if response.ok:
             return response.json()
-        raise RuntimeError(self._error_message(response))
+        raise CAError(self._error_message(response))
 
     # Delete a provisioner
     def delete_provisioner(self, name):
@@ -477,16 +479,14 @@ class StepCAClient:
             data = {}
         if response.status_code == 200 and data.get("status") == "ok":
             return True
-        log.warning("step-ca returned %s: %s", response.status_code, response.text)
-        return False
+        raise CAError(self._error_message(response))
 
     def update_admin(self, id, admin_type):
         """step-ca only lets the type of an admin change (1 = ADMIN, 2 = SUPER_ADMIN)."""
-        response = self._request("PATCH", f"/admin/admins/{id}", json_payload={"type": admin_type})
+        response = self._request("PATCH", f"/admin/admins/{quote(id, safe='')}", json_payload={"type": admin_type})
         if response.ok:
             return response.json()
-        log.warning("step-ca returned %s: %s", response.status_code, response.text)
-        return None
+        raise CAError(self._error_message(response))
 
     def list_admins(self):
         admins = self._list_all("/admin/admins", "admins")
@@ -498,12 +498,10 @@ class StepCAClient:
         response = self._request("POST", "/admin/admins", json_payload=payload)
         if response.status_code == 201:
             return response.json()
-        else:
-            log.warning("step-ca returned %s: %s", response.status_code, response.text)
-            return None
+        raise CAError(self._error_message(response))
 
     def delete_admin(self, id):
-        response = self._request("DELETE", f"/admin/admins/{id}")
+        response = self._request("DELETE", f"/admin/admins/{quote(id, safe='')}")
 
         try:
             data = response.json()
@@ -511,8 +509,7 @@ class StepCAClient:
             data = {}
         if response.status_code == 200 and data.get("status") == "ok":
             return True
-        log.warning("step-ca returned %s: %s", response.status_code, response.text)
-        return False
+        raise CAError(self._error_message(response))
 
     def public_get_provisioner_by_name(self, name):
         for provisioner in self._list_all("/provisioners", "provisioners", auth=False) or []:
@@ -533,7 +530,7 @@ class StepCAClient:
         response = self._request_noauth("POST", "/1.0/revoke", json_payload=payload)
         if response.status_code == 200:
             return response.json()
-        raise RuntimeError(f"step-ca returned {response.status_code}: {response.text}")
+        raise CAError(self._error_message(response))
 
     def sign(self, csr, provisioner_name, passphrase, not_after=None):
         """Sign a PEM CSR with a JWK provisioner's token. `not_after`: a duration such as "24h", within the

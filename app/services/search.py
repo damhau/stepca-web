@@ -1,8 +1,8 @@
-"""One search over certificates, ACME accounts and orders, provisioners and admins (step-ca's database only)."""
+"""One search over certificates (the inventory), ACME accounts and orders, provisioners and admins (step-ca's database)."""
 
-import re
 from dataclasses import dataclass, field
 
+from app.services import inventory
 from app.services import provisioners as provisioner_service
 from app.stepca import store
 
@@ -25,14 +25,6 @@ class Results:
         return sum(len(getattr(self, kind)) for kind in ("certificates", "acme_accounts", "acme_orders", "provisioners", "admins"))
 
 
-def hex_serial(text):
-    """A hex serial as people paste it (colons, spaces, 0x, any case), as cert_utils writes it; None if it isn't hex."""
-    compact = re.sub(r"[\s:]", "", text.lower()).removeprefix("0x")
-    if not re.fullmatch(r"[0-9a-f]+", compact):
-        return None
-    return compact.lstrip("0") or "0"
-
-
 def _matches(needle, *values):
     return any(needle in (value or "").lower() for value in values)
 
@@ -48,14 +40,11 @@ def search(query):
     results = Results(query=query.strip())
     if len(needle) < 2:
         return results
-    hex_needle = hex_serial(needle)
-
-    certificates = [
-        cert
-        for cert in store.certificates()
-        if _matches(needle, cert.serial, cert.subject, *cert.dns_names) or (hex_needle and hex_needle in cert.serial_hex)
-    ]
-    _limited(results, "certificates", certificates)
+    # The inventory matches the serial in decimal or hex, the subject and the DNS names
+    certificates, total = inventory.certificates(inventory.CertificateQuery(q=needle), per_page=LIMIT)
+    results.certificates = certificates
+    if total > LIMIT:
+        results.truncated.add("certificates")
 
     _limited(results, "acme_accounts", [a for a in store.acme_accounts() if _matches(needle, a.id, *a.contact)])
     _limited(results, "acme_orders", [o for o in store.acme_orders() if _matches(needle, o.id, *(i.value for i in o.identifiers))])

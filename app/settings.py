@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     # Start/stop of the step-ca systemd unit through sudo: off by default, never works in Docker
     service_control_enabled: bool = False
 
+    # How often a page checks step-ca's tables for new certificates and revocations, at most
+    inventory_refresh_seconds: float = 5
+
     @classmethod
     def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
         data_dir = Path(env_settings().get("data_dir") or init_settings().get("data_dir") or ".")

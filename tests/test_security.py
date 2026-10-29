@@ -4,7 +4,8 @@ import pytest
 
 from tests.conftest import PASSWORD, csrf_token
 
-PUBLIC_ENDPOINTS = {"auth.login", "auth.logout", "static"}
+# Reachable without signing in: the sign-in page and API, and the container health check
+PUBLIC_ENDPOINTS = {"auth.login", "auth.logout", "static", "healthz", "api_session.get_session", "api_session.login", "api_session.logout"}
 
 
 def concrete_routes(app, methods):

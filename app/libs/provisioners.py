@@ -31,8 +31,29 @@ def durations_from_form(form):
     return durations
 
 
+def changes_from_form(form):
+    """The edit form's fields as apply_changes() takes them."""
+    return {
+        "x509_enabled": "x509_enabled" in form,
+        "durations": durations_from_form(form),
+        "disable_renewal": "disable_renewal" in form,
+        "allow_renewal_after_expiry": "allow_renewal_after_expiry" in form,
+        "acme": {
+            "force_cn": "force_cn" in form,
+            "require_eab": "require_eab" in form,
+            "challenges": form.getlist("challenges"),
+        },
+    }
+
+
 def edit_provisioner(provisioner, form, app_provisioner=None):
-    """A copy of the provisioner (as GET /admin/provisioners/{name} returns it) with the form's changes.
+    return apply_changes(provisioner, changes_from_form(form), app_provisioner)
+
+
+def apply_changes(provisioner, changes, app_provisioner=None):
+    """A copy of the provisioner (as GET /admin/provisioners/{name} returns it) with these changes:
+    x509_enabled, durations ({"default", "min", "max"}, empty ones left out), disable_renewal,
+    allow_renewal_after_expiry, and for an ACME provisioner acme ({"challenges", "force_cn", "require_eab"}).
 
     Only claims and ACME options change: step-ca refuses any change of id, type or dates.
     Raises ValueError on invalid input.
@@ -40,23 +61,26 @@ def edit_provisioner(provisioner, form, app_provisioner=None):
     updated = copy.deepcopy(provisioner)
     claims = updated.setdefault("claims", {})
     x509 = claims.setdefault("x509", {})
-    x509["enabled"] = "x509_enabled" in form
-    durations = durations_from_form(form)
+    x509["enabled"] = bool(changes["x509_enabled"])
+    durations = {field: value for field, value in (changes.get("durations") or {}).items() if value}
+    for value in durations.values():
+        duration_seconds(value)  # validates
     if durations:
         x509["durations"] = durations
     else:
         x509.pop("durations", None)  # the CA's defaults
-    claims["disableRenewal"] = "disable_renewal" in form
-    claims["allowRenewalAfterExpiry"] = "allow_renewal_after_expiry" in form
+    claims["disableRenewal"] = bool(changes.get("disable_renewal"))
+    claims["allowRenewalAfterExpiry"] = bool(changes.get("allow_renewal_after_expiry"))
 
-    if updated.get("type") == "ACME":
+    if updated.get("type") == "ACME" and changes.get("acme") is not None:
+        options = changes["acme"]
         acme = updated.setdefault("details", {}).setdefault("ACME", {})
-        acme["forceCn"] = "force_cn" in form
-        acme["requireEab"] = "require_eab" in form
+        acme["forceCn"] = bool(options.get("force_cn"))
+        acme["requireEab"] = bool(options.get("require_eab"))
         offered = [name for name, _ in ACME_CHALLENGES]
         # Challenges the form doesn't offer (e.g. device-attest-01) are kept as they are
         kept = [challenge for challenge in acme.get("challenges", []) if challenge not in offered]
-        acme["challenges"] = [name for name in offered if name in form.getlist("challenges")] + kept
+        acme["challenges"] = [name for name in offered if name in (options.get("challenges") or [])] + kept
 
     if app_provisioner and updated.get("name") == app_provisioner:
         if not x509["enabled"]:

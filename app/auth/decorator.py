@@ -3,7 +3,15 @@ from functools import wraps
 from flask import jsonify, redirect, request, session, url_for
 
 # Endpoints reachable without a session, everything else requires login
-PUBLIC_ENDPOINTS = {"auth.login", "auth.logout", "static"}
+PUBLIC_ENDPOINTS = {
+    "auth.login",
+    "auth.logout",
+    "static",
+    "healthz",
+    "api_session.get_session",
+    "api_session.login",
+    "api_session.logout",
+}
 
 
 def login_required(f):

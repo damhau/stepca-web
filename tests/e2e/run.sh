@@ -63,11 +63,9 @@ $STEP ca health $CA
 echo "== Waiting for OpenLDAP"
 # The image runs a temporary slapd to load the test directory, then restarts it
 LDAP_READY="ldapsearch -x -H ldap://localhost -D uid=bob,ou=people,dc=example,dc=org -w bobpw -b dc=example,dc=org (uid=alice)"
-for _ in $(seq 1 60); do
-  $DC logs openldap 2>&1 | grep -q "First start is done" && $DC exec -T openldap $LDAP_READY >/dev/null 2>&1 && break
-  sleep 1
-done
-$DC exec -T openldap $LDAP_READY >/dev/null || { $DC logs openldap; exit 1; }
+ldap_ready() { $DC logs openldap 2>&1 | grep -q "First start is done" && $DC exec -T openldap $LDAP_READY >/dev/null 2>&1; }
+for _ in $(seq 1 180); do ldap_ready && break; sleep 1; done
+ldap_ready || { $DC logs openldap; echo "OpenLDAP did not finish its first start"; exit 1; }
 
 echo "== Read-only database role for the app"
 $DC exec -T db psql -q -U step-ca -d step_ca_db -c "

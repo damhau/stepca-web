@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from flask import flash, make_response, redirect, render_template, request, url_for
+from flask import flash, jsonify, make_response, redirect, render_template, request, url_for
 
 from app.auth.decorator import login_required
 from app.auth.roles import role_required
@@ -11,7 +11,7 @@ from app.blueprint.x509 import bp
 from app.libs import ca
 from app.libs.audit import audit
 from app.libs.ca import client
-from app.libs.cert_utils import certificate_extensions
+from app.libs.cert_utils import certificate_extensions, describe_csr
 from app.libs.db_step import get_jwk_provisioner_names, get_step_provisioners
 from app.libs.db_x509 import (
     get_expiring_certs,
@@ -23,6 +23,8 @@ from app.libs.db_x509 import (
     get_x509_certs_by_id,
     save_generated_cert,
 )
+from app.libs.provisioners import duration_seconds
+from app.libs.stepapi import SignError
 from app.services import acme
 
 # Every RFC 5280 reason code, to name the ones step-ca recorded
@@ -145,40 +147,64 @@ def download_cert(serial):
     return response
 
 
+# A CSR is a few kilobytes; refuse anything much bigger
+MAX_CSR_BYTES = 64 * 1024
+
+
+def submitted_csr():
+    """The CSR from the uploaded file, or else from the text field."""
+    upload = request.files.get("csr_file")
+    if upload and upload.filename:
+        content = upload.read(MAX_CSR_BYTES + 1)
+        if len(content) > MAX_CSR_BYTES:
+            raise SignError("The CSR file is too large")
+        try:
+            return content.decode("ascii")
+        except UnicodeDecodeError as e:
+            raise SignError("The CSR file is not a PEM file") from e
+    return request.form.get("csr_pem", "")
+
+
 @bp.route("/sign", methods=["POST"])
 @login_required
 @role_required("operator")
 def sign_cert():
-    csr = request.form.get("csr_pem")
-    passphrase = request.form.get("passphrase")
-    provisioner_name = request.form.get("provisioner")
-
+    provisioner_name = request.form.get("provisioner", "")
+    valid_for = request.form.get("valid_for", "").strip()
     try:
-
-        certificate = client.sign(csr, provisioner_name, passphrase)
-
-        if certificate:
-            serial_number = str(certificate.serial_number)  # decimal, like step-ca's x509_certs key
-
-            common_name = None
-            for attribute in certificate.subject:
-                if attribute.oid == x509.NameOID.COMMON_NAME:
-                    common_name = attribute.value
-                    break
-
-            save_generated_cert(serial_number, common_name, provisioner_name, csr)
-            audit("sign", serial_number, detail=f"cn={common_name} provisioner={provisioner_name}")
-
-            flash(f"Certificate {serial_number} created successfully", "success")
-            return redirect(url_for("x509.cert_detail", serial=serial_number))
-        else:
-            audit("sign", "", success=False, detail=f"provisioner={provisioner_name}")
-            flash("Failed to sign certificate", "danger")
-    except Exception as e:
+        if valid_for:
+            try:
+                duration_seconds(valid_for)
+            except ValueError as e:
+                raise SignError(f"Validity: {e}") from e
+        csr = submitted_csr()
+        certificate = client.sign(csr, provisioner_name, request.form.get("passphrase", ""), not_after=valid_for or None)
+    except SignError as e:
         audit("sign", "", success=False, detail=f"provisioner={provisioner_name}: {e}")
-        flash(f"Failed to sign certificate with error {e}", "danger")
+        flash(f"The certificate was not signed: {e}.", "danger")
+        return redirect(url_for("x509.active_certs"))
 
-    return redirect(url_for("x509.active_certs"))
+    serial_number = str(certificate.serial_number)  # decimal, like step-ca's x509_certs key
+    common_names = certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+    common_name = common_names[0].value if common_names else None
+    save_generated_cert(serial_number, common_name, provisioner_name, csr)
+    audit("sign", serial_number, detail=f"cn={common_name} provisioner={provisioner_name}")
+    flash(f"Certificate {serial_number} created successfully", "success")
+    return redirect(url_for("x509.cert_detail", serial=serial_number))
+
+
+@bp.route("/csr/preview", methods=["POST"])
+@login_required
+@role_required("operator")
+def csr_preview():
+    """What a CSR asks for, shown by the sign form before signing."""
+    csr = (request.get_json(silent=True) or {}).get("csr_pem", "")
+    if len(csr) > MAX_CSR_BYTES:
+        return jsonify({"error": "The CSR is too large"}), 400
+    try:
+        return jsonify(describe_csr(csr))
+    except ValueError:
+        return jsonify({"error": "This is not a PEM certificate signing request"}), 400
 
 
 @bp.route("/revoke", methods=["POST"])

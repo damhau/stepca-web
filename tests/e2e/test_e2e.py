@@ -216,3 +216,24 @@ def test_acme_drill_down(session):
     assert f'href="/acme/order/{order_id}"' in session.get(f"{BASE_URL}/x509/cert/{serial}").text
     account_id = re.search(r'href="/acme/account/([^"]+)"', html).group(1)
     assert "e2e@example.org" in session.get(f"{BASE_URL}/acme/account/{account_id}").text
+
+
+def test_sign_with_a_validity_and_readable_errors(session):
+    assert step("certificate", "create", "e2e-valid.test", "/tmp/v.csr", "/tmp/v.key", "--csr", "--no-password", "--insecure").returncode == 0
+    csr = compose_exec("step-ca", "cat", "/tmp/v.csr").stdout
+    form = {"csr_pem": csr, "provisioner": "Admin JWK", "csrf_token": session.csrf}
+
+    (kind, message), *_ = flashes(session.post(f"{BASE_URL}/x509/sign", data={**form, "passphrase": "wrong"}).text)
+    assert (kind, message) == ("danger", "The certificate was not signed: Wrong password for provisioner 'Admin JWK'.")
+
+    (kind, message), *_ = flashes(session.post(f"{BASE_URL}/x509/sign", data={**form, "passphrase": "testpass", "valid_for": "900h"}).text)
+    assert kind == "danger" and message.startswith("The certificate was not signed: step-ca refused:"), message
+
+    html = session.post(f"{BASE_URL}/x509/sign", data={**form, "passphrase": "testpass", "valid_for": "10m"}).text
+    (kind, message), *_ = flashes(html)
+    assert kind == "success", message
+    serial = re.search(r"Certificate (\d+) created", message).group(1)
+    cert = x509.load_pem_x509_certificate(session.get(f"{BASE_URL}/x509/download/{serial}").content)
+    lifetime = cert.not_valid_after_utc - cert.not_valid_before_utc
+    # step-ca backdates notBefore by a minute
+    assert 10 * 60 <= lifetime.total_seconds() <= 11 * 60, lifetime

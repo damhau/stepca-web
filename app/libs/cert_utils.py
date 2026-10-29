@@ -4,7 +4,7 @@ import re
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
-from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID, ObjectIdentifier
+from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID, NameOID, ObjectIdentifier
 
 PEM_CERTIFICATE = re.compile(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.S)
 
@@ -176,11 +176,37 @@ def parse_cert(leaf_b64):
         return {"subject": "[error decoding cert]", "error": str(e)}
 
 
-def extract_sans_from_csr(csr_pem):
-    csr = x509.load_pem_x509_csr(csr_pem.encode("utf-8"))
+def csr_sans(csr):
+    """Every subject alternative name of a CSR, as step-ca compares them with a token's "sans"."""
     try:
-        san_ext = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-        sans = san_ext.value.get_values_for_type(x509.DNSName)
-        return sans
+        names = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
     except x509.ExtensionNotFound:
-        return None
+        return []
+    return (
+        names.get_values_for_type(x509.DNSName)
+        + [str(ip) for ip in names.get_values_for_type(x509.IPAddress)]
+        + names.get_values_for_type(x509.RFC822Name)
+        + names.get_values_for_type(x509.UniformResourceIdentifier)
+    )
+
+
+def describe_csr(csr_pem):
+    """What a CSR asks for, for the sign form's preview. Raises ValueError if it isn't a PEM CSR."""
+    csr = x509.load_pem_x509_csr(csr_pem.strip().encode())
+    common_names = [a.value for a in csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)]
+    key = csr.public_key()
+    if isinstance(key, rsa.RSAPublicKey):
+        key_name = f"RSA {key.key_size} bit"
+    elif isinstance(key, ec.EllipticCurvePublicKey):
+        key_name = f"EC {key.curve.name}"
+    elif isinstance(key, ed25519.Ed25519PublicKey):
+        key_name = "Ed25519"
+    else:
+        key_name = "Unknown"
+    return {
+        "subject": csr.subject.rfc4514_string(),
+        "common_name": common_names[0] if common_names else None,
+        "sans": csr_sans(csr),
+        "key": key_name,
+        "signature_valid": csr.is_signature_valid,
+    }

@@ -23,9 +23,10 @@ from cryptography.x509.oid import NameOID
 from jwcrypto import jwa
 from jwcrypto import jwe as jwcrypto_jwe
 from jwcrypto import jwk as jwcrypto_jwk
+from jwcrypto.common import JWException
 from jwt.algorithms import ECAlgorithm
 
-from app.libs.cert_utils import extract_sans_from_csr, issuing_provisioner
+from app.libs.cert_utils import csr_sans, issuing_provisioner
 from config import CA_ADMIN_PASSWORD, CA_ADMIN_PASSWORD_FILE, CA_ADMIN_PROVISIONER_NAME, CA_ADMIN_SUBJECT, CA_FINGERPRINT, CA_ROOT
 
 # step encrypts provisioner keys with PBES2 and 600,000 iterations; jwcrypto refuses more than its own small
@@ -36,6 +37,10 @@ log = logging.getLogger(__name__)
 
 # Seconds before a request to the CA is abandoned
 TIMEOUT = 30
+class SignError(Exception):
+    """Signing failed; the message is meant for the user."""
+
+
 class CAToken:
     def __init__(self, ca_url, ca_path, ca_fingerprint, provisioner_name, subject, jwk_privkey, sans=None):
         self.ca_url = ca_url
@@ -328,19 +333,6 @@ class StepCAClient:
         response.raise_for_status()
         return response.content
 
-    def extract_cn_from_csr(self, csr_pem):
-        csr = x509.load_pem_x509_csr(csr_pem.encode("utf-8"), default_backend())
-        subject = csr.subject
-
-        # Find the Common Name (CN)
-        cn = None
-        for attribute in subject:
-            if attribute.oid == x509.NameOID.COMMON_NAME:
-                cn = attribute.value
-                break
-
-        return cn
-
     def _list_all(self, path, key, auth=True):
         """Every item of a step-ca list: it returns at most 100 per page plus a nextCursor."""
         send = self._request if auth else self._request_noauth
@@ -508,24 +500,41 @@ class StepCAClient:
             return response.json()
         raise RuntimeError(f"step-ca returned {response.status_code}: {response.text}")
 
-    def sign(self, csr, provisioner_name, passphrase):
-        provisioner = self.public_get_provisioner_by_name(provisioner_name)
-        full_jwk = self.decrypt_and_merge(
-            jwk_public=provisioner["key"], encrypted_key=provisioner["encryptedKey"], passphrase=passphrase
-        )
+    def sign(self, csr, provisioner_name, passphrase, not_after=None):
+        """Sign a PEM CSR with a JWK provisioner's token. `not_after`: a duration such as "24h", within the
+        provisioner's limits. Raises SignError with a message for the user."""
+        try:
+            request = x509.load_pem_x509_csr(csr.strip().encode())
+        except ValueError as e:
+            raise SignError("This is not a PEM certificate signing request") from e
+        if not request.is_signature_valid:
+            raise SignError("The CSR's signature is not valid")
+        try:
+            provisioner = self.public_get_provisioner_by_name(provisioner_name)
+        except ValueError as e:
+            raise SignError(str(e)) from e
+        if "encryptedKey" not in provisioner:
+            raise SignError(f"Provisioner '{provisioner_name}' has no password-protected key: only JWK provisioners sign from here")
+        try:
+            full_jwk = self.decrypt_and_merge(jwk_public=provisioner["key"], encrypted_key=provisioner["encryptedKey"], passphrase=passphrase)
+        except JWException as e:
+            raise SignError(f"Wrong password for provisioner '{provisioner_name}'") from e
 
-        subject = self.extract_cn_from_csr(csr)
-
-        sans = extract_sans_from_csr(csr)
+        sans = csr_sans(request)
+        common_names = [a.value for a in request.subject.get_attributes_for_oid(NameOID.COMMON_NAME)]
+        # Like `step ca certificate`: the token's subject is the CN, or else the first SAN
+        subject = common_names[0] if common_names else (sans[0] if sans else None)
+        if not subject:
+            raise SignError("The CSR has neither a common name nor a subject alternative name")
         token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk, sans or None).token
 
-        payload = {"csr": csr, "ott": token}
+        payload = {"csr": csr.strip(), "ott": token}
+        if not_after:
+            payload["notAfter"] = not_after
         response = self._request_noauth("POST", "/1.0/sign", json_payload=payload)
         if response.status_code == 201:
-            return x509.load_pem_x509_certificate(str.encode(response.json()["crt"]))
-        else:
-            log.warning("step-ca returned %s: %s", response.status_code, response.text)
-            return None
+            return x509.load_pem_x509_certificate(response.json()["crt"].encode())
+        raise SignError(f"step-ca refused: {self._error_message(response)}")
 
     def generate_default_key_pair(self, passphrase: bytes):
         if not passphrase:

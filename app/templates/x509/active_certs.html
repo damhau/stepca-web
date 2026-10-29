@@ -96,34 +96,52 @@
     {% if can("operator") %}{% include "x509/_revoke_modal.html" %}{% endif %}
 
     {% if can("operator") %}
-    <div class="modal fade" id="newCertModal" tabindex="-1" role="dialog" aria-labelledby="newCertModalLabel"
-      aria-hidden="true">
-      <div class="modal-dialog" role="document">
-        <form method="POST" action="{{ url_for('x509.sign_cert') }}">
+    <div class="modal fade" id="newCertModal" tabindex="-1" role="dialog" aria-labelledby="newCertModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <form method="POST" action="{{ url_for('x509.sign_cert') }}" enctype="multipart/form-data" id="signForm"
+          data-preview-url="{{ url_for('x509.csr_preview') }}" data-csrf="{{ csrf_token() }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="modal-content">
             <div class="modal-header">
-              <h5 class="modal-title" id="newCertModalLabel">Submit Certificate Signing Request (CSR)</h5>
-              <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+              <h5 class="modal-title" id="newCertModalLabel">Sign a certificate signing request (CSR)</h5>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
-
             <div class="modal-body">
+              <div class="form-row">
+                <div class="form-group col-md-6">
+                  <label for="provisionerSelect">Provisioner</label>
+                  <select class="form-control" id="provisionerSelect" name="provisioner" required>
+                    {% for name in signing_provisioners %}
+                    <option value="{{ name }}">{{ name }}</option>
+                    {% endfor %}
+                  </select>
+                  <small class="form-text text-muted">JWK provisioners: the CSR is signed with a token from the provisioner's key.</small>
+                </div>
+                <div class="form-group col-md-6">
+                  <label for="passphrase">Provisioner password</label>
+                  <input type="password" class="form-control" id="passphrase" name="passphrase" autocomplete="off" required>
+                </div>
+              </div>
               <div class="form-group">
-                <label for="provisionerSelect">Provisioner</label>
-                <select class="form-control" id="provisionerSelect" name="provisioner" required>
-                  {% for name in signing_provisioners %}
-                  <option value="{{ name }}">{{ name }}</option>
-                  {% endfor %}
-                </select>
-                <small class="form-text text-muted mb-2">JWK provisioners: the CSR is signed with a token from the provisioner's key.</small>
-                <label for="passphrase">Provisioner password</label>
-                <input type="password" class="form-control" id="passphrase" name="passphrase" required>
-                <label for="csr_pem">Paste CSR (PEM format)</label>
-                <textarea class="form-control" id="csr_pem" name="csr_pem" rows="10" required></textarea>
+                <label for="csr_pem">CSR (PEM)</label>
+                <textarea class="form-control text-monospace small" id="csr_pem" name="csr_pem" rows="8"
+                  placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
+                <div class="custom-file mt-2">
+                  <input type="file" class="custom-file-input" id="csr_file" name="csr_file" accept=".csr,.pem,.req,.txt">
+                  <label class="custom-file-label" for="csr_file">Or choose a CSR file…</label>
+                </div>
+              </div>
+              <div id="csrPreview" class="alert alert-light border small" aria-live="polite" hidden></div>
+              <div class="form-group mb-0">
+                <label for="valid_for">Valid for</label>
+                <input type="text" class="form-control" id="valid_for" name="valid_for" placeholder="the provisioner's default, e.g. 24h"
+                  pattern="([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+" title="A duration such as 24h, 720h or 90m">
+                <small class="form-text text-muted">Within the provisioner's minimum and maximum durations.</small>
               </div>
             </div>
             <div class="modal-footer">
-              <button type="submit" class="btn btn-primary">Submit CSR</button>
+              <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary">Sign</button>
             </div>
           </div>
         </form>
@@ -143,6 +161,5 @@
 
 <!-- Specific Page JS goes HERE  -->
 {% block javascripts %}
-
-
+<script src="/static/assets/js/sign.js"></script>
 {% endblock javascripts %}

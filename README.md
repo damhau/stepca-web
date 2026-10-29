@@ -24,12 +24,13 @@ https://smallstep.com/docs/step-ca
 - **X.509 certificates**
   - All, active, expiring (7, 30 or 90 days) and revoked certificates; search, sort and paging on every list.
   - A page per certificate: details, extensions, revocation status and reason; PEM, chain and DER downloads.
-  - Sign a CSR with a JWK provisioner; revoke with an RFC 5280 reason.
-- **ACME**: read-only lists of accounts, orders, certificates, authorizations and challenges.
+  - Sign a CSR (pasted or uploaded, previewed, with a chosen validity) with a JWK provisioner; revoke with an RFC 5280 reason.
+- **ACME** (read-only): accounts, orders, certificates, authorizations and challenges, and the drill-down from an account to its orders, from an order to its authorizations, challenges and certificate.
 - **Provisioners**: list, add (JWK, ACME), edit (durations, renewal, ACME options) and delete.
 - **Admins**: list, add, change type and delete (when the app's CA identity is a super admin).
 - **CA status**: health, version, root and intermediate certificates with their expiry, the CRL.
 - **Dashboard**: active, expiring and revoked certificates, provisioners, charts.
+- **Search** across certificates (serial in decimal or hex, subject, DNS name), ACME accounts and orders, provisioners and admins; **CSV export** of any list.
 - **Roles and audit log**: viewer, operator and admin roles; every change and sign-in is recorded.
 - **Systemd service control** (optional, off by default): start, stop or restart step-ca.
 
@@ -40,32 +41,20 @@ Not supported: SSH certificates, ACME EAB keys (open-source step-ca can't create
 ```
 stepca-web/
 ├── app/
-│   ├── blueprint/
-│   │   ├── acme/
-│   │   │   └── routes.py
-│   │   ├── home/
-│   │   │   └── routes.py
-│   │   ├── step/
-│   │   │   └── routes.py
-│   │   ├── system/
-│   │   │   └── routes.py
-│   │   └── x509/
-│   │       └── routes.py
+│   ├── __init__.py        # create_app(settings)
+│   ├── settings.py        # typed settings: environment, then settings.json, then defaults
+│   ├── blueprint/         # routes: parse the request, call a service, render
+│   │   ├── acme/  home/  step/  system/  x509/  auth/
+│   ├── services/          # what the pages show: certificates, acme, provisioners, dashboard, search, ca
+│   ├── stepca/            # everything that knows step-ca
+│   │   ├── client.py      # its API: Admin API (x5c token), sign and revoke (JWK token), public endpoints
+│   │   ├── store.py       # its database: the key/value tables, read into records
+│   │   └── records.py     # typed records: certificates, revocations, provisioners, admins, ACME objects
 │   ├── auth/              # login check, roles, auth backend factory
-│   ├── libs/
-│   │   ├── auth/          # LDAP and local auth backends
-│   │   ├── audit.py       # audit log
-│   │   ├── ca.py          # the shared CA client, CA status
-│   │   ├── cert_utils.py
-│   │   ├── db_acme.py     # read step-ca's tables
-│   │   ├── db_step.py
-│   │   ├── db_x509.py
-│   │   ├── provisioners.py
-│   │   └── stepapi.py     # step-ca API client
-│   ├── templates/
-│   │   └── ... (Jinja2 HTML templates)
-│   └── static/
-│       └── ... (CSS, JS, icons)
+│   ├── libs/              # auth backends (LDAP, local), audit log, certificate parsing, provisioner forms
+│   ├── models/            # SQLAlchemy tables: step-ca's (read-only) and the app's own
+│   ├── templates/         # Jinja2; pages extend layouts/page.html
+│   └── static/            # AdminLTE, Bootstrap, jQuery, Flot, and the app's own JS and CSS
 ├── tests/                 # unit tests; tests/e2e/run.sh runs them against a real step-ca
 ├── docs/analysis-report.md
 ├── pyproject.toml / uv.lock
@@ -74,41 +63,7 @@ stepca-web/
 └── README.md
 ```
 
-## Backend: Python API and Endpoints
-
-### Blueprints and Routing
-
-The backend is organized using Flask blueprints:
-
-- **app/blueprint/acme/routes.py**: ACME account/order/cert/authz/challenge views
-- **app/blueprint/x509/routes.py**: X.509 certificate management
-- **app/blueprint/step/routes.py**: Provisioners, admins, CA status, service control
-- **app/blueprint/system/routes.py**: Configuration (read-only) and audit log
-- **app/blueprint/home/routes.py**: Dashboard and summary
-
-### Key Python Functions
-
-#### Database Access
-
-- **db_acme.py**: Functions to fetch ACME accounts, orders, certs, authzs, challenges from PostgreSQL.
-- **db_x509.py**: Functions to fetch X.509 certs, revoked certs, and related metadata.
-- **db_step.py**: Functions to fetch provisioners and admins.
-
-#### Step CA API Wrapper (`stepapi.py`)
-
-- **StepCAClient**: Main class for interacting with Step CA's REST API.
-  - `list_provisioners()`, `get_provisioner(name)`, `create_provisioner_jwk()`, `create_provisioner_acme()`, `update_provisioner()`, `delete_provisioner()`
-  - `list_admins()`, `create_admin()`, `update_admin()`, `delete_admin()`
-  - `sign()`, `revoke()`: Certificate signing and revocation
-  - `health()`, `version()`, `roots()`, `intermediates()`, `crl()`: the CA's public endpoints
-  - Internal helpers for JWT, JWK, and certificate handling
-
-#### Certificate Utilities (`cert_utils.py`)
-
-- `parse_cert()`, `parse_cert_from_bytes()`: Subject, issuer, validity, serial, key and DNS names of a PEM or DER certificate.
-- `certificate_extensions()`: The extensions, readable.
-- `issuing_provisioner()`: The step-ca provisioner that issued a certificate.
-- `extract_sans_from_csr()`: Extract SANs from a CSR.
+step-ca's database is only read, by `app/stepca/store.py`. Changes go through step-ca's API (`app/stepca/client.py`). Provisioners and admins are listed from the Admin API; the database only fills in what the API leaves out (provisioner ids, some admins' creation dates).
 
 ### Routes
 
@@ -117,6 +72,7 @@ Every route needs a session except `/auth/login`. Changes need a role (see [Role
 #### ACME
 
 - `/acme/accounts`, `/acme/orders`, `/acme/certs`, `/acme/authzs`, `/acme/challenges` – lists
+- `/acme/account/<id>`, `/acme/order/<id>` – an account with its orders; an order with its authorizations, challenges and certificate
 - `/api/acme/<kind>` – the same as JSON
 
 #### X.509
@@ -125,7 +81,7 @@ Every route needs a session except `/auth/login`. Changes need a role (see [Role
 - `/x509/expiring?days=7|30|90` – certificates expiring soon
 - `/x509/cert/<serial>` – one certificate (decimal serial)
 - `/x509/download/<serial>?format=pem|chain|der` – download a certificate
-- `/x509/sign` (POST, operator) – sign a CSR
+- `/x509/sign` (POST, operator) – sign a CSR; `/x509/csr/preview` (POST, operator) – what a CSR asks for
 - `/x509/revoke` (POST, operator) – revoke a certificate
 - `/api/x509/certs`, `/api/x509/certs/<serial>` – JSON
 
@@ -147,6 +103,7 @@ Every route needs a session except `/auth/login`. Changes need a role (see [Role
 #### Home
 
 - `/` – Dashboard overview
+- `/search?q=` – search
 
 
 ## Frontend: GUI Overview
@@ -154,9 +111,10 @@ Every route needs a session except `/auth/login`. Changes need a role (see [Role
 The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Bootstrap.
 
 - **Dashboard**: KPIs for active, expiring and revoked certificates and provisioners.
-- **ACME Management**: Tables for accounts, orders, certs, authorizations, and challenges.
+- **ACME Management**: Tables for accounts, orders, certs, authorizations, and challenges, with a page per account and per order.
 - **X.509 Management**: Tables for all, active, expiring and revoked certificates, and a page per certificate with its extensions, downloads (PEM, chain, DER) and revoke (with a reason).
-- **Every list** can be searched, sorted by any column and paged (50 rows per page), without any third-party script.
+- **Every list** can be searched, sorted by any column, paged (50 rows per page) and exported as CSV, without any third-party script.
+- **Search** box in the top bar.
 - **Provisioner Management**: Table of provisioners with view, add, edit and delete.
 - **CA Status**: Health, version, roots, intermediates and CRL of the CA.
 - **Admin Management**: Table of admins with add, type change and delete (when the app's CA identity is a super admin).
@@ -225,8 +183,8 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
   ALTER DEFAULT PRIVILEGES FOR ROLE "step-ca" IN SCHEMA public GRANT SELECT ON TABLES TO stepca_web;
   ```
 
-- The app's own data (certificates signed from the UI, with their CSR) lives in a SQLite file, `stepca-web.db`, in the working directory. Override it with `APP_DATABASE_URI`.
-- Connection parameters are set with environment variables or `settings.json`.
+- The app's own data (the audit log, and certificates signed from the UI with their CSR) lives in a SQLite file, `stepca-web.db`, in the data directory (`DATA_DIR`, `/data` in the image). Override it with `APP_DATABASE_URI`.
+- Connection parameters are set with environment variables or `settings.json` (in the data directory). Environment variables win.
 - Example config:
 
   ```json
@@ -427,19 +385,21 @@ These changes need action:
 - **Database:** the app only reads step-ca's database. Give it a read-only role (see [Database Connection](#database-connection)). The `generated_certs` table it used to create in step-ca's database can be dropped.
 - **Revocations made before the fix** revoked the wrong serial. The Revoked page marks them "Ineffective" and links to the certificate that is still valid: revoke it again from its page.
 - **Service control** is off unless `SERVICE_CONTROL_ENABLED=true`.
+- **Data directory:** the app's files (`settings.json`, `admin.crt`, `admin.key`, `ca_root.crt`, `stepca-web.db`, `jwk_key.json`, `local_users.json`) are in `DATA_DIR`: `/data` in the image, as before; the working directory otherwise.
+- **JSON API:** `/api/x509/*` and `/api/acme/*` return the app's records (`serial`, `subject`, `not_after` in ISO 8601, ...) instead of step-ca's raw rows.
 
 
 ## Development
 
 - Install everything, including the test tools: `uv sync`.
-- Lint: `uv run ruff check .`
-- Unit tests: `uv run pytest`. They use in-memory SQLite with the same table layout as step-ca, and a fake CA client.
-- End-to-end tests: `tests/e2e/run.sh` starts a real step-ca on PostgreSQL and an OpenLDAP server, runs the app on a read-only role, and tests signing, revoking (down to the CRL), provisioner editing, CSRF, pagination and LDAP over TLS against them. Needs Docker. `KEEP=1` leaves the stack running; `DOCKERFILE=Dockerfile.pip` tests the pip image; `E2E_IDENTITY=super` uses the legacy `jwk_key.json` setup.
+- Lint and type-check: `uv run ruff check .` and `uv run mypy`
+- Unit tests: `uv run pytest`. They use in-memory SQLite with the same table layout as step-ca, and a fake CA client; each test builds its own settings (`tests/conftest.py`).
+- End-to-end tests: `tests/e2e/run.sh` starts a real step-ca on PostgreSQL and an OpenLDAP server, gets a certificate over ACME, runs the app on a read-only role, and tests signing, revoking (down to the CRL), provisioner editing, the ACME pages, CSRF, pagination and LDAP over TLS against them. Needs Docker. `KEEP=1` leaves the stack running; `DOCKERFILE=Dockerfile.pip` tests the pip image; `E2E_IDENTITY=super` uses the legacy `jwk_key.json` setup.
 - After changing dependencies in `pyproject.toml`, run `uv lock` and `uv export --frozen --no-dev --no-emit-project -o requirements.txt`. CI checks both are in sync.
 - Use the built-in Flask dev server for local testing.
 - For UI, modify `app/templates/` and `app/static/`.
 - To add new pages, extend `layouts/base.html` and register routes in the appropriate blueprint. Page scripts go in `app/static/assets/js/`: the Content-Security-Policy blocks inline scripts and event handlers.
-- Backend logic is in `app/libs/` and blueprints in `app/blueprint/`.
+- Domain logic is in `app/services/`, step-ca's API and database in `app/stepca/`, routes in `app/blueprint/`.
 
 
 ## To Do / Ideas

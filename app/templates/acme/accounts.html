@@ -1,80 +1,27 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/page.html" %}
+{% from "includes/macros.html" import status_badge, date_cell %}
 
-{% block title %} {{ title }} {% endblock %}
-
-<!-- Element injected in the BODY element -->
-{% block body_class %} sidebar-mini {% endblock body_class %}
-
-{% block content %}
-
-<div class="content-wrapper">
-
-  <!-- Content Header (Page header) -->
-  <div class="content-header">
-    <div class="container-fluid">
-      <div class="row mb-2">
-        <div class="col-sm-6">
-          <h1 class="m-0 text-dark">{{ title }}</h1>
-        </div>
-        <div class="col-sm-6">
-          <ol class="breadcrumb float-sm-right">
-            <li class="breadcrumb-item"><a href="/">Home</a></li>
-            <li class="breadcrumb-item active">{{ title }}</li>
-          </ol>
-        </div>
-      </div>
-    </div>
+{% block page %}
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover table-striped text-sm" data-table-tools>
+      <thead>
+        <tr><th>Account</th><th>Contact</th><th>Provisioner</th><th>Status</th><th>Created</th></tr>
+      </thead>
+      <tbody>
+        {% for account in accounts %}
+        <tr>
+          <td><a href="{{ url_for('acme.account', account_id=account.id) }}"><code>{{ account.id }}</code></a></td>
+          <td>{{ account.contact | join(", ") or "—" }}</td>
+          <td>{{ account.provisioner_name or "—" }}</td>
+          <td>{{ status_badge(account.status) }}</td>
+          {{ date_cell(account.created_at) }}
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted">No ACME accounts yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  <!-- /.content-header -->
-
-  <!-- Main content -->
-  <section class="content">
-    {% include "includes/flashes.html" %}
-    <div class="card">
-      <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-sm table-striped" data-table-tools>
-          <thead>
-            <tr>
-              <th>Account ID</th>
-              <th>Provisioner</th>
-              <th>Contact</th>
-              <th>Status</th>
-              <th>Created At</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for account in accounts %}
-            {% set data = account.data %}
-            <tr>
-              <td><code>{{ account.nkey }}</code></td>
-              <td>{{ data.provisionerName or "-" }}</td>
-              <td>
-                {% if data.contact %}
-                {{ data.contact | join(', ') }}
-                {% else %}
-                <em>—</em>
-                {% endif %}
-              </td>
-
-              <td>{{ data.status or "unknown" }}</td>
-              <td data-sort-value="{{ data.createdAt }}">{{ data.createdAt | datetime }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="5" class="text-muted">No ACME accounts yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-  <!-- /.content -->
-
 </div>
-
-{% endblock content %}
-
-<!-- Specific Page JS goes HERE  -->
-{% block javascripts %}
-
-
-{% endblock javascripts %}
+{% endblock page %}

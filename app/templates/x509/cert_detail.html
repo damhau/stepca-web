@@ -66,6 +66,9 @@
               <tr><th>DNS names</th><td>{{ data.dns_names | join(", ") if data.dns_names else "—" }}</td></tr>
               <tr><th>Key</th><td>{{ data.key_size }}{% if data.key_size is number %} bit{% endif %}</td></tr>
               <tr><th>Issued via provisioner</th><td>{{ cert.provisioner.name or "—" }}</td></tr>
+              {% if acme_order_id %}
+              <tr><th>ACME order</th><td><a href="{{ url_for('acme.order', order_id=acme_order_id) }}"><code>{{ acme_order_id }}</code></a></td></tr>
+              {% endif %}
               {% if revocation %}
               <tr><th>Revoked at</th><td>{{ revocation.RevokedAt | datetime }}</td></tr>
               <tr><th>Revocation reason</th><td>{{ revocation.Reason or reason_names.get(revocation.ReasonCode, "—") }} ({{ revocation.ReasonCode }})</td></tr>

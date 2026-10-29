@@ -90,6 +90,12 @@ else
   $STEP ca provisioner add stepca-web --type JWK --create --password-file /tmp/stepca-web.pass "${AUTH[@]}" $CA >/dev/null
   $STEP ca admin add stepca-web stepca-web "${AUTH[@]}" $CA >/dev/null
 fi
+echo "== A certificate over ACME (http-01), for the ACME pages"
+$STEP ca provisioner add acme-e2e --type ACME --admin-subject step --admin-provisioner "Admin JWK" \
+  --admin-password-file /home/step/secrets/password $CA >/dev/null
+$DC run --rm --use-aliases -T acme-client ca certificate acme-client /tmp/acme.crt /tmp/acme.key --provisioner acme-e2e \
+  --ca-url https://step-ca:9000 --root /home/step/certs/root_ca.crt --standalone --contact e2e@example.org >/dev/null
+
 HASH=$($DC run --rm --no-deps -T --entrypoint python stepca-web -c \
   "from werkzeug.security import generate_password_hash as g; print(g('testpw'))")
 python3 -c 'import json, sys; json.dump({"admin": {"password_hash": sys.argv[1], "role": "admin"}}, open("work/local_users.json", "w"))' "$HASH"

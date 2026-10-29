@@ -1,0 +1,71 @@
+{% extends "layouts/page.html" %}
+{% from "includes/macros.html" import status_badge, identifiers %}
+{% set breadcrumb = [("ACME orders", url_for("acme.orders"))] %}
+
+{% block heading %}ACME order for {{ identifiers(view.order.identifiers) }}{% endblock %}
+{% block crumb %}<code>{{ view.order.id }}</code>{% endblock %}
+
+{% block page %}
+{% set order = view.order %}
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <tbody>
+        <tr><th class="w-25">ID</th><td><code>{{ order.id }}</code></td></tr>
+        <tr><th>Status</th><td>{{ status_badge(order.status) }}{% if order.error %} <span class="text-danger">{{ order.error }}</span>{% endif %}</td></tr>
+        <tr>
+          <th>Account</th>
+          <td>
+            <a href="{{ url_for('acme.account', account_id=order.account_id) }}"><code>{{ order.account_id }}</code></a>
+            {% if view.account and view.account.contact %} ({{ view.account.contact | join(", ") }}){% endif %}
+          </td>
+        </tr>
+        <tr><th>Identifiers</th><td>{{ identifiers(order.identifiers) }}</td></tr>
+        <tr><th>Requested validity</th><td>{{ order.not_before | datetime }} to {{ order.not_after | datetime }}</td></tr>
+        <tr><th>Created</th><td>{{ order.created_at | datetime }}</td></tr>
+        <tr><th>Expires</th><td>{{ order.expires_at | datetime }}</td></tr>
+        <tr>
+          <th>Certificate</th>
+          <td>
+            {% if view.certificate and view.certificate.serial %}
+            <a href="{{ url_for('x509.cert_detail', serial=view.certificate.serial) }}"><code>{{ view.certificate.serial }}</code></a>
+            {{ view.certificate.leaf.subject }}
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% for item in view.authorizations %}
+{% set authorization = item.authorization %}
+<div class="card">
+  <div class="card-header d-flex align-items-center">
+    <h3 class="card-title mr-auto">
+      Authorization for {{ authorization.identifier.value }}{% if authorization.wildcard %} (wildcard){% endif %}
+    </h3>
+    {{ status_badge(authorization.status) }}
+  </div>
+  <div class="card-body p-0">
+    {% if authorization.error %}<p class="text-danger px-3 pt-2 mb-0">{{ authorization.error }}</p>{% endif %}
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Challenge</th><th>Status</th><th>Validated</th><th>Error</th></tr></thead>
+      <tbody>
+        {% for challenge in item.challenges %}
+        <tr>
+          <td>{{ challenge.type }}</td>
+          <td>{{ status_badge(challenge.status) }}</td>
+          <td>{{ challenge.validated_at | datetime }}</td>
+          <td class="text-danger">{{ challenge.error or "" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-muted">No challenges.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer text-muted small">Expires {{ authorization.expires_at | datetime }}. A valid authorization needs one valid challenge; step-ca offers the others until then.</div>
+</div>
+{% endfor %}
+{% endblock page %}

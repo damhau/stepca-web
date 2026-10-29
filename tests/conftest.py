@@ -32,6 +32,7 @@ from werkzeug.security import generate_password_hash  # noqa: E402
 
 from app import create_app  # noqa: E402
 from app.extensions import db  # noqa: E402
+from app.models import acme as acme_tables  # noqa: E402
 from app.models.step import StepAdmin, StepProvisioner  # noqa: E402
 from app.models.x509 import RevokedX509Cert, X509Cert, X509CertData  # noqa: E402
 from config import Config  # noqa: E402
@@ -172,6 +173,47 @@ def step_db(app):
             }
             db.session.add(StepAdmin(nkey=admin_id.encode(), nvalue=json.dumps(value).encode()))
             db.session.commit()
+
+        def add_acme_issuance(self, serial, common_name, prefix="a"):
+            """An ACME account, its valid order, authorization, 3 challenges (http-01 valid) and certificate,
+            as step-ca stores them. Returns the ids."""
+            ids = {kind: f"{prefix}-{kind}" for kind in ("account", "order", "authz", "cert")}
+            challenges = [f"{prefix}-challenge-{kind}" for kind in ("dns", "http", "tls")]
+            when = "2026-10-29T14:28:37Z"
+            pem = x509.load_der_x509_certificate(make_cert(serial, common_name)).public_bytes(serialization.Encoding.PEM)
+            rows = [
+                (acme_tables.AcmeAccount, ids["account"], {
+                    "id": ids["account"], "key": {"kty": "EC"}, "contact": ["ops@example.org"], "status": "valid",
+                    "provisionerID": "prov-acme", "provisionerName": "acme", "createdAt": when, "deactivatedAt": "0001-01-01T00:00:00Z",
+                }),
+                (acme_tables.AcmeOrder, ids["order"], {
+                    "id": ids["order"], "accountID": ids["account"], "provisionerID": "prov-acme",
+                    "identifiers": [{"type": "dns", "value": common_name}], "authorizationIDs": [ids["authz"]], "status": "valid",
+                    "notBefore": when, "notAfter": "2026-10-30T14:28:37Z", "createdAt": when, "expiresAt": "2026-10-30T14:28:37Z",
+                    "certificate": ids["cert"],
+                }),
+                (acme_tables.AcmeAuthz, ids["authz"], {
+                    "id": ids["authz"], "accountID": ids["account"], "identifier": {"type": "dns", "value": common_name},
+                    "status": "valid", "token": "t", "challengeIDs": challenges, "wildcard": False,
+                    "createdAt": when, "expiresAt": "2026-10-30T14:28:37Z", "error": None,
+                }),
+                (acme_tables.AcmeCert, ids["cert"], {
+                    "id": ids["cert"], "createdAt": "2026-10-29T14:28:39.777624623Z", "accountID": ids["account"],
+                    "orderID": ids["order"], "leaf": base64.b64encode(pem).decode(), "intermediates": "",
+                }),
+                (acme_tables.AcmeSerialCert, str(serial), {"serial": str(serial), "certificateID": ids["cert"]}),
+            ]
+            for challenge_id, kind in zip(challenges, ("dns-01", "http-01", "tls-alpn-01"), strict=True):
+                valid = kind == "http-01"
+                rows.append((acme_tables.AcmeChallenge, challenge_id, {
+                    "id": challenge_id, "accountID": ids["account"], "type": kind, "status": "valid" if valid else "pending",
+                    "token": "t", "value": common_name, "validatedAt": "2026-10-29T14:28:38Z" if valid else "",
+                    "createdAt": when, "error": None,
+                }))
+            for model, key, value in rows:
+                db.session.add(model(nkey=key.encode(), nvalue=json.dumps(value).encode()))
+            db.session.commit()
+            return ids
 
     helper = StepDB()
     helper.add_provisioner(ADMIN_JWK["id"], ADMIN_JWK["name"])

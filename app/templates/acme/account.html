@@ -1,0 +1,29 @@
+{% extends "layouts/page.html" %}
+{% from "includes/macros.html" import status_badge %}
+{% set breadcrumb = [("ACME accounts", url_for("acme.accounts"))] %}
+
+{% block heading %}ACME account{% endblock %}
+{% block crumb %}<code>{{ account.id }}</code>{% endblock %}
+
+{% block page %}
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <tbody>
+        <tr><th class="w-25">ID</th><td><code>{{ account.id }}</code></td></tr>
+        <tr><th>Status</th><td>{{ status_badge(account.status) }}</td></tr>
+        <tr><th>Contact</th><td>{{ account.contact | join(", ") or "—" }}</td></tr>
+        <tr><th>Provisioner</th><td>{{ account.provisioner_name or "—" }}</td></tr>
+        <tr><th>Created</th><td>{{ account.created_at | datetime }}</td></tr>
+        {% if account.deactivated_at %}<tr><th>Deactivated</th><td>{{ account.deactivated_at | datetime }}</td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header"><h3 class="card-title">Orders</h3></div>
+  <div class="card-body table-responsive p-0">
+    {% include "acme/_orders_table.html" %}
+  </div>
+</div>
+{% endblock page %}

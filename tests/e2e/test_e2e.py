@@ -204,3 +204,15 @@ def test_ca_status(session):
     roots = x509.load_pem_x509_certificates(session.get(f"{BASE_URL}/step/ca/roots.pem").content)
     root = compose_exec("step-ca", "cat", "/home/step/certs/root_ca.crt").stdout.encode()
     assert roots == [x509.load_pem_x509_certificate(root)]
+
+
+def test_acme_drill_down(session):
+    """run.sh issued a certificate for acme-client over ACME, with an http-01 challenge."""
+    order_id = re.search(r'href="/acme/order/([^"]+)"', session.get(f"{BASE_URL}/acme/orders").text).group(1)
+    html = session.get(f"{BASE_URL}/acme/order/{order_id}").text
+    assert "Authorization for acme-client" in html
+    assert re.search(r'http-01</td>\s*<td><span class="badge badge-success">valid', html), "the http-01 challenge is valid"
+    serial = re.search(r'href="/x509/cert/(\d+)"', html).group(1)
+    assert f'href="/acme/order/{order_id}"' in session.get(f"{BASE_URL}/x509/cert/{serial}").text
+    account_id = re.search(r'href="/acme/account/([^"]+)"', html).group(1)
+    assert "e2e@example.org" in session.get(f"{BASE_URL}/acme/account/{account_id}").text

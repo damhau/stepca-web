@@ -1,0 +1,14 @@
+{# Small pieces shared by the pages #}
+
+{% macro status_badge(status) -%}
+<span class="badge badge-{{ {'valid': 'success', 'ready': 'info', 'processing': 'info', 'pending': 'warning', 'invalid': 'danger', 'revoked': 'danger', 'deactivated': 'secondary'}.get(status, 'secondary') }}">{{ status or "—" }}</span>
+{%- endmacro %}
+
+{# A table cell with a date, sorted by its ISO value #}
+{% macro date_cell(value) -%}
+<td data-sort-value="{{ value.isoformat() if value else '' }}">{{ value | datetime }}</td>
+{%- endmacro %}
+
+{% macro identifiers(values) -%}
+{% for identifier in values %}{{ identifier.value }}{% if identifier.type != "dns" %} ({{ identifier.type }}){% endif %}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}
+{%- endmacro %}

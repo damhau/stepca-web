@@ -45,6 +45,15 @@ services:
       - ./ldap/40-read-access.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/40-read-access.ldif:ro
       - ./ldap/50-directory.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/50-directory.ldif:ro
 
+  # An ACME client (step CLI, http-01 on port 80, hence root), run once by run.sh so the ACME pages have data
+  acme-client:
+    image: smallstep/step-ca:0.30.2
+    profiles: [acme]
+    user: root
+    entrypoint: ["step"]
+    volumes:
+      - step:/home/step:ro
+
   stepca-web:
     build:
       context: ../..

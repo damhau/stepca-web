@@ -25,3 +25,9 @@ class AcmeChallenge(db.Model):
     __tablename__ = 'acme_challenges'
     nkey = db.Column(db.LargeBinary, primary_key=True)
     nvalue = db.Column(db.LargeBinary)
+
+class AcmeSerialCert(db.Model):
+    """Decimal serial -> ACME certificate id."""
+    __tablename__ = 'acme_serial_certs_index'
+    nkey = db.Column(db.LargeBinary, primary_key=True)
+    nvalue = db.Column(db.LargeBinary)

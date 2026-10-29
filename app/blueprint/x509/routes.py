@@ -23,6 +23,7 @@ from app.libs.db_x509 import (
     get_x509_certs_by_id,
     save_generated_cert,
 )
+from app.services import acme
 
 # Every RFC 5280 reason code, to name the ones step-ca recorded
 REASON_NAMES = {
@@ -105,6 +106,7 @@ def cert_detail(serial):
         status=status,
         days_left=(not_after - now).days,
         extensions=certificate_extensions(get_x509_cert(serial)),
+        acme_order_id=acme.order_id_for_serial(serial),
         revocation_reasons=REVOCATION_REASONS,
         reason_names=REASON_NAMES,
     )

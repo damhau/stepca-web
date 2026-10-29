@@ -1,85 +1,28 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/page.html" %}
+{% from "includes/macros.html" import status_badge, date_cell %}
 
-{% block title %} {{ title }} {% endblock %}
-
-<!-- Element injected in the BODY element -->
-{% block body_class %} sidebar-mini {% endblock body_class %}
-
-{% block content %}
-
-<div class="content-wrapper">
-
-  <!-- Content Header (Page header) -->
-  <div class="content-header">
-    <div class="container-fluid">
-      <div class="row mb-2">
-        <div class="col-sm-6">
-          <h1 class="m-0 text-dark">{{ title }}</h1>
-        </div>
-        <div class="col-sm-6">
-          <ol class="breadcrumb float-sm-right">
-            <li class="breadcrumb-item"><a href="/">Home</a></li>
-            <li class="breadcrumb-item active">{{ title }}</li>
-          </ol>
-        </div>
-      </div>
-    </div>
+{% block page %}
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover table-striped text-sm" data-table-tools>
+      <thead>
+        <tr><th>Type</th><th>For</th><th>Status</th><th>Validated</th><th>Created</th><th>Order</th></tr>
+      </thead>
+      <tbody>
+        {% for challenge, order_id in challenges %}
+        <tr>
+          <td>{{ challenge.type }}</td>
+          <td>{{ challenge.value or "—" }}</td>
+          <td>{{ status_badge(challenge.status) }}{% if challenge.error %}<br><small class="text-danger">{{ challenge.error }}</small>{% endif %}</td>
+          {{ date_cell(challenge.validated_at) }}
+          {{ date_cell(challenge.created_at) }}
+          <td>{% if order_id %}<a href="{{ url_for('acme.order', order_id=order_id) }}"><code>{{ order_id }}</code></a>{% else %}—{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted">No ACME challenges yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  <!-- /.content-header -->
-
-  <!-- Main content -->
-  <section class="content">
-    {% include "includes/flashes.html" %}
-    <div class="card">
-      <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-sm table-striped" data-table-tools>
-          <thead>
-            <tr>
-              <th>Challenge ID</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Token</th>
-              <th>Created</th>
-              <th>Validated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for ch in challenges %}
-            {% set data = ch.data %}
-            <tr>
-              <td><code>{{ ch.nkey }}</code></td>
-              <td>{{ data.type or '—' }}</td>
-              <td>
-                {% if data.status %}
-                <span class="badge badge-{{
-                      'success' if data.status == 'valid' else
-                      'warning' if data.status == 'pending' else
-                      'danger' if data.status == 'invalid' else 'secondary'
-                    }}">{{ data.status }}</span>
-                {% else %}
-                <em>—</em>
-                {% endif %}
-              </td>
-              <td><code>{{ data.token or '—' }}</code></td>
-              <td data-sort-value="{{ data.createdAt }}">{{ data.createdAt | datetime }}</td>
-              <td>{{ data.validatedAt or '—' }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="6" class="text-muted">No ACME challenges yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-  <!-- /.content -->
-
 </div>
-
-{% endblock content %}
-
-<!-- Specific Page JS goes HERE  -->
-{% block javascripts %}
-
-
-{% endblock javascripts %}
+{% endblock page %}

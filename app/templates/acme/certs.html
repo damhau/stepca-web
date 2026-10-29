@@ -1,79 +1,29 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/page.html" %}
+{% from "includes/macros.html" import date_cell %}
 
-{% block title %} {{ title }} {% endblock %}
-
-<!-- Element injected in the BODY element -->
-{% block body_class %} sidebar-mini {% endblock body_class %}
-
-{% block content %}
-
-<div class="content-wrapper">
-
-  <!-- Content Header (Page header) -->
-  <div class="content-header">
-    <div class="container-fluid">
-      <div class="row mb-2">
-        <div class="col-sm-6">
-          <h1 class="m-0 text-dark">{{ title }}</h1>
-        </div>
-        <div class="col-sm-6">
-          <ol class="breadcrumb float-sm-right">
-            <li class="breadcrumb-item"><a href="/">Home</a></li>
-            <li class="breadcrumb-item active">{{ title }}</li>
-          </ol>
-        </div>
-      </div>
-    </div>
+{% block page %}
+<div class="card">
+  <div class="card-body table-responsive p-0">
+    <table class="table table-hover table-striped text-sm" data-table-tools>
+      <thead>
+        <tr><th title="Decimal">Serial</th><th>Subject</th><th>DNS names</th><th>Valid from</th><th>Valid to</th><th>Order</th></tr>
+      </thead>
+      <tbody>
+        {% for cert in certs %}
+        {% set leaf = cert.leaf %}
+        <tr>
+          <td>{% if cert.serial %}<a href="{{ url_for('x509.cert_detail', serial=cert.serial) }}"><code>{{ cert.serial }}</code></a>{% else %}—{% endif %}</td>
+          <td>{{ leaf.subject or "—" }}</td>
+          <td>{{ leaf.dns_names | join(", ") if leaf.dns_names else "—" }}</td>
+          <td data-sort-value="{{ leaf.not_before }}">{{ leaf.not_before | datetime }}</td>
+          <td data-sort-value="{{ leaf.not_after }}">{{ leaf.not_after | datetime }}</td>
+          <td><a href="{{ url_for('acme.order', order_id=cert.order_id) }}"><code>{{ cert.order_id }}</code></a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted">No ACME certificates yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  <!-- /.content-header -->
-
-  <!-- Main content -->
-  <section class="content">
-    {% include "includes/flashes.html" %}
-    <div class="card">
-      <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-sm table-striped" data-table-tools>
-          <thead>
-            <tr>
-              <th title="Decimal">Serial</th>
-              <th>Subject</th>
-              <th>DNS names</th>
-              <th>Valid from</th>
-              <th>Valid to</th>
-              <th>ACME certificate ID</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for cert in certs %}
-            {% set data = cert.data %}
-            <tr>
-              <td>
-                {% if data.serial_dec %}
-                <a href="{{ url_for('x509.cert_detail', serial=data.serial_dec) }}"><code>{{ data.serial_dec }}</code></a>
-                {% else %}—{% endif %}
-              </td>
-              <td>{{ data.subject or '—' }}</td>
-              <td>{{ data.dns_names | join(", ") if data.dns_names else '—' }}</td>
-              <td data-sort-value="{{ data.not_before }}">{{ data.not_before | datetime }}</td>
-              <td data-sort-value="{{ data.not_after }}">{{ data.not_after | datetime }}</td>
-              <td><code>{{ data.id or cert.nkey }}</code></td>
-            </tr>
-            {% else %}
-            <tr><td colspan="6" class="text-muted">No ACME certificates yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-  <!-- /.content -->
-
 </div>
-
-{% endblock content %}
-
-<!-- Specific Page JS goes HERE  -->
-{% block javascripts %}
-
-
-{% endblock javascripts %}
+{% endblock page %}

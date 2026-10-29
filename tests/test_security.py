@@ -148,6 +148,7 @@ def test_security_headers(client):
     headers = client.get("/").headers
     csp = dict(directive.strip().split(" ", 1) for directive in headers["Content-Security-Policy"].split(";"))
     assert csp["script-src"] == "'self'"
+    assert csp["style-src"] == "'self'"
     assert csp["frame-ancestors"] == "'none'"
     assert headers["X-Frame-Options"] == "DENY"
     assert headers["X-Content-Type-Options"] == "nosniff"

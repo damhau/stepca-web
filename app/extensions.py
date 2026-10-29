@@ -17,12 +17,12 @@ def log_breach(limit):
 # counters live in RATELIMIT_STORAGE_URI, memory:// by default
 limiter = Limiter(get_remote_address, on_breach=log_breach)
 
-# Only the app's own files: no inline script, no CDN. Styles allow inline style attributes,
-# which templates and Flot's labels use
+# Only the app's own files: no inline script or style, no CDN. Scripts may still set styles through
+# the CSSOM (element.style), which CSP allows
 CONTENT_SECURITY_POLICY = {
     "default-src": "'self'",
     "script-src": "'self'",
-    "style-src": ["'self'", "'unsafe-inline'"],
+    "style-src": "'self'",
     "img-src": ["'self'", "data:"],
     "font-src": "'self'",
     "connect-src": "'self'",

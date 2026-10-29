@@ -11,7 +11,7 @@ from app import format_datetime
 from tests.conftest import make_cert
 from tests.test_pages import PAGES
 
-HTML_PAGES = [path for path in PAGES if not path.startswith("/api/")]
+HTML_PAGES = [path for path in PAGES if not path.startswith("/api/")] + ["/acme/account/a-account", "/acme/order/a-order", "/search?q=test"]
 
 
 @pytest.fixture
@@ -22,6 +22,7 @@ def populated(step_db):
     step_db.add_revocation(1002)
     step_db.add_provisioner("prov-acme", "acme", prov_type=6)
     step_db.add_admin("adm-1", "step", "prov-admin-jwk")
+    step_db.add_acme_issuance(1001, "a.test")
 
 
 @pytest.mark.parametrize("path", HTML_PAGES)
@@ -32,13 +33,16 @@ def test_every_page_shows_flash_messages(client, populated, path):
 
 
 @pytest.mark.parametrize("path", HTML_PAGES + ["/auth/login"])
-def test_no_inline_scripts_or_event_handlers(client, populated, path):
-    """The Content-Security-Policy only allows the app's own script files."""
+def test_no_inline_scripts_styles_or_event_handlers(client, populated, path):
+    """The Content-Security-Policy only allows the app's own script and style files."""
     html = client.get(path).get_data(as_text=True)
     inline = [tag for tag in re.findall(r"<script\b[^>]*>", html) if "src=" not in tag and 'type="application/json"' not in tag]
     assert inline == []
     assert re.findall(r"\son[a-z]+=", html) == []
     assert "javascript:" not in html
+    # Nor inline styles: style-src is 'self' only
+    assert re.findall(r"\sstyle=", html) == []
+    assert "<style" not in html
 
 
 @pytest.mark.parametrize(
@@ -90,7 +94,7 @@ def test_dashboard_charts_use_the_server_counts(client, populated):
     html = client.get("/").get_data(as_text=True)
     charts = json.loads(re.search(r'<script type="application/json" id="dashboard-data">(.*?)</script>', html, re.S).group(1))
     assert charts["issued_by_provisioner"] == {"Admin JWK": 2, "Unknown": 1}
-    assert charts["acme_orders_by_status"] == {}
+    assert charts["acme_orders_by_status"] == {"valid": 1}
     assert "/api/x509/certs" not in html
 
 

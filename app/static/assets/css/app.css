@@ -10,13 +10,40 @@
   overflow: visible;
 }
 
-/* Labels drawn by Flot inside the donut slices */
-.dashboard-chart-label {
-  font-size: 13px;
+/* The donut's legend (dashboard.js): a coloured square per status */
+.chart-legend {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
   text-align: center;
-  padding: 2px;
-  color: #fff;
-  font-weight: 600;
+}
+
+.chart-legend li {
+  display: inline-block;
+  margin: 0 0.75rem;
+}
+
+.chart-legend-swatch {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 0.3em;
+  vertical-align: baseline;
+}
+
+/* Table columns of action buttons */
+.col-actions {
+  width: 150px;
+}
+
+/* JSON shown as it is, wrapped */
+.pre-wrap {
+  white-space: pre-wrap;
+}
+
+/* The shield next to the app's name in the sidebar */
+.brand-icon {
+  font-size: 1.5rem;
 }
 
 /* The search box of the table tools (tables.js) */

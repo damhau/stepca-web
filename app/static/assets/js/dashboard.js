@@ -35,21 +35,22 @@ $(function () {
       color: colours[status] || "#999999",
     }));
     $.plot("#donut-chart", series, {
-      series: {
-        pie: {
-          show: true,
-          radius: 1,
-          innerRadius: 0.5,
-          label: {
-            show: true,
-            radius: 2 / 3,
-            threshold: 0.1,
-            formatter: (label, slice) =>
-              '<div class="dashboard-chart-label">' + escapeHtml(label) + "<br>" + Math.round(slice.percent) + "%</div>",
-          },
-        },
-      },
+      // No labels inside the slices: Flot positions them with inline styles, which the CSP forbids
+      series: { pie: { show: true, radius: 1, innerRadius: 0.5, label: { show: false } } },
       legend: { show: false },
     });
+    // A legend built with DOM calls; the swatch colour is set through the CSSOM, which the CSP allows
+    const total = series.reduce((sum, slice) => sum + slice.data, 0);
+    const legend = document.createElement("ul");
+    legend.className = "chart-legend";
+    for (const slice of series) {
+      const item = document.createElement("li");
+      const swatch = document.createElement("span");
+      swatch.className = "chart-legend-swatch";
+      swatch.style.backgroundColor = slice.color;
+      item.append(swatch, document.createTextNode(`${slice.label}: ${slice.data} (${Math.round((100 * slice.data) / total)}%)`));
+      legend.append(item);
+    }
+    document.getElementById("donut-chart").after(legend);
   }
 });

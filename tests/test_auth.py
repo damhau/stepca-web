@@ -3,6 +3,7 @@ from unittest import mock
 import pytest
 
 from app import create_app
+from app.auth.factory import get_auth_backend
 from app.libs.auth.ldap_backend import LDAPAuthBackend
 from config import Config
 from tests.conftest import PASSWORD, csrf_token
@@ -33,6 +34,27 @@ def test_logout_clears_the_session(client):
     with client.session_transaction() as session:
         assert dict(session) == {}
     assert client.get("/").status_code == 302
+
+
+@pytest.mark.parametrize("backend", ["oidc", "saml", "radius"])
+def test_unimplemented_backends_are_refused(backend):
+    with pytest.raises(ValueError, match="ldap"):
+        get_auth_backend({"AUTH_BACKEND": backend})
+
+
+def test_no_required_ldap_group_by_default(monkeypatch):
+    """It used to default to LDAP_BASE_DN, which no user is a member of: every LDAP login was refused."""
+    monkeypatch.setenv("LDAP_BASE_DN", "dc=corp,dc=test")
+    monkeypatch.delenv("LDAP_REQUIRED_GROUP_DN", raising=False)
+    import importlib
+
+    import config
+
+    try:
+        assert importlib.reload(config).Config.LDAP_REQUIRED_GROUP_DN is None
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
 
 
 class TestLDAP:

@@ -322,7 +322,7 @@ To keep the behaviour from before roles existed (every LDAP user can do everythi
 
 ## Authentication
 
-The app supports several auth backends, selected via the `AUTH_BACKEND` environment variable (`config.py`): `ldap` (default), `radius`, `saml`, `oidc`, `local`. The factory dispatching the choice lives in `app/auth/factory.py`.
+Two auth backends are available, selected with the `AUTH_BACKEND` environment variable: `ldap` (default) and `local`. The factory dispatching the choice lives in `app/auth/factory.py`.
 
 ### Local auth setup
 

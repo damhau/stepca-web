@@ -31,9 +31,3 @@ class LocalAuthBackend(AuthBackend):
             attributes = user.get('attributes', {})
             return {'id': username, 'attributes': attributes, 'role': user.get('role') or attributes.get('role')}
         return None
-
-    def get_user(self, user_id):
-        user = self.users.get(user_id)
-        if user:
-            return {'id': user_id, 'attributes': user.get('attributes', {})}
-        return None

@@ -1,0 +1,29 @@
+name: Security scans
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Weekly, to catch vulnerabilities published after the last push
+    - cron: "0 6 * * 1"
+
+jobs:
+  secrets:
+    name: Secrets in the git history (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history, not only the last commit
+          fetch-depth: 0
+      # Same version as the pre-commit hook
+      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.29.1 git /repo --no-banner --redact
+
+  dependencies:
+    name: Known vulnerabilities in dependencies (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # requirements.txt is uv.lock exported with hashes (the CI workflow checks they match)
+      - run: uvx pip-audit==2.9.0 -r requirements.txt --require-hashes --disable-pip --progress-spinner off

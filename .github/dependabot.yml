@@ -1,0 +1,8 @@
+# Python dependencies are not listed here: Dependabot would update uv.lock but not the
+# requirements.txt exported from it. The weekly pip-audit run (security.yml) flags vulnerable ones.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

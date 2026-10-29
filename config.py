@@ -44,7 +44,7 @@ CA_ADMIN_PASSWORD = os.environ.get("CA_ADMIN_PASSWORD")
 
 
 class Config:
-    # Authentication backend: 'ldap', 'radius', 'saml', 'oidc'
+    # Authentication backend: 'ldap' or 'local'
     AUTH_BACKEND = os.environ.get('AUTH_BACKEND', 'ldap')
     # LDAP-specific configuration
     LDAP_URL = os.environ.get('LDAP_URL') or get_config('ldap.url', 'ldap://localhost')
@@ -52,7 +52,8 @@ class Config:
     LDAP_DOMAIN = os.environ.get('LDAP_DOMAIN') or get_config('ldap.domain', '')
     LDAP_USER_SEARCH_FILTER = os.environ.get('LDAP_USER_SEARCH_FILTER') or get_config('ldap.user_search_filter', '(uid={username})')
     LDAP_USER_SEARCH_BASE = os.environ.get('LDAP_USER_SEARCH_BASE') or get_config('ldap.user_search_base', LDAP_BASE_DN)
-    LDAP_REQUIRED_GROUP_DN = os.environ.get('LDAP_REQUIRED_GROUP_DN') or get_config('ldap.ldap_required_group_dn', LDAP_BASE_DN)
+    # Optional: only members of this group may log in (DEFAULT_ROLE=none does the same with role groups)
+    LDAP_REQUIRED_GROUP_DN = os.environ.get('LDAP_REQUIRED_GROUP_DN') or get_config('ldap.ldap_required_group_dn')
     # Roles: viewer (read-only), operator (also sign and revoke), admin (also provisioners, admins, system).
     # LDAP group DNs per role; users in none of them get DEFAULT_ROLE ("none" refuses them)
     ROLE_ADMIN_GROUP = os.environ.get('ROLE_ADMIN_GROUP') or get_config('roles.admin_group')
@@ -63,7 +64,6 @@ class Config:
     SERVICE_CONTROL_ENABLED = os.environ.get('SERVICE_CONTROL_ENABLED', 'false').lower() == 'true'
     # Local backend: users and password hashes live outside the source tree
     LOCAL_USERS_FILE = os.environ.get('LOCAL_USERS_FILE', 'local_users.json')
-    # OIDC, SAML, RADIUS config can be added similarly
     # Required: signs the session cookie, must be the same for every worker and restart
     SECRET_KEY = os.environ.get("SECRET_KEY")
     PERMANENT_SESSION_LIFETIME = timedelta(hours=int(os.environ.get("SESSION_LIFETIME_HOURS", "8")))

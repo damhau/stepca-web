@@ -159,6 +159,13 @@ def test_config_page_never_shows_the_db_password(client):
     assert "<form" not in html.split("Configuration")[-1] or 'name="db_password"' not in html
 
 
+def test_config_page_masks_the_app_database_password(app, client):
+    app.config["SQLALCHEMY_BINDS"] = {"app": "postgresql+psycopg://stepca_web:s3cret@db.test/stepca_web"}
+    html = client.get("/system/config").get_data(as_text=True)
+    assert "postgresql+psycopg://stepca_web:***@db.test/stepca_web" in html
+    assert "s3cret" not in html
+
+
 def test_admins_are_read_only_with_an_admin_identity(client, ca_client):
     ca_client.identity = "ADMIN"
     html = client.get("/step/admins").get_data(as_text=True)

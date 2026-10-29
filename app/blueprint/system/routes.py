@@ -1,4 +1,5 @@
 from flask import current_app, render_template
+from sqlalchemy.engine import make_url
 
 from app.auth.decorator import login_required
 from app.auth.roles import role_required
@@ -59,7 +60,7 @@ def effective_settings():
         (
             "Application",
             [
-                ("App database", config["SQLALCHEMY_BINDS"]["app"]),
+                ("App database", make_url(config["SQLALCHEMY_BINDS"]["app"]).render_as_string(hide_password=True)),
                 ("Service control", "enabled" if config["SERVICE_CONTROL_ENABLED"] else "disabled"),
             ],
         ),

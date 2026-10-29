@@ -55,21 +55,3 @@ class LDAPAuthBackend(AuthBackend):
         except Exception as e:
             log.warning("LDAP authentication of %s failed: %s", username, e)
             return None
-
-    def get_user(self, user_id):
-        try:
-            server = Server(self.ldap_url, get_info=ALL)
-            conn = Connection(server, auto_bind=True)
-            conn.search(
-                search_base=self.user_search_base,
-                search_filter=self.user_search_filter.format(username=escape_filter_chars(user_id)),
-                search_scope=SUBTREE,
-                attributes=['*']
-            )
-            user_info = conn.entries[0] if conn.entries else None
-            conn.unbind()
-            if user_info:
-                return {'id': user_id, 'attributes': user_info.entry_attributes_as_dict}
-            return None
-        except Exception:
-            return None

@@ -10,6 +10,7 @@ import time
 import uuid
 import warnings
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from urllib.parse import quote, urljoin
 
 import jwt as python_jwt
@@ -27,7 +28,6 @@ from jwcrypto.common import JWException
 from jwt.algorithms import ECAlgorithm
 
 from app.libs.cert_utils import csr_sans, issuing_provisioner
-from config import CA_ADMIN_PASSWORD, CA_ADMIN_PASSWORD_FILE, CA_ADMIN_PROVISIONER_NAME, CA_ADMIN_SUBJECT, CA_FINGERPRINT, CA_ROOT
 
 # step encrypts provisioner keys with PBES2 and 600,000 iterations; jwcrypto refuses more than its own small
 # default to stop a malicious server from burning CPU, so raise the cap just enough
@@ -75,25 +75,51 @@ class StepCAClient:
     def __init__(
         self,
         ca_url,
-        cert_file="admin.crt",
-        key_file="admin.key",
-        subject=CA_ADMIN_SUBJECT,
-        provisioner_name=CA_ADMIN_PROVISIONER_NAME,
+        *,
+        fingerprint=None,
+        root_file=None,
+        data_dir=".",
+        subject="step",
+        provisioner_name="Admin JWK",
+        admin_password=None,
+        admin_password_file=None,
         not_after="24h",
     ):
+        """`root_file`: the CA root, if given; otherwise it is downloaded once into data_dir and checked
+        against `fingerprint`. `admin_password` or `admin_password_file`: the admin provisioner's password,
+        to decrypt its key in memory; without either, data_dir/jwk_key.json holds the decrypted key."""
+        data_dir = Path(data_dir)
         self.ca_url = ca_url.rstrip("/")
-        self.cert_file = cert_file
-        self.key_file = key_file
+        self.cert_file = str(data_dir / "admin.crt")
+        self.key_file = str(data_dir / "admin.key")
+        self.jwk_key_file = str(data_dir / "jwk_key.json")
         self.subject = subject
         self.provisioner_name = provisioner_name
         self.not_after = not_after
+        self.admin_password = admin_password
+        self.admin_password_file = admin_password_file
         # The admin provisioner's private key, decrypted in memory on first use (see _admin_jwk)
         self._jwk = None
         self._jwk_lock = threading.Lock()
-        # CA root that TLS is verified against: CA_ROOT if set, else bootstrapped from CA_FINGERPRINT
-        self.ca_fingerprint = (CA_FINGERPRINT or "").replace(":", "").lower()
-        self.root_file = CA_ROOT or "ca_root.crt"
-        self._root_verified = bool(CA_ROOT)
+        # CA root that TLS is verified against: root_file if given, else bootstrapped from the fingerprint
+        self.ca_fingerprint = (fingerprint or "").replace(":", "").lower()
+        self.root_file = str(root_file) if root_file else str(data_dir / "ca_root.crt")
+        self._root_verified = bool(root_file)
+        # (fetched at, admin type) of the app's own admin on the CA; see app.services.provisioners
+        self.identity_cache = (float("-inf"), None)
+
+    @classmethod
+    def from_settings(cls, settings):
+        return cls(
+            settings.ca_url,
+            fingerprint=settings.ca_fingerprint,
+            root_file=settings.path(settings.ca_root) if settings.ca_root else None,
+            data_dir=settings.data_dir,
+            subject=settings.ca_admin_subject,
+            provisioner_name=settings.ca_admin_provisioner_name,
+            admin_password=settings.ca_admin_password.get_secret_value() if settings.ca_admin_password else None,
+            admin_password_file=settings.path(settings.ca_admin_password_file) if settings.ca_admin_password_file else None,
+        )
 
     def _compare_fingerprints(self, pem, fingerprint):
         cert = x509.load_pem_x509_certificate(str.encode(pem))
@@ -104,7 +130,7 @@ class StepCAClient:
         """Path of the CA root every request is verified against.
 
         Like `step ca bootstrap`: download the root once, check that it matches
-        CA_FINGERPRINT, then keep it in the working directory.
+        the fingerprint, then keep it in the data directory.
         """
         if self._root_verified:
             return self.root_file
@@ -137,28 +163,28 @@ class StepCAClient:
         return self.root_file
 
     def admin_key_source(self):
-        if CA_ADMIN_PASSWORD_FILE or CA_ADMIN_PASSWORD:
+        if self.admin_password_file or self.admin_password:
             return "encrypted key from the CA, decrypted in memory"
         return "jwk_key.json (decrypted key on disk, legacy)"
 
     def _admin_jwk(self):
         """The private JWK of the admin provisioner, used for the admin certificate and for revocations.
 
-        With CA_ADMIN_PASSWORD_FILE (or CA_ADMIN_PASSWORD), the provisioner's encrypted key is fetched
-        from the CA and decrypted in memory: no plaintext key on disk. Otherwise jwk_key.json is read.
+        With a password (or a password file), the provisioner's encrypted key is fetched from the CA and
+        decrypted in memory: no plaintext key on disk. Otherwise jwk_key.json is read.
         """
         with self._jwk_lock:
             if self._jwk is None:
-                if CA_ADMIN_PASSWORD_FILE or CA_ADMIN_PASSWORD:
-                    password = CA_ADMIN_PASSWORD
-                    if CA_ADMIN_PASSWORD_FILE:
-                        with open(CA_ADMIN_PASSWORD_FILE) as f:
+                if self.admin_password_file or self.admin_password:
+                    password = self.admin_password
+                    if self.admin_password_file:
+                        with open(self.admin_password_file) as f:
                             password = f.read().strip()
                     provisioner = self.public_get_provisioner_by_name(self.provisioner_name)
                     self._jwk = self.decrypt_and_merge(jwk_public=provisioner["key"], encrypted_key=provisioner["encryptedKey"], passphrase=password)
                     log.info("Key of provisioner '%s' decrypted in memory", self.provisioner_name)
                 else:
-                    self._jwk = self._load_jwk_key_from_file("jwk_key.json")
+                    self._jwk = self._load_jwk_key_from_file(self.jwk_key_file)
                     if self._jwk is None:
                         raise RuntimeError("Set CA_ADMIN_PASSWORD_FILE (or provide jwk_key.json) to act on the CA")
             return self._jwk
@@ -492,7 +518,7 @@ class StepCAClient:
         full_jwk = self._admin_jwk()
         provisioner_name = self.provisioner_name
 
-        token = CAToken(self.ca_url, "/1.0/revoke", CA_FINGERPRINT, provisioner_name, serial, full_jwk).token
+        token = CAToken(self.ca_url, "/1.0/revoke", self.ca_fingerprint, provisioner_name, serial, full_jwk).token
 
         payload = {"serial": serial, "ott": token, "passive": True, "reasonCode": reason_code, "reason": reason}
         response = self._request_noauth("POST", "/1.0/revoke", json_payload=payload)
@@ -526,7 +552,7 @@ class StepCAClient:
         subject = common_names[0] if common_names else (sans[0] if sans else None)
         if not subject:
             raise SignError("The CSR has neither a common name nor a subject alternative name")
-        token = CAToken(self.ca_url, "/1.0/sign", CA_FINGERPRINT, provisioner_name, subject, full_jwk, sans or None).token
+        token = CAToken(self.ca_url, "/1.0/sign", self.ca_fingerprint, provisioner_name, subject, full_jwk, sans or None).token
 
         payload = {"csr": csr.strip(), "ott": token}
         if not_after:

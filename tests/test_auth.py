@@ -9,16 +9,7 @@ from ldap3.core.exceptions import LDAPBindError, LDAPSocketOpenError
 from app import create_app
 from app.auth.factory import get_auth_backend
 from app.libs.auth.ldap_backend import LDAPAuthBackend, ldap_transport
-from config import Config
-from tests.conftest import PASSWORD, csrf_token
-
-
-def test_app_refuses_to_start_without_secret_key():
-    class NoSecret(Config):
-        SECRET_KEY = None
-
-    with pytest.raises(RuntimeError, match="SECRET_KEY"):
-        create_app(NoSecret)
+from tests.conftest import PASSWORD, csrf_token, make_settings
 
 
 def test_login_starts_a_fresh_session(app):
@@ -46,19 +37,11 @@ def test_unimplemented_backends_are_refused(backend):
         get_auth_backend({"AUTH_BACKEND": backend})
 
 
-def test_no_required_ldap_group_by_default(monkeypatch):
+def test_no_required_ldap_group_by_default(tmp_path):
     """It used to default to LDAP_BASE_DN, which no user is a member of: every LDAP login was refused."""
-    monkeypatch.setenv("LDAP_BASE_DN", "dc=corp,dc=test")
-    monkeypatch.delenv("LDAP_REQUIRED_GROUP_DN", raising=False)
-    import importlib
-
-    import config
-
-    try:
-        assert importlib.reload(config).Config.LDAP_REQUIRED_GROUP_DN is None
-    finally:
-        monkeypatch.undo()
-        importlib.reload(config)
+    settings = make_settings(tmp_path, ldap_base_dn="dc=corp,dc=test")
+    assert settings.ldap_required_group_dn is None
+    assert settings.ldap_user_search_base == "dc=corp,dc=test"
 
 
 LDAP_CONFIG = {"LDAP_URL": "ldap://ldap.test", "LDAP_DOMAIN": "corp.test", "LDAP_USER_SEARCH_FILTER": "(uid={username})"}
@@ -142,14 +125,6 @@ class TestLDAP:
         connect.assert_not_called()
 
 
-def test_app_refuses_to_start_without_ca_url(monkeypatch):
-    import app as app_package
-
-    monkeypatch.setattr(app_package, "CA_URL", None)
-    with pytest.raises(RuntimeError, match="CA_URL"):
-        create_app(Config)
-
-
 @pytest.mark.parametrize(
     "url, start_tls, transport",
     [("ldaps://dc.corp", False, "ldaps"), ("LDAPS://dc.corp:636", True, "ldaps"), ("ldap://dc.corp", True, "starttls"), ("ldap://dc.corp", False, "cleartext")],
@@ -158,29 +133,14 @@ def test_ldap_transport(url, start_tls, transport):
     assert ldap_transport({"LDAP_URL": url, "LDAP_START_TLS": start_tls}) == transport
 
 
-class LDAPConfig(Config):
-    TESTING = True  # no version check against the CA in the background
-    AUTH_BACKEND = "ldap"
-    SQLALCHEMY_DATABASE_URI = "sqlite://"
-    SQLALCHEMY_BINDS = {"app": "sqlite://"}
-
-
-def test_cleartext_ldap_is_allowed_with_a_warning(caplog):
-    class Cleartext(LDAPConfig):
-        LDAP_URL = "ldap://dc.corp"
-        LDAP_START_TLS = False
-
-    create_app(Cleartext)
+def test_cleartext_ldap_is_allowed_with_a_warning(tmp_path, caplog):
+    create_app(make_settings(tmp_path, auth_backend="ldap", ldap_url="ldap://dc.corp", ldap_start_tls=False))
     assert "cleartext" in caplog.text
 
 
-def test_missing_ldap_ca_file_stops_the_app():
-    class MissingCA(LDAPConfig):
-        LDAP_URL = "ldaps://dc.corp"
-        LDAP_CA_FILE = "/nonexistent/ca.crt"
-
+def test_missing_ldap_ca_file_stops_the_app(tmp_path):
     with pytest.raises(RuntimeError, match="LDAP_CA_FILE"):
-        create_app(MissingCA)
+        create_app(make_settings(tmp_path, auth_backend="ldap", ldap_url="ldaps://dc.corp", ldap_ca_file="/nonexistent/ca.crt"))
 
 
 def test_config_page_warns_about_cleartext_ldap(app, client):

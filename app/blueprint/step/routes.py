@@ -9,11 +9,9 @@ from app.auth.roles import role_required
 from app.blueprint.step import bp
 from app.libs import ca
 from app.libs.audit import audit
-from app.libs.ca import client
 from app.libs.db_step import get_active_provisioner_map, get_admin_created_dates, get_step_provisioners
 from app.libs.provisioners import ACME_CHALLENGES, durations_from_form
 from app.libs.provisioners import edit_provisioner as edit_provisioner_record
-from config import CA_ADMIN_PROVISIONER_NAME
 
 
 @bp.route("/provisioners", methods=["GET", "POST"])
@@ -30,7 +28,7 @@ def provisioner():
             return redirect(url_for("step.provisioner"))
 
         if provisioner_type == "JWK":
-            resp = client.create_provisioner_jwk(name, request.form.get("passphrase", ""), claims=claims)
+            resp = ca.client().create_provisioner_jwk(name, request.form.get("passphrase", ""), claims=claims)
         elif provisioner_type == "ACME":
             offered = [challenge for challenge, _ in ACME_CHALLENGES]
             details = {
@@ -40,7 +38,7 @@ def provisioner():
                     "challenges": [challenge for challenge in request.form.getlist("challenges") if challenge in offered],
                 }
             }
-            resp = client.create_provisioner_acme(name=name, details=details, claims=claims)
+            resp = ca.client().create_provisioner_acme(name=name, details=details, claims=claims)
         else:
             flash(f"Unknown provisioner type '{provisioner_type}'.", "danger")
             return redirect(url_for("step.provisioner"))
@@ -52,7 +50,7 @@ def provisioner():
             flash(f"Failed to create provisioner '{name}'.", "danger")
         return redirect(url_for("step.provisioner"))
 
-    provisioners = client.list_provisioners()
+    provisioners = ca.client().list_provisioners()
     if provisioners is None:
         flash("Could not load the provisioners from the CA.", "danger")
     return render_template(
@@ -67,14 +65,14 @@ def provisioner():
 @login_required
 @role_required("admin")
 def edit_provisioner(name):
-    prov = client.get_provisioner(name)
+    prov = ca.client().get_provisioner(name)
     if prov is None:
         flash(f"Could not load the provisioner '{name}' from the CA.", "danger")
         return redirect(url_for("step.provisioner"))
 
     if request.method == "POST":
         try:
-            client.update_provisioner(name, edit_provisioner_record(prov, request.form, app_provisioner=CA_ADMIN_PROVISIONER_NAME))
+            ca.client().update_provisioner(name, edit_provisioner_record(prov, request.form, app_provisioner=ca.client().provisioner_name))
         except (ValueError, RuntimeError) as e:
             audit("update_provisioner", name, success=False, detail=str(e))
             flash(f"Provisioner '{name}' was not updated: {e}", "danger")
@@ -88,7 +86,7 @@ def edit_provisioner(name):
         title=f"Edit provisioner {name}",
         prov=prov,
         acme_challenges=ACME_CHALLENGES,
-        is_app_provisioner=name == CA_ADMIN_PROVISIONER_NAME,
+        is_app_provisioner=name == ca.client().provisioner_name,
     )
 
 
@@ -109,7 +107,7 @@ def download(content, filename, content_type):
 @login_required
 def ca_certificates(kind):
     """The CA's roots or intermediates as one PEM file, fetched from the CA (which browsers may not reach)."""
-    fetch = {"roots": client.roots, "intermediates": client.intermediates}.get(kind)
+    fetch = {"roots": ca.client().roots, "intermediates": ca.client().intermediates}.get(kind)
     if fetch is None:
         abort(404)
     try:
@@ -124,7 +122,7 @@ def ca_certificates(kind):
 @login_required
 def ca_crl():
     try:
-        der = client.crl()
+        der = ca.client().crl()
     except ca.CA_ERRORS as e:
         der = None
         flash(f"Could not load the CRL from the CA: {e}", "danger")
@@ -140,7 +138,7 @@ def ca_crl():
 @login_required
 @role_required("admin")
 def delete_provisioner(name):
-    resp = client.delete_provisioner(name)
+    resp = ca.client().delete_provisioner(name)
     audit("delete_provisioner", name, success=bool(resp))
     if resp:
         flash(f"Provisioner '{name}' deleted successfully.", "success")
@@ -173,7 +171,7 @@ def admins():
         provisioner_id = request.form.get("provisioner")
         admin_type = int(request.form.get("type"))
 
-        resp = client.create_admin(subject=subject, provisioner=provisioner_id, admin_type=admin_type)
+        resp = ca.client().create_admin(subject=subject, provisioner=provisioner_id, admin_type=admin_type)
         audit("create_admin", subject, success=bool(resp), detail=f"provisioner={provisioner_id} type={admin_type}")
 
         if resp:
@@ -182,7 +180,7 @@ def admins():
             flash(f"Failed to create admin '{subject}'.", "danger")
         return redirect(url_for("step.admins"))
 
-    admins = client.list_admins()
+    admins = ca.client().list_admins()
     if admins is None:
         flash("Could not load the admins from the CA.", "danger")
     provisioner_map = get_active_provisioner_map(get_step_provisioners())
@@ -204,7 +202,7 @@ def update_admin(id):
     if refused := refuse_unless_admins_manageable():
         return refused
     admin_type = request.form.get("type", type=int)
-    ok = admin_type in (1, 2) and bool(client.update_admin(id, admin_type))
+    ok = admin_type in (1, 2) and bool(ca.client().update_admin(id, admin_type))
     audit("update_admin", id, success=ok, detail=f"type={admin_type}")
     if not ok:
         flash(f"Failed to update admin '{id}'.", "danger")
@@ -219,7 +217,7 @@ def update_admin(id):
 def delete_admin(id):
     if refused := refuse_unless_admins_manageable():
         return refused
-    resp = client.delete_admin(id)
+    resp = ca.client().delete_admin(id)
     audit("delete_admin", id, success=bool(resp))
 
     if resp:

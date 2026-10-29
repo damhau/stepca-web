@@ -16,6 +16,7 @@ dependencies = [
     "jwcrypto>=1.5",
     "ldap3>=2.9",
     "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.6",
     "pyjwt>=2.10",
     "requests>=2.32",
     "sqlalchemy>=2.0",

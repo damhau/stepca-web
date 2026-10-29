@@ -10,7 +10,6 @@ from app.auth.roles import role_required
 from app.blueprint.x509 import bp
 from app.libs import ca
 from app.libs.audit import audit
-from app.libs.ca import client
 from app.libs.cert_utils import certificate_extensions, describe_csr
 from app.libs.db_step import get_jwk_provisioner_names, get_step_provisioners
 from app.libs.db_x509 import (
@@ -130,7 +129,7 @@ def download_cert(serial):
         content, filename, content_type = cert.public_bytes(serialization.Encoding.DER), f"{filename}.crt", "application/pkix-cert"
     elif file_format == "chain":
         try:
-            intermediates = client.intermediates()
+            intermediates = ca.client().intermediates()
         except ca.CA_ERRORS as e:
             flash(f"Could not load the intermediate certificates from the CA: {e}", "danger")
             return redirect(url_for("x509.cert_detail", serial=serial))
@@ -178,7 +177,7 @@ def sign_cert():
             except ValueError as e:
                 raise SignError(f"Validity: {e}") from e
         csr = submitted_csr()
-        certificate = client.sign(csr, provisioner_name, request.form.get("passphrase", ""), not_after=valid_for or None)
+        certificate = ca.client().sign(csr, provisioner_name, request.form.get("passphrase", ""), not_after=valid_for or None)
     except SignError as e:
         audit("sign", "", success=False, detail=f"provisioner={provisioner_name}: {e}")
         flash(f"The certificate was not signed: {e}.", "danger")
@@ -226,7 +225,7 @@ def revoke_cert():
         return redirect(url_for("x509.active_certs"))
 
     try:
-        client.revoke(cert_id, reason_code=reason_code, reason=reasons[reason_code])
+        ca.client().revoke(cert_id, reason_code=reason_code, reason=reasons[reason_code])
         audit("revoke", cert_id, detail=reasons[reason_code])
         flash(f"Certificate {cert_id} has been revoked successfully.", "success")
     except Exception as e:

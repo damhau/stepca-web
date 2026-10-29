@@ -1,41 +1,23 @@
 import base64
 import datetime
 import json
-import os
 import re
 from unittest import mock
 
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 from flask import g
+from werkzeug.security import generate_password_hash
 
-# config.py reads the environment at import time: set it before importing the app
-os.environ.update(
-    {
-        "SECRET_KEY": "test-secret",
-        "DATABASE_HOST": "unused",
-        "DATABASE_USER": "unused",
-        "DATABASE_PASSWORD": "unused",
-        "DATABASE_NAME": "unused",
-        "APP_DATABASE_URI": "sqlite://",
-        "CA_URL": "https://ca.test:9000",
-        "CA_FINGERPRINT": "00" * 32,
-        "CA_ADMIN_PROVISIONER_NAME": "Admin JWK",
-        "AUTH_BACKEND": "local",
-    }
-)
-
-from cryptography import x509  # noqa: E402
-from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric import ec  # noqa: E402
-from cryptography.x509.oid import NameOID  # noqa: E402
-from werkzeug.security import generate_password_hash  # noqa: E402
-
-from app import create_app  # noqa: E402
-from app.extensions import db  # noqa: E402
-from app.models import acme as acme_tables  # noqa: E402
-from app.models.step import StepAdmin, StepProvisioner  # noqa: E402
-from app.models.x509 import RevokedX509Cert, X509Cert, X509CertData  # noqa: E402
-from config import Config  # noqa: E402
+from app import create_app
+from app.extensions import db
+from app.models import acme as acme_tables
+from app.models.step import StepAdmin, StepProvisioner
+from app.models.x509 import RevokedX509Cert, X509Cert, X509CertData
+from app.settings import Settings
 
 PASSWORD = "testpw"
 ADMIN_JWK = {"id": "prov-admin-jwk", "name": "Admin JWK", "type": "JWK"}
@@ -61,21 +43,44 @@ def make_cert(serial, common_name, days_valid=30, not_before=None):
     return cert.public_bytes(serialization.Encoding.DER)
 
 
+CA_URL = "https://ca.test:9000"
+
+
+class IsolatedSettings(Settings):
+    """Settings from the test's arguments only: neither the environment nor a settings.json."""
+
+    @classmethod
+    def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
+        return (init_settings,)
+
+
+def make_settings(data_dir, **overrides):
+    values = {
+        "data_dir": data_dir,
+        "testing": True,
+        "secret_key": "test-secret",
+        "database_host": "unused",
+        "database_user": "unused",
+        "database_password": "unused",
+        "database_name": "unused",
+        "sqlalchemy_database_uri": "sqlite://",
+        "app_database_uri": "sqlite://",
+        "ca_url": CA_URL,
+        "ca_fingerprint": "00" * 32,
+        "ca_admin_provisioner_name": "Admin JWK",
+        "auth_backend": "local",
+    }
+    return IsolatedSettings(**{**values, **overrides})
+
+
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     users = tmp_path / "local_users.json"
     password_hash = generate_password_hash(PASSWORD)
     users.write_text(json.dumps({role: {"password_hash": password_hash, "role": role} for role in ("viewer", "operator", "admin")}))
-
-    class TestConfig(Config):
-        TESTING = True
-        SQLALCHEMY_DATABASE_URI = "sqlite://"
-        SQLALCHEMY_BINDS = {"app": "sqlite://"}
-        LOCAL_USERS_FILE = str(users)
-
-    # Files the app reads or writes relative to the working directory
-    monkeypatch.chdir(tmp_path)
-    app = create_app(TestConfig)
+    # Nothing may depend on the working directory: every file is in the data directory
+    monkeypatch.chdir("/")
+    app = create_app(make_settings(tmp_path))
 
     # The app context below stays pushed for the whole test, so `g` outlives each request (unlike in
     # production). Reset Flask-WTF's per-request token cache, or a token cleared at login would be reused.
@@ -91,17 +96,18 @@ def app(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def ca_client(monkeypatch):
-    """Replaces the StepCAClient used by the blueprints: no CA is contacted in unit tests."""
+def ca_client(app, monkeypatch):
+    """Replaces the app's StepCAClient: no CA is contacted in unit tests."""
     fake = mock.MagicMock()
     fake.list_provisioners.return_value = {"provisioners": [{"name": "Admin JWK", "type": "JWK", "id": ADMIN_JWK["id"]}]}
-    fake.list_admins.return_value = {
-        "admins": [{"id": "adm-1", "subject": "step", "provisioner_id": ADMIN_JWK["id"], "type": 2}]
-    }
+    fake.list_admins.return_value = {"admins": [{"id": "adm-1", "subject": "step", "provisioner_id": ADMIN_JWK["id"], "type": 2}]}
     fake.revoke.return_value = {"status": "ok"}
     fake.admin_key_source.return_value = "encrypted key from the CA, decrypted in memory"
-    for module in ("app.libs.ca", "app.blueprint.step.routes", "app.blueprint.x509.routes"):
-        monkeypatch.setattr(f"{module}.client", fake)
+    fake.ca_url = CA_URL
+    fake.ca_fingerprint = "00" * 32
+    fake.subject = "step"
+    fake.provisioner_name = "Admin JWK"
+    app.extensions["stepca"] = fake
     # The app's identity on the CA; tests change it with fake.identity = "ADMIN"
     fake.identity = "SUPER_ADMIN"
     monkeypatch.setattr("app.libs.ca.app_identity_type", lambda: fake.identity)

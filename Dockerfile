@@ -19,9 +19,10 @@ RUN uv sync --frozen --no-dev --no-cache
 # --- Runtime stage ---
 FROM python:3.12-slim
 
-# Code lives in /app, runtime files (settings.json, jwk_key.json, admin.crt,
-# admin.key) are read/written relative to the working directory /data
+# Code lives in /app; runtime files (settings.json, jwk_key.json, admin.crt, admin.key, ca_root.crt,
+# stepca-web.db, local_users.json) in the data directory /data
 ENV PYTHONDONTWRITEBYTECODE=1 \
+    DATA_DIR=/data \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH=/app \
@@ -32,7 +33,6 @@ RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin app \
     && chown app:app /data
 
 COPY --from=builder /opt/venv /opt/venv
-COPY config.py /app/
 COPY app /app/app
 
 WORKDIR /data

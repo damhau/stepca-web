@@ -106,17 +106,16 @@ def test_successful_sign_ins_are_not_counted(app):
 
 
 def app_with(app, **overrides):
-    """Another app with the test settings plus overrides, for settings read once at startup."""
+    """Another app with the test settings plus overrides (lower case, as in app.settings), for settings
+    read once at startup."""
     from app import create_app
-    from config import Config
 
-    settings = {key: value for key, value in app.config.items() if key.isupper()}
-    return create_app(type("Overridden", (Config,), {**settings, **overrides}))
+    return create_app(app.extensions["settings"].model_copy(update=overrides))
 
 
 def test_client_address_comes_from_trusted_proxies(app):
     """Behind a proxy every client has the proxy's address: with TRUSTED_PROXIES, X-Forwarded-For is used."""
-    client = app_with(app, TRUSTED_PROXIES=1, LOGIN_RATE_LIMIT="1 per minute").test_client()
+    client = app_with(app, trusted_proxies=1, login_rate_limit="1 per minute").test_client()
     token = csrf_token(client)
 
     def attempt(client_address):
@@ -158,7 +157,7 @@ def test_security_headers(client):
 
 
 def test_https_deployment_gets_hsts_and_secure_cookies(app):
-    client = app_with(app, SESSION_COOKIE_SECURE=True).test_client()
+    client = app_with(app, session_cookie_secure=True).test_client()
     html = client.get("/auth/login", base_url="https://stepca-web.test").get_data(as_text=True)
     token = re.search(r'name="csrf_token" value="([^"]+)"', html).group(1)
     # Over HTTPS, Flask-WTF also wants a same-origin Referer, which browsers send (Referrer-Policy: same-origin)

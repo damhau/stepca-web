@@ -196,10 +196,10 @@ def test_app_identity_type_from_the_admin_list_and_the_db(app, step_db, monkeypa
             {"subject": "stepca-web", "provisioner_id": "prov-web", "type": 1},
         ]
     }
-    monkeypatch.setattr(ca, "client", fake)
-    monkeypatch.setattr(ca, "_identity", (float("-inf"), None))
+    fake.identity_cache = (float("-inf"), None)
+    app.extensions["stepca"] = fake
     assert ca.app_identity_type() == "ADMIN"
     fake.subject, fake.provisioner_name = "step", "Admin JWK"
     assert ca.app_identity_type() == "ADMIN", "cached"
-    monkeypatch.setattr(ca, "_identity", (float("-inf"), None))
+    fake.identity_cache = (float("-inf"), None)
     assert ca.app_identity_type() == "SUPER_ADMIN"

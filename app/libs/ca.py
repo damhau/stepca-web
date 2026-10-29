@@ -4,21 +4,23 @@ from datetime import UTC, datetime
 
 import requests
 from cryptography import x509
+from flask import current_app
 
 from app.libs.cert_utils import describe_certificate, fingerprint
 from app.libs.db_step import get_active_provisioner_map, get_step_provisioners
 from app.libs.stepapi import StepCAClient
-from config import CA_FINGERPRINT, CA_URL
 
 log = logging.getLogger(__name__)
 
-# The one client shared by the whole app: one admin certificate, one decrypted key
-client = StepCAClient(CA_URL)
+
+
+def client() -> StepCAClient:
+    """The app's one CA client (built by create_app): one admin certificate, one decrypted key."""
+    return current_app.extensions["stepca"]
+
 
 # How long the app's admin type (ADMIN / SUPER_ADMIN) is cached
 IDENTITY_CACHE_SECONDS = 300
-# (fetched at, admin type). -inf, not 0: time.monotonic() counts from boot, so it can be under the cache lifetime
-_identity = (float("-inf"), None)
 
 
 def app_identity_type():
@@ -27,18 +29,19 @@ def app_identity_type():
     The Admin API lists admins with a provisioner id, but lists provisioners without one:
     the id -> name mapping comes from step-ca's database.
     """
-    global _identity
-    fetched_at, admin_type = _identity
+    ca = client()
+    # -inf at first, not 0: time.monotonic() counts from boot, so it can be under the cache lifetime
+    fetched_at, admin_type = ca.identity_cache
     if time.monotonic() - fetched_at < IDENTITY_CACHE_SECONDS:
         return admin_type
     admin_type = None
-    admins = client.list_admins()
+    admins = ca.list_admins()
     if admins:
         provisioner_names = get_active_provisioner_map(get_step_provisioners())
         for admin in admins["admins"]:
-            if admin.get("subject") == client.subject and provisioner_names.get(admin.get("provisioner_id")) == client.provisioner_name:
+            if admin.get("subject") == ca.subject and provisioner_names.get(admin.get("provisioner_id")) == ca.provisioner_name:
                 admin_type = {1: "ADMIN", 2: "SUPER_ADMIN"}.get(admin.get("type"), admin.get("type"))
-    _identity = (time.monotonic(), admin_type)
+    ca.identity_cache = (time.monotonic(), admin_type)
     return admin_type
 
 
@@ -52,10 +55,10 @@ def version_is_tested(version):
     return any(version == tested or version.startswith(tested + ".") for tested in TESTED_STEP_CA_VERSIONS)
 
 
-def check_ca_version():
+def check_ca_version(ca):
     """Log step-ca's version, with a warning when the app isn't tested with it. Run once at startup."""
     try:
-        version = client.version()["version"]
+        version = ca.version()["version"]
     except CA_ERRORS as e:
         log.warning("Cannot read step-ca's version: %s", e)
         return None
@@ -83,14 +86,14 @@ def describe_crl(der):
 
 def ca_status():
     """What step-ca reports about itself, for the status page. Each part is None when it can't be read."""
-    pinned = (CA_FINGERPRINT or "").replace(":", "").lower()
-    status = {"url": client.ca_url, "errors": []}
+    ca = client()
+    status = {"url": ca.ca_url, "errors": []}
     parts = {
-        "health": lambda: client.health().get("status"),
-        "version": lambda: client.version()["version"],
-        "roots": lambda: [describe_ca_certificate(cert, pinned) for cert in client.roots()],
-        "intermediates": lambda: [describe_ca_certificate(cert) for cert in client.intermediates()],
-        "crl": lambda: describe_crl(der) if (der := client.crl()) else None,
+        "health": lambda: ca.health().get("status"),
+        "version": lambda: ca.version()["version"],
+        "roots": lambda: [describe_ca_certificate(cert, ca.ca_fingerprint) for cert in ca.roots()],
+        "intermediates": lambda: [describe_ca_certificate(cert) for cert in ca.intermediates()],
+        "crl": lambda: describe_crl(der) if (der := ca.crl()) else None,
     }
     for name, read in parts.items():
         try:

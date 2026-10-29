@@ -215,7 +215,7 @@ def test_admin_key_is_decrypted_in_memory(tmp_path, ca_client, monkeypatch):
     public_jwk, encrypted = ca_client.generate_default_key_pair(b"provisioner-password")
     password_file = tmp_path / "password"
     password_file.write_text("provisioner-password\n")
-    monkeypatch.setattr(stepapi, "CA_ADMIN_PASSWORD_FILE", str(password_file))
+    ca_client.admin_password_file = password_file
     monkeypatch.setattr(ca_client, "public_get_provisioner_by_name", lambda name: {"key": public_jwk, "encryptedKey": encrypted})
     jwk = ca_client._admin_jwk()
     assert jwk["kid"] == public_jwk["kid"] and "d" in jwk

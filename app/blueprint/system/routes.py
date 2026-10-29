@@ -7,18 +7,7 @@ from app.blueprint.system import bp
 from app.libs import ca
 from app.libs.audit import recent_events
 from app.libs.auth.ldap_backend import ldap_transport
-from config import (
-    CA_ADMIN_PROVISIONER_NAME,
-    CA_ADMIN_SUBJECT,
-    CA_FINGERPRINT,
-    CA_ROOT,
-    CA_URL,
-    DB_HOST,
-    DB_NAME,
-    DB_PASSWORD,
-    DB_PORT,
-    DB_USER,
-)
+from app.settings import current_settings
 
 LDAP_TRANSPORTS = {
     "ldaps": "LDAPS, server certificate verified",
@@ -38,26 +27,27 @@ def config_warnings():
 def effective_settings():
     """The configuration in effect, grouped for display. Secrets are never shown."""
     config = current_app.config
+    settings = current_settings()
     return [
         (
             "Step CA database (read-only)",
             [
-                ("Host", DB_HOST),
-                ("Port", DB_PORT),
-                ("Database", DB_NAME),
-                ("User", DB_USER),
-                ("Password", "set" if DB_PASSWORD else "not set"),
+                ("Host", settings.database_host),
+                ("Port", settings.database_port),
+                ("Database", settings.database_name),
+                ("User", settings.database_user),
+                ("Password", "set" if settings.database_password else "not set"),
             ],
         ),
         (
             "Step CA",
             [
-                ("URL", CA_URL),
-                ("Root fingerprint", CA_FINGERPRINT or "not set"),
-                ("Root certificate", CA_ROOT or "downloaded from the CA and pinned with the fingerprint"),
-                ("App identity", f"{CA_ADMIN_SUBJECT} on provisioner {CA_ADMIN_PROVISIONER_NAME}"),
+                ("URL", settings.ca_url),
+                ("Root fingerprint", settings.ca_fingerprint or "not set"),
+                ("Root certificate", str(settings.ca_root) if settings.ca_root else "downloaded from the CA and pinned with the fingerprint"),
+                ("App identity", f"{settings.ca_admin_subject} on provisioner {settings.ca_admin_provisioner_name}"),
                 ("App identity type", ca.app_identity_type() or "unknown (CA unreachable or admin not found)"),
-                ("Admin provisioner key", ca.client.admin_key_source()),
+                ("Admin provisioner key", ca.client().admin_key_source()),
             ],
         ),
         (
@@ -77,6 +67,7 @@ def effective_settings():
         (
             "Application",
             [
+                ("Data directory", str(settings.data_dir.resolve())),
                 ("App database", make_url(config["SQLALCHEMY_BINDS"]["app"]).render_as_string(hide_password=True)),
                 ("Service control", "enabled" if config["SERVICE_CONTROL_ENABLED"] else "disabled"),
             ],

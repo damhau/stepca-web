@@ -8,9 +8,10 @@ from flask_talisman import Talisman
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.extensions import CONTENT_SECURITY_POLICY, csrf, db, limiter
+from app.libs.stepapi import StepCAClient
 from app.models.audit import AuditEvent  # noqa: F401  registers the model for create_all
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
-from config import CA_URL, DB_HOST, Config
+from app.settings import Settings, load_settings
 
 log = logging.getLogger(__name__)
 
@@ -44,16 +45,15 @@ def format_datetime(value):
     return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
-def create_app(config_class=Config):
-    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+def create_app(settings: Settings | None = None):
+    """The app, from `settings` or else from the environment and settings.json (app.settings)."""
+    settings = settings or load_settings()
+    logging.basicConfig(level=settings.log_level.upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     app = Flask(__name__)
-
-    app.config.from_object(config_class)
-    if not app.config.get("SECRET_KEY"):
-        raise RuntimeError('SECRET_KEY is not set. Generate one with: python -c "import secrets; print(secrets.token_hex(32))"')
-    missing = [name for name, value in (("CA_URL", CA_URL), ("DATABASE_HOST", DB_HOST)) if not value]
-    if missing:
-        raise RuntimeError(f"Missing configuration: {', '.join(missing)} (see .env.example)")
+    app.config.update(settings.flask_config())
+    app.extensions["settings"] = settings
+    # The one CA client: one admin certificate, one decrypted admin key
+    app.extensions["stepca"] = StepCAClient.from_settings(settings)
     if app.config["AUTH_BACKEND"] == "ldap":
         check_ldap_config(app.config)
 
@@ -100,7 +100,7 @@ def create_app(config_class=Config):
         # the app starts even when the CA is down
         from app.libs.ca import check_ca_version
 
-        threading.Thread(target=check_ca_version, name="ca-version-check", daemon=True).start()
+        threading.Thread(target=check_ca_version, args=(app.extensions["stepca"],), name="ca-version-check", daemon=True).start()
 
     with app.app_context():
         # Only the app's own SQLite tables: step-ca's database is never modified

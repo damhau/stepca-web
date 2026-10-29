@@ -47,7 +47,7 @@ def ca_up(ca_client, monkeypatch):
     ca_client.roots.return_value = [root]
     ca_client.intermediates.return_value = [INTERMEDIATE]
     ca_client.crl.return_value = crl(1002, 1003)
-    monkeypatch.setattr(ca, "CA_FINGERPRINT", fingerprint(root))
+    ca_client.ca_fingerprint = fingerprint(root)
     return ca_client
 
 
@@ -58,7 +58,7 @@ def test_tested_versions(version, tested):
 
 def test_untested_version_is_logged(ca_up, caplog):
     ca_up.version.return_value = {"version": "0.40.0"}
-    assert ca.check_ca_version() == "0.40.0"
+    assert ca.check_ca_version(ca_up) == "0.40.0"
     assert "tested with step-ca 0.30" in caplog.text
 
 

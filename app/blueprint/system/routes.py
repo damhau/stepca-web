@@ -4,9 +4,9 @@ from sqlalchemy.engine import make_url
 from app.auth.decorator import login_required
 from app.auth.roles import role_required
 from app.blueprint.system import bp
-from app.libs import ca
 from app.libs.audit import recent_events
 from app.libs.auth.ldap_backend import ldap_transport
+from app.services import ca, provisioners
 from app.settings import current_settings
 
 LDAP_TRANSPORTS = {
@@ -46,7 +46,7 @@ def effective_settings():
                 ("Root fingerprint", settings.ca_fingerprint or "not set"),
                 ("Root certificate", str(settings.ca_root) if settings.ca_root else "downloaded from the CA and pinned with the fingerprint"),
                 ("App identity", f"{settings.ca_admin_subject} on provisioner {settings.ca_admin_provisioner_name}"),
-                ("App identity type", ca.app_identity_type() or "unknown (CA unreachable or admin not found)"),
+                ("App identity type", provisioners.identity_type() or "unknown (CA unreachable or admin not found)"),
                 ("Admin provisioner key", ca.client().admin_key_source()),
             ],
         ),

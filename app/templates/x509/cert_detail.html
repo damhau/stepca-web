@@ -1,104 +1,78 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/page.html" %}
+{% set breadcrumb = [("Certificates", url_for("x509.all_certs"))] %}
 
-{% block title %} {{ title }} {% endblock %}
+{% block heading %}{{ view.certificate.subject }}{% endblock %}
+{% block crumb %}{{ view.certificate.serial }}{% endblock %}
 
-{% block body_class %} sidebar-mini {% endblock body_class %}
-
-{% block content %}
-{% set data = cert.data %}
-<div class="content-wrapper">
-  <div class="content-header">
-    <div class="container-fluid">
-      <div class="row mb-2">
-        <div class="col-sm-6">
-          <h1 class="m-0 text-dark">{{ data.subject }}</h1>
-        </div>
-        <div class="col-sm-6">
-          <ol class="breadcrumb float-sm-right">
-            <li class="breadcrumb-item"><a href="/">Home</a></li>
-            <li class="breadcrumb-item"><a href="{{ url_for('x509.all_certs') }}">Certificates</a></li>
-            <li class="breadcrumb-item active">{{ cert.nkey }}</li>
-          </ol>
-        </div>
-      </div>
+{% block page %}
+{% set cert = view.certificate %}
+{% set revocation = view.revocation %}
+<div class="card">
+  <div class="card-header d-flex align-items-center">
+    <h3 class="card-title mr-auto">
+      {% if view.status == "revoked" %}
+      <span class="badge badge-danger">Revoked</span>
+      {% elif view.status == "expired" %}
+      <span class="badge badge-secondary">Expired</span>
+      {% elif view.status == "not yet valid" %}
+      <span class="badge badge-info">Not yet valid</span>
+      {% else %}
+      <span class="badge badge-success">Valid</span>
+      <span class="badge {{ 'badge-danger' if view.days_left < 7 else 'badge-warning' if view.days_left < 30 else 'badge-light' }}">{{ view.days_left }} days left</span>
+      {% endif %}
+    </h3>
+    <div class="btn-group ml-2" role="group" aria-label="Download">
+      <a download href="{{ url_for('x509.download_cert', serial=cert.serial) }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> PEM</a>
+      <a download href="{{ url_for('x509.download_cert', serial=cert.serial, format='chain') }}" class="btn btn-sm btn-success"
+        title="The certificate followed by its intermediate">Chain</a>
+      <a download href="{{ url_for('x509.download_cert', serial=cert.serial, format='der') }}" class="btn btn-sm btn-success">DER</a>
     </div>
+    {% if not revocation and can("operator") %}
+    <button type="button" class="btn btn-sm btn-danger ml-2" data-toggle="modal" data-target="#revokeModal"
+      data-cert-id="{{ cert.serial }}" data-cert-subject="{{ cert.subject }}">
+      <i class="fas fa-ban"></i> Revoke
+    </button>
+    {% endif %}
   </div>
-
-  <section class="content">
-    <div class="container-fluid">
-      {% include "includes/flashes.html" %}
-      <div class="card">
-        <div class="card-header d-flex align-items-center">
-          <h3 class="card-title mr-auto">
-            {% if revocation %}
-            <span class="badge badge-danger">Revoked</span>
-            {% elif status == "expired" %}
-            <span class="badge badge-secondary">Expired</span>
-            {% elif status == "not yet valid" %}
-            <span class="badge badge-info">Not yet valid</span>
-            {% else %}
-            <span class="badge badge-success">Valid</span>
-            <span class="badge {{ 'badge-danger' if days_left < 7 else 'badge-warning' if days_left < 30 else 'badge-light' }}">{{ days_left }} days left</span>
-            {% endif %}
-          </h3>
-          <div class="btn-group ml-2" role="group" aria-label="Download">
-            <a download href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> PEM</a>
-            <a download href="{{ url_for('x509.download_cert', serial=cert.nkey, format='chain') }}" class="btn btn-sm btn-success"
-              title="The certificate followed by its intermediate">Chain</a>
-            <a download href="{{ url_for('x509.download_cert', serial=cert.nkey, format='der') }}" class="btn btn-sm btn-success">DER</a>
-          </div>
-          {% if not revocation and can("operator") %}
-          <button type="button" class="btn btn-sm btn-danger ml-2" data-toggle="modal" data-target="#revokeModal"
-            data-cert-id="{{ cert.nkey }}" data-cert-subject="{{ data.subject }}">
-            <i class="fas fa-ban"></i> Revoke
-          </button>
-          {% endif %}
-        </div>
-        <div class="card-body p-0">
-          <table class="table table-sm mb-0">
-            <tbody>
-              <tr><th class="w-25">Subject</th><td>{{ data.subject }}</td></tr>
-              <tr><th>Issuer</th><td>{{ data.issuer }}</td></tr>
-              <tr><th>Serial (decimal)</th><td><code>{{ cert.nkey }}</code></td></tr>
-              <tr><th>Serial (hex)</th><td><code>{{ data.serial }}</code></td></tr>
-              <tr><th>Valid from</th><td>{{ data.not_before | datetime }}</td></tr>
-              <tr><th>Valid to</th><td>{{ data.not_after | datetime }}</td></tr>
-              <tr><th>DNS names</th><td>{{ data.dns_names | join(", ") if data.dns_names else "—" }}</td></tr>
-              <tr><th>Key</th><td>{{ data.key_size }}{% if data.key_size is number %} bit{% endif %}</td></tr>
-              <tr><th>Issued via provisioner</th><td>{{ cert.provisioner.name or "—" }}</td></tr>
-              {% if acme_order_id %}
-              <tr><th>ACME order</th><td><a href="{{ url_for('acme.order', order_id=acme_order_id) }}"><code>{{ acme_order_id }}</code></a></td></tr>
-              {% endif %}
-              {% if revocation %}
-              <tr><th>Revoked at</th><td>{{ revocation.RevokedAt | datetime }}</td></tr>
-              <tr><th>Revocation reason</th><td>{{ revocation.Reason or reason_names.get(revocation.ReasonCode, "—") }} ({{ revocation.ReasonCode }})</td></tr>
-              {% endif %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header"><h3 class="card-title">Extensions</h3></div>
-        <div class="card-body p-0">
-          <table class="table table-sm mb-0">
-            <tbody>
-              {% for name, value, critical in extensions %}
-              <tr>
-                <th class="w-25">{{ name }}{% if critical %} <span class="badge badge-secondary">critical</span>{% endif %}</th>
-                <td class="text-break">{{ value }}</td>
-              </tr>
-              {% else %}
-              <tr><td class="text-muted">No extensions.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </section>
-  {% if can("operator") %}{% include "x509/_revoke_modal.html" %}{% endif %}
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <tbody>
+        <tr><th class="w-25">Subject</th><td>{{ cert.subject }}</td></tr>
+        <tr><th>Issuer</th><td>{{ cert.issuer }}</td></tr>
+        <tr><th>Serial (decimal)</th><td><code>{{ cert.serial }}</code></td></tr>
+        <tr><th>Serial (hex)</th><td><code>{{ cert.serial_hex }}</code></td></tr>
+        <tr><th>Valid from</th><td>{{ cert.not_before | datetime }}</td></tr>
+        <tr><th>Valid to</th><td>{{ cert.not_after | datetime }}</td></tr>
+        <tr><th>DNS names</th><td>{{ cert.dns_names | join(", ") or "—" }}</td></tr>
+        <tr><th>Key</th><td>{{ cert.key }}{% if cert.key is number %} bit{% endif %}</td></tr>
+        <tr><th>Issued via provisioner</th><td>{{ cert.provisioner.name if cert.provisioner and cert.provisioner.name else "—" }}</td></tr>
+        {% if view.acme_order_id %}
+        <tr><th>ACME order</th><td><a href="{{ url_for('acme.order', order_id=view.acme_order_id) }}"><code>{{ view.acme_order_id }}</code></a></td></tr>
+        {% endif %}
+        {% if revocation %}
+        <tr><th>Revoked at</th><td>{{ revocation.revoked_at | datetime }}</td></tr>
+        <tr><th>Revocation reason</th><td>{{ revocation.reason or reason_names.get(revocation.reason_code, "—") }} ({{ revocation.reason_code }})</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
 </div>
-{% endblock content %}
-
-{% block javascripts %}
-{% endblock javascripts %}
+<div class="card">
+  <div class="card-header"><h3 class="card-title">Extensions</h3></div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <tbody>
+        {% for name, value, critical in view.extensions %}
+        <tr>
+          <th class="w-25">{{ name }}{% if critical %} <span class="badge badge-secondary">critical</span>{% endif %}</th>
+          <td class="text-break">{{ value }}</td>
+        </tr>
+        {% else %}
+        <tr><td class="text-muted">No extensions.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% if can("operator") %}{% include "x509/_revoke_modal.html" %}{% endif %}
+{% endblock page %}

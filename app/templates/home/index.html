@@ -55,11 +55,11 @@
     {% include "includes/flashes.html" %}
     <div class="container-fluid">
       <div class="row">
-        {{ tile(active_certs, "Active Certificates", "fas fa-check-circle", "bg-success", url_for('x509.active_certs')) }}
-        {{ tile(expiring_certs, "Expiring within 30 days", "fas fa-hourglass-half", "bg-warning" if expiring_certs else "bg-light", url_for('x509.expiring_certs', days=30)) }}
-        {{ tile(acme_certs, "ACME Certificates", "fas fa-certificate", "bg-info", url_for('acme.certs')) }}
-        {{ tile(revoked_certs, "Revoked Certificates", "fas fa-ban", "bg-danger", url_for('x509.revoked_certs')) }}
-        {{ tile(total_provisioners, "Provisioners", "fas fa-key", "bg-secondary", url_for('step.provisioner')) }}
+        {{ tile(summary.active_certs, "Active Certificates", "fas fa-check-circle", "bg-success", url_for('x509.active_certs')) }}
+        {{ tile(summary.expiring_certs, "Expiring within 30 days", "fas fa-hourglass-half", "bg-warning" if summary.expiring_certs else "bg-light", url_for('x509.expiring_certs', days=30)) }}
+        {{ tile(summary.acme_certs, "ACME Certificates", "fas fa-certificate", "bg-info", url_for('acme.certs')) }}
+        {{ tile(summary.revoked_certs, "Revoked Certificates", "fas fa-ban", "bg-danger", url_for('x509.revoked_certs')) }}
+        {{ tile(summary.total_provisioners, "Provisioners", "fas fa-key", "bg-secondary", url_for('step.provisioner')) }}
       </div>
       <div class="row">
         {{ chart_card("bar-chart", "Certificates issued per provisioner (all time)") }}
@@ -70,7 +70,7 @@
 </div>
 
 <!-- Chart data: read by dashboard.js, never executed -->
-<script type="application/json" id="dashboard-data">{{ charts | tojson }}</script>
+<script type="application/json" id="dashboard-data">{{ summary.charts | tojson }}</script>
 
 {% endblock content %}
 

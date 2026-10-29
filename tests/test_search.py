@@ -35,11 +35,11 @@ def test_hex_serials_as_people_paste_them(text, normalised):
 def test_finds(populated, query, kind, expected):
     found = getattr(search.search(query), kind)
     keys = {
-        "certificates": lambda c: c["nkey"],
+        "certificates": lambda c: c.serial,
         "acme_accounts": lambda a: a.id,
         "acme_orders": lambda o: o.id,
-        "provisioners": lambda p: p["name"],
-        "admins": lambda a: a["subject"],
+        "provisioners": lambda p: p.name,
+        "admins": lambda row: row[0].subject,
     }
     assert [keys[kind](item) for item in found] == expected
 

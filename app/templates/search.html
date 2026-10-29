@@ -27,10 +27,10 @@
 <tbody>
   {% for cert in results.certificates %}
   <tr>
-    <td><a href="{{ url_for('x509.cert_detail', serial=cert.nkey) }}"><code>{{ cert.nkey }}</code></a></td>
-    <td>{{ cert.data.subject or "—" }}</td>
-    <td>{{ cert.data.dns_names | join(", ") if cert.data.dns_names else "—" }}</td>
-    <td>{{ cert.data.not_after | datetime }}</td>
+    <td><a href="{{ url_for('x509.cert_detail', serial=cert.serial) }}"><code>{{ cert.serial }}</code></a></td>
+    <td>{{ cert.subject or "—" }}</td>
+    <td>{{ cert.dns_names | join(", ") or "—" }}</td>
+    <td>{{ cert.not_after | datetime }}</td>
   </tr>
   {% endfor %}
 </tbody>
@@ -86,11 +86,11 @@
 {% call section("Admins", "admins", results.admins) %}
 <thead><tr><th>Subject</th><th>Provisioner</th><th>Type</th></tr></thead>
 <tbody>
-  {% for admin in results.admins %}
+  {% for admin, provisioner_name in results.admins %}
   <tr>
     <td><a href="{{ url_for('step.admins') }}">{{ admin.subject }}</a></td>
-    <td>{{ admin.provisioner }}</td>
-    <td>{{ {1: "ADMIN", 2: "SUPER_ADMIN"}.get(admin.type, admin.type) }}</td>
+    <td>{{ provisioner_name or "—" }}</td>
+    <td>{{ admin.type }}</td>
   </tr>
   {% endfor %}
 </tbody>

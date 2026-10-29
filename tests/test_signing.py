@@ -13,9 +13,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
 from app.libs.cert_utils import describe_csr
-from app.libs.stepapi import SignError, StepCAClient
+from app.stepca.client import SignError, StepCAClient
 from tests.conftest import make_cert
-from tests.test_stepapi import CA_URL, response
+from tests.test_ca_client import CA_URL, response
 
 
 def make_csr(common_name="web.test", sans=("web.test",), ips=()):

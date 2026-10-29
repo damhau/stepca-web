@@ -7,11 +7,10 @@ from flask import abort, current_app, flash, jsonify, make_response, redirect, r
 from app.auth.decorator import login_required
 from app.auth.roles import role_required
 from app.blueprint.step import bp
-from app.libs import ca
 from app.libs.audit import audit
-from app.libs.db_step import get_active_provisioner_map, get_admin_created_dates, get_step_provisioners
 from app.libs.provisioners import ACME_CHALLENGES, durations_from_form
 from app.libs.provisioners import edit_provisioner as edit_provisioner_record
+from app.services import ca, provisioners
 
 
 @bp.route("/provisioners", methods=["GET", "POST"])
@@ -147,13 +146,8 @@ def delete_provisioner(name):
     return redirect(url_for("step.provisioner"))
 
 
-def admins_manageable():
-    """Only a SUPER_ADMIN may change admins on step-ca: with a dedicated ADMIN identity they are read-only."""
-    return ca.app_identity_type() == "SUPER_ADMIN"
-
-
 def refuse_unless_admins_manageable():
-    if admins_manageable():
+    if provisioners.admins_manageable():
         return None
     flash("The app's identity on the CA is not a SUPER_ADMIN: manage admins with `step ca admin`.", "danger")
     return redirect(url_for("step.admins"))
@@ -167,9 +161,12 @@ def admins():
     if request.method == "POST":
         if refused := refuse_unless_admins_manageable():
             return refused
-        subject = request.form.get("subject")
-        provisioner_id = request.form.get("provisioner")
-        admin_type = int(request.form.get("type"))
+        subject = request.form.get("subject", "")
+        provisioner_id = request.form.get("provisioner", "")
+        admin_type = {"1": 1, "2": 2}.get(request.form.get("type", ""))
+        if not subject or admin_type is None:
+            flash("An admin needs a subject and a type.", "danger")
+            return redirect(url_for("step.admins"))
 
         resp = ca.client().create_admin(subject=subject, provisioner=provisioner_id, admin_type=admin_type)
         audit("create_admin", subject, success=bool(resp), detail=f"provisioner={provisioner_id} type={admin_type}")
@@ -180,18 +177,15 @@ def admins():
             flash(f"Failed to create admin '{subject}'.", "danger")
         return redirect(url_for("step.admins"))
 
-    admins = ca.client().list_admins()
-    if admins is None:
+    listed = ca.client().list_admins()
+    if listed is None:
         flash("Could not load the admins from the CA.", "danger")
-    provisioner_map = get_active_provisioner_map(get_step_provisioners())
-
     return render_template(
         "step/admin.html",
         title="StepCA Admins",
-        admins=(admins or {}).get("admins", []),
-        provisioners=provisioner_map,
-        created_dates=get_admin_created_dates(),
-        manage_admins=admins_manageable(),
+        admins=provisioners.admin_rows((listed or {}).get("admins", [])),
+        provisioners=provisioners.names_by_id(),
+        manage_admins=provisioners.admins_manageable(),
     )
 
 

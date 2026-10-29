@@ -1,4 +1,5 @@
 {% extends "layouts/base.html" %}
+{% from "includes/macros.html" import date_cell %}
 
 {% block title %} {{ title }} {% endblock %}
 
@@ -43,25 +44,26 @@
             </tr>
           </thead>
           <tbody>
-            {% for r in revoked %}
+            {% for row in revoked %}
+            {% set revocation = row.revocation %}
             <tr>
               <td>
-                {% if r.cert %}
-                <a href="{{ url_for('x509.cert_detail', serial=r.nkey) }}"><code>{{ r.nkey }}</code></a>
+                {% if row.certificate %}
+                <a href="{{ url_for('x509.cert_detail', serial=revocation.serial) }}"><code>{{ revocation.serial }}</code></a>
                 {% else %}
-                <code>{{ r.nkey }}</code>
+                <code>{{ revocation.serial }}</code>
                 {% endif %}
-                {% if r.data.misdirected_serial %}
-                <br><a class="badge badge-warning" href="{{ url_for('x509.cert_detail', serial=r.data.misdirected_serial) }}"
-                  title="Revoked by an older version of this UI with a wrong serial. Certificate {{ r.data.misdirected_serial }} is still valid: revoke it again from its page.">
-                  Ineffective: certificate {{ r.data.misdirected_serial }} is still valid
+                {% if row.misdirected_serial %}
+                <br><a class="badge badge-warning" href="{{ url_for('x509.cert_detail', serial=row.misdirected_serial) }}"
+                  title="Revoked by an older version of this UI with a wrong serial. Certificate {{ row.misdirected_serial }} is still valid: revoke it again from its page.">
+                  Ineffective: certificate {{ row.misdirected_serial }} is still valid
                 </a>
                 {% endif %}
               </td>
-              <td>{{ r.cert.subject if r.cert else "—" }}</td>
-              <td data-sort-value="{{ r.data.RevokedAt }}">{{ r.data.RevokedAt | datetime }}</td>
-              <td>{{ r.data.Reason or reason_names.get(r.data.ReasonCode, "—") }}{% if r.data.ReasonCode is not none %} ({{ r.data.ReasonCode }}){% endif %}</td>
-              <td>{{ r.data.provisioner_name or "—" }}</td>
+              <td>{{ row.certificate.subject if row.certificate else "—" }}</td>
+              {{ date_cell(revocation.revoked_at) }}
+              <td>{{ revocation.reason or reason_names.get(revocation.reason_code, "—") }}{% if revocation.reason_code is not none %} ({{ revocation.reason_code }}){% endif %}</td>
+              <td>{{ row.provisioner_name or "—" }}</td>
             </tr>
             {% else %}
             <tr><td colspan="5" class="text-muted">No revoked certificates.</td></tr>

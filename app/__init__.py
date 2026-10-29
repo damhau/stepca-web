@@ -8,10 +8,10 @@ from flask_talisman import Talisman
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.extensions import CONTENT_SECURITY_POLICY, csrf, db, limiter
-from app.libs.stepapi import StepCAClient
 from app.models.audit import AuditEvent  # noqa: F401  registers the model for create_all
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
 from app.settings import Settings, load_settings
+from app.stepca.client import StepCAClient
 
 log = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ def create_app(settings: Settings | None = None):
     if not app.testing:
         # Logs step-ca's version, and warns when it isn't one the app is tested with. In the background:
         # the app starts even when the CA is down
-        from app.libs.ca import check_ca_version
+        from app.services.ca import check_ca_version
 
         threading.Thread(target=check_ca_version, args=(app.extensions["stepca"],), name="ca-version-check", daemon=True).start()
 

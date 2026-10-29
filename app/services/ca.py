@@ -1,5 +1,6 @@
+"""The CA: the app's one client, step-ca's version and what it reports about itself."""
+
 import logging
-import time
 from datetime import UTC, datetime
 
 import requests
@@ -7,8 +8,7 @@ from cryptography import x509
 from flask import current_app
 
 from app.libs.cert_utils import describe_certificate, fingerprint
-from app.libs.db_step import get_active_provisioner_map, get_step_provisioners
-from app.libs.stepapi import StepCAClient
+from app.stepca.client import StepCAClient
 
 log = logging.getLogger(__name__)
 
@@ -17,32 +17,6 @@ log = logging.getLogger(__name__)
 def client() -> StepCAClient:
     """The app's one CA client (built by create_app): one admin certificate, one decrypted key."""
     return current_app.extensions["stepca"]
-
-
-# How long the app's admin type (ADMIN / SUPER_ADMIN) is cached
-IDENTITY_CACHE_SECONDS = 300
-
-
-def app_identity_type():
-    """'SUPER_ADMIN' or 'ADMIN' for the app's own admin on the CA, None if unknown. Cached.
-
-    The Admin API lists admins with a provisioner id, but lists provisioners without one:
-    the id -> name mapping comes from step-ca's database.
-    """
-    ca = client()
-    # -inf at first, not 0: time.monotonic() counts from boot, so it can be under the cache lifetime
-    fetched_at, admin_type = ca.identity_cache
-    if time.monotonic() - fetched_at < IDENTITY_CACHE_SECONDS:
-        return admin_type
-    admin_type = None
-    admins = ca.list_admins()
-    if admins:
-        provisioner_names = get_active_provisioner_map(get_step_provisioners())
-        for admin in admins["admins"]:
-            if admin.get("subject") == ca.subject and provisioner_names.get(admin.get("provisioner_id")) == ca.provisioner_name:
-                admin_type = {1: "ADMIN", 2: "SUPER_ADMIN"}.get(admin.get("type"), admin.get("type"))
-    ca.identity_cache = (time.monotonic(), admin_type)
-    return admin_type
 
 
 # step-ca versions (major.minor) the end-to-end tests run against: tests/e2e/compose.yml

@@ -1,1 +1,2 @@
-"""Everything that knows how step-ca stores its data (store.py) and the records it returns (records.py)."""
+"""Everything that knows how step-ca works: its API (client.py), its database (store.py) and the records
+the store returns (records.py)."""

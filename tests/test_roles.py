@@ -186,7 +186,7 @@ def test_admins_are_read_only_with_an_admin_identity(client, ca_client):
 
 def test_app_identity_type_from_the_admin_list_and_the_db(app, step_db, monkeypatch):
     """The Admin API gives admins a provisioner id; provisioner names come from step-ca's database."""
-    from app.libs import ca
+    from app.services import provisioners
 
     step_db.add_provisioner("prov-web", "stepca-web")
     fake = mock.MagicMock(subject="stepca-web", provisioner_name="stepca-web")
@@ -198,8 +198,8 @@ def test_app_identity_type_from_the_admin_list_and_the_db(app, step_db, monkeypa
     }
     fake.identity_cache = (float("-inf"), None)
     app.extensions["stepca"] = fake
-    assert ca.app_identity_type() == "ADMIN"
+    assert provisioners.identity_type() == "ADMIN"
     fake.subject, fake.provisioner_name = "step", "Admin JWK"
-    assert ca.app_identity_type() == "ADMIN", "cached"
+    assert provisioners.identity_type() == "ADMIN", "cached"
     fake.identity_cache = (float("-inf"), None)
-    assert ca.app_identity_type() == "SUPER_ADMIN"
+    assert provisioners.identity_type() == "SUPER_ADMIN"

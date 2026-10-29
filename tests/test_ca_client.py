@@ -10,8 +10,9 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from jwcrypto import jwk as jwcrypto_jwk
 
-from app.libs import cert_utils, stepapi
-from app.libs.stepapi import CAToken, StepCAClient
+from app.libs import cert_utils
+from app.stepca import client as stepapi
+from app.stepca.client import CAToken, StepCAClient
 from tests.conftest import make_cert
 
 CA_URL = "https://ca.test:9000"

@@ -6,7 +6,7 @@ import pytest
 from werkzeug.datastructures import MultiDict
 
 from app.libs.provisioners import duration_seconds, edit_provisioner
-from app.libs.stepapi import StepCAClient
+from app.stepca.client import StepCAClient
 
 ACME = {
     "id": "prov-1",

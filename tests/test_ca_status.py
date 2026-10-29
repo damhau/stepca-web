@@ -7,8 +7,8 @@ import requests
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 
-from app.libs import ca
 from app.libs.cert_utils import certificate_extensions, fingerprint
+from app.services import ca
 from tests.conftest import CA_KEY, CA_NAME
 
 NOW = datetime.datetime.now(datetime.UTC)

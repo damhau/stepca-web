@@ -1,23 +1,8 @@
-from dataclasses import asdict, is_dataclass
-from datetime import datetime
-
 from flask import jsonify
 
 from app.blueprint.acme import api_bp
+from app.blueprint.api_json import as_json
 from app.services import acme
-
-
-def as_json(value):
-    """Records as JSON-ready data, with dates in ISO 8601."""
-    if is_dataclass(value):
-        return as_json(asdict(value))
-    if isinstance(value, dict):
-        return {key: as_json(item) for key, item in value.items()}
-    if isinstance(value, list | tuple):
-        return [as_json(item) for item in value]
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return value
 
 
 @api_bp.route("/accounts")

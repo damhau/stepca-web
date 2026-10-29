@@ -3,8 +3,7 @@
 import re
 from dataclasses import dataclass, field
 
-from app.libs.db_step import get_active_provisioner_map, get_step_admins, get_step_provisioners, provisioner_type
-from app.libs.db_x509 import get_x509_certs
+from app.services import provisioners as provisioner_service
 from app.stepca import store
 
 # Results shown per kind; the page says when there are more
@@ -51,29 +50,16 @@ def search(query):
         return results
     hex_needle = hex_serial(needle)
 
-    certificates = []
-    for cert in get_x509_certs():
-        data = cert["data"]
-        if _matches(needle, cert["nkey"], data.get("subject"), *(data.get("dns_names") or [])) or (
-            hex_needle and hex_needle in (data.get("serial") or "")
-        ):
-            certificates.append(cert)
+    certificates = [
+        cert
+        for cert in store.certificates()
+        if _matches(needle, cert.serial, cert.subject, *cert.dns_names) or (hex_needle and hex_needle in cert.serial_hex)
+    ]
     _limited(results, "certificates", certificates)
 
     _limited(results, "acme_accounts", [a for a in store.acme_accounts() if _matches(needle, a.id, *a.contact)])
     _limited(results, "acme_orders", [o for o in store.acme_orders() if _matches(needle, o.id, *(i.value for i in o.identifiers))])
 
-    provisioners = get_step_provisioners()
-    active = get_active_provisioner_map(provisioners)
-    _limited(
-        results,
-        "provisioners",
-        [
-            {"name": p["data"]["name"], "type": provisioner_type(p)}
-            for p in provisioners
-            if p["data"].get("id") in active and _matches(needle, p["data"]["name"])
-        ],
-    )
-    _limited(results, "admins", [admin for admin in get_step_admins() if _matches(needle, admin["subject"])])
+    _limited(results, "provisioners", [p for p in store.provisioners() if _matches(needle, p.name)])
+    _limited(results, "admins", [(admin, name) for admin, name in provisioner_service.search_admins() if _matches(needle, admin.subject)])
     return results
-

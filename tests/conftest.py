@@ -110,7 +110,7 @@ def ca_client(app, monkeypatch):
     app.extensions["stepca"] = fake
     # The app's identity on the CA; tests change it with fake.identity = "ADMIN"
     fake.identity = "SUPER_ADMIN"
-    monkeypatch.setattr("app.libs.ca.app_identity_type", lambda: fake.identity)
+    monkeypatch.setattr("app.services.provisioners.identity_type", lambda: fake.identity)
     return fake
 
 

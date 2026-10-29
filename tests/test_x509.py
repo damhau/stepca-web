@@ -2,7 +2,8 @@
 
 from cryptography import x509
 
-from app.libs import db_x509
+from app.services import certificates
+from app.stepca import store
 from tests.conftest import csrf_token
 
 SERIAL = 119960802063269571811733802872440608485  # a typical 128-bit step-ca serial
@@ -10,10 +11,10 @@ SERIAL = 119960802063269571811733802872440608485  # a typical 128-bit step-ca se
 
 def test_certificates_are_identified_by_their_decimal_serial(client, step_db):
     step_db.add_cert(SERIAL, "web.test")
-    certs = db_x509.get_x509_certs()
-    assert [c["nkey"] for c in certs] == [str(SERIAL)]
-    assert certs[0]["data"]["subject"] == "CN=web.test"
-    assert certs[0]["provisioner"]["name"] == "Admin JWK"
+    certs = store.certificates()
+    assert [c.serial for c in certs] == [str(SERIAL)]
+    assert certs[0].subject == "CN=web.test"
+    assert certs[0].provisioner.name == "Admin JWK"
     assert str(SERIAL) in client.get("/x509/active").get_data(as_text=True)
 
 
@@ -73,11 +74,10 @@ def test_revoked_certificates_are_not_active(client, step_db):
     step_db.add_cert(SERIAL, "revoked.test")
     step_db.add_cert(42, "still-valid.test")
     step_db.add_revocation(SERIAL)
-    active = [c["nkey"] for c in db_x509.get_x509_active_certs()]
-    assert active == ["42"]
-    revoked = db_x509.get_revoked_x509_with_cert_info()
-    assert revoked[0]["cert"]["subject"] == "CN=revoked.test"
-    assert revoked[0]["data"]["provisioner_name"] == "Admin JWK"
+    assert [c.serial for c in certificates.active()] == ["42"]
+    (row,) = certificates.revoked()
+    assert row.certificate.subject == "CN=revoked.test"
+    assert row.provisioner_name == "Admin JWK"
 
 
 def test_expired_and_future_certificates_are_not_active(step_db):
@@ -87,31 +87,31 @@ def test_expired_and_future_certificates_are_not_active(step_db):
     step_db.add_cert(1, "expired.test", days_valid=1, not_before=now - datetime.timedelta(days=5))
     step_db.add_cert(2, "future.test", not_before=now + datetime.timedelta(days=5))
     step_db.add_cert(3, "valid.test")
-    assert [c["nkey"] for c in db_x509.get_x509_active_certs()] == ["3"]
+    assert [c.serial for c in certificates.active()] == ["3"]
 
 
 def test_misdirected_revocations_are_flagged(client, step_db):
     """Revocations made by the old UI point at the hex of the ASCII serial: flag them."""
     step_db.add_cert(SERIAL, "victim.test")
     step_db.add_revocation(str(SERIAL).encode().hex())
-    revoked = db_x509.get_revoked_x509_with_cert_info()
-    assert revoked[0]["data"]["misdirected_serial"] == str(SERIAL)
-    assert [c["nkey"] for c in db_x509.get_x509_active_certs()] == [str(SERIAL)]
+    (row,) = certificates.revoked()
+    assert row.misdirected_serial == str(SERIAL)
+    assert [c.serial for c in certificates.active()] == [str(SERIAL)]
     assert f"Ineffective: certificate {SERIAL} is still valid" in client.get("/x509/revoked").get_data(as_text=True)
 
 
 def test_certificate_without_metadata_is_still_listed(step_db):
     step_db.add_cert(7, "no-metadata.test", provisioner=None)
-    cert = db_x509.get_x509_certs()[0]
-    assert cert["data"]["subject"] == "CN=no-metadata.test"
-    assert cert["provisioner"] == {}
+    (cert,) = store.certificates()
+    assert cert.subject == "CN=no-metadata.test"
+    assert cert.provisioner is None
 
 
 def test_lookup_by_id(step_db):
     step_db.add_cert(SERIAL)
-    assert db_x509.get_x509_certs_by_id(str(SERIAL))["nkey"] == str(SERIAL)
-    assert db_x509.get_x509_certs_by_id("999") is None
-    assert db_x509.get_x509_certs_by_id("not-a-serial") is None
+    assert store.certificate(str(SERIAL)).serial == str(SERIAL)
+    assert store.certificate("999") is None
+    assert certificates.view("not-a-serial") is None and not certificates.exists("not-a-serial")
 
 
 def test_download_returns_the_stored_certificate(client, step_db):
@@ -131,5 +131,5 @@ def test_download_of_unknown_serial_redirects(client, step_db):
 def test_api_returns_one_certificate(client, step_db):
     step_db.add_cert(SERIAL, "api.test")
     data = client.get(f"/api/x509/certs/{SERIAL}").get_json()
-    assert data["nkey"] == str(SERIAL)
+    assert data["serial"] == str(SERIAL) and data["subject"] == "CN=api.test"
     assert client.get("/api/x509/certs/999").status_code == 404

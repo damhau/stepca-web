@@ -61,14 +61,14 @@
             {% for admin in admins %}
             <tr>
               <td>{{ admin.subject or "—" }}</td>
-              <td>{{ provisioners.get(admin.provisioner_id, admin.provisioner_id) or "—" }}</td>
-              <td>{{ {1: "ADMIN", 2: "SUPER_ADMIN"}.get(admin.type, admin.type) }}</td>
-              <td>{{ (admin.get("created_at", {}).get("seconds") or created_dates.get(admin.id)) | datetime }}</td>
+              <td>{{ admin.provisioner_name or admin.provisioner_id or "—" }}</td>
+              <td>{{ admin.type }}</td>
+              <td>{{ admin.created_at | datetime }}</td>
               <td><code>{{ admin.id }}</code></td>
               <td>
                 {% if manage %}
                 <button class="btn btn-sm btn-info" data-toggle="modal" data-target="#editAdminModal"
-                  data-admin='{{ admin | tojson }}' data-provisioner-name="{{ provisioners.get(admin.provisioner_id, '') }}"
+                  data-admin='{{ admin.raw | tojson }}' data-provisioner-name="{{ admin.provisioner_name or '' }}"
                   aria-label="Change the admin's type">
                   <i class="fas fa-edit"></i>
                 </button>

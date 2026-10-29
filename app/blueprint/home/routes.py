@@ -1,11 +1,12 @@
 from collections import Counter
 
-from flask import render_template
+from flask import render_template, request
 
 from app.auth.decorator import login_required
 from app.blueprint.home import bp
 from app.libs.db_step import get_active_provisioner_map, get_step_provisioners
 from app.libs.db_x509 import get_expiring_certs, get_revoked_x509_certs, get_x509_active_certs, get_x509_certs
+from app.services import search as search_service
 from app.stepca import store
 
 
@@ -34,3 +35,10 @@ def index():
         total_provisioners=len(active_provisioners),
         charts=charts,
     )
+
+
+@bp.route("/search")
+@login_required
+def search():
+    query = request.args.get("q", "")
+    return render_template("search.html", title="Search", results=search_service.search(query))

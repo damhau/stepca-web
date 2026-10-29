@@ -84,7 +84,7 @@
       <div class="card">
         <div class="card-header d-flex align-items-center">
           <h3 class="card-title mr-auto">Root certificates</h3>
-          {% if roots %}<a href="{{ url_for('step.ca_certificates', kind='roots') }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> roots.pem</a>{% endif %}
+          {% if roots %}<a download href="{{ url_for('step.ca_certificates', kind='roots') }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> roots.pem</a>{% endif %}
         </div>
         <div class="card-body p-0">{{ certificate_table(roots or [], "roots") }}</div>
       </div>
@@ -92,7 +92,7 @@
       <div class="card">
         <div class="card-header d-flex align-items-center">
           <h3 class="card-title mr-auto">Intermediate certificates</h3>
-          {% if intermediates %}<a href="{{ url_for('step.ca_certificates', kind='intermediates') }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> intermediates.pem</a>{% endif %}
+          {% if intermediates %}<a download href="{{ url_for('step.ca_certificates', kind='intermediates') }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> intermediates.pem</a>{% endif %}
         </div>
         <div class="card-body p-0">{{ certificate_table(intermediates or [], "intermediates") }}</div>
       </div>
@@ -101,8 +101,8 @@
         <div class="card-header d-flex align-items-center">
           <h3 class="card-title mr-auto">Certificate revocation list</h3>
           {% if crl %}
-          <a href="{{ url_for('step.ca_crl') }}" class="btn btn-sm btn-success ml-2"><i class="fas fa-download"></i> DER</a>
-          <a href="{{ url_for('step.ca_crl', pem='') }}" class="btn btn-sm btn-success ml-2"><i class="fas fa-download"></i> PEM</a>
+          <a download href="{{ url_for('step.ca_crl') }}" class="btn btn-sm btn-success ml-2"><i class="fas fa-download"></i> DER</a>
+          <a download href="{{ url_for('step.ca_crl', pem='') }}" class="btn btn-sm btn-success ml-2"><i class="fas fa-download"></i> PEM</a>
           {% endif %}
         </div>
         <div class="card-body {{ 'p-0' if crl else '' }}">

@@ -38,10 +38,15 @@
       button.className = "btn btn-sm btn-outline-secondary ml-1";
       button.textContent = label;
     }
+    const exportButton = document.createElement("button");
+    exportButton.type = "button";
+    exportButton.className = "btn btn-sm btn-outline-secondary ml-auto";
+    exportButton.textContent = "Export CSV";
+    exportButton.title = "The rows that match the search, in their current order";
     const top = document.createElement("div");
     top.className = "d-flex align-items-center p-2";
-    search.style.maxWidth = "320px";
-    top.append(search);
+    search.classList.add("table-search");
+    top.append(search, exportButton);
     const bottom = document.createElement("div");
     bottom.className = "d-flex align-items-center justify-content-end p-2";
     bottom.append(info, prev, next);
@@ -85,6 +90,28 @@
         applyFilterAndSort();
       });
     });
+    // CSV of the matching rows, every page, without the action columns
+    const headers = Array.from(table.tHead ? table.tHead.rows[0].cells : []);
+    const exported = headers.map((th, i) => (th.hasAttribute("data-no-sort") || th.hasAttribute("data-no-export") ? -1 : i)).filter(i => i >= 0);
+    function csvCell(text) {
+      let value = text.replace(/\s+/g, " ").trim();
+      // A spreadsheet runs a cell that starts with =, +, -, @ or a tab as a formula
+      if (/^[=+\-@\t\r]/.test(value)) value = "'" + value;
+      return /[",;\n]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value;
+    }
+    exportButton.addEventListener("click", () => {
+      const lines = [exported.map(i => csvCell(headers[i].textContent))];
+      filtered.forEach(r => lines.push(exported.map(i => csvCell(r.cells[i] ? r.cells[i].textContent : ""))));
+      // The byte order mark makes spreadsheets read the file as UTF-8
+      const blob = new Blob(["\ufeff" + lines.map(line => line.join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      const name = document.title.replace(/^\s*StepCA Admin - /, "").trim().replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+      link.download = (name || "export") + ".csv";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+
     search.addEventListener("input", () => { page = 0; applyFilterAndSort(); });
     prev.addEventListener("click", () => { page -= 1; render(); });
     next.addEventListener("click", () => { page += 1; render(); });

@@ -81,7 +81,7 @@
                   <i class="fas fa-trash"></i>
                 </button>
                 {% endif %}
-                <a href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success" aria-label="Download the certificate">
+                <a download href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success" aria-label="Download the certificate">
                   <i class="fas fa-download"></i>
                 </a>
               </td>

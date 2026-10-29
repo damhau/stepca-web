@@ -9,6 +9,16 @@
     </li>
   </ul>
 
+  <form class="form-inline ml-3" method="get" action="{{ url_for('home.search') }}" role="search">
+    <div class="input-group input-group-sm">
+      <input class="form-control form-control-navbar" type="search" name="q" placeholder="Serial, name, contact…" aria-label="Search"
+        value="{{ request.args.get('q', '') if request.endpoint == 'home.search' else '' }}" minlength="2">
+      <div class="input-group-append">
+        <button class="btn btn-navbar" type="submit" aria-label="Search"><i class="fas fa-search"></i></button>
+      </div>
+    </div>
+  </form>
+
   <ul class="navbar-nav ml-auto">
     <li class="nav-item">
       <span class="nav-link text-muted"><i class="fas fa-user mr-1"></i>{{ session.user_id }} ({{ current_role }})</span>

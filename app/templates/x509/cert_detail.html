@@ -42,10 +42,10 @@
             {% endif %}
           </h3>
           <div class="btn-group ml-2" role="group" aria-label="Download">
-            <a href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> PEM</a>
-            <a href="{{ url_for('x509.download_cert', serial=cert.nkey, format='chain') }}" class="btn btn-sm btn-success"
+            <a download href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> PEM</a>
+            <a download href="{{ url_for('x509.download_cert', serial=cert.nkey, format='chain') }}" class="btn btn-sm btn-success"
               title="The certificate followed by its intermediate">Chain</a>
-            <a href="{{ url_for('x509.download_cert', serial=cert.nkey, format='der') }}" class="btn btn-sm btn-success">DER</a>
+            <a download href="{{ url_for('x509.download_cert', serial=cert.nkey, format='der') }}" class="btn btn-sm btn-success">DER</a>
           </div>
           {% if not revocation and can("operator") %}
           <button type="button" class="btn btn-sm btn-danger ml-2" data-toggle="modal" data-target="#revokeModal"

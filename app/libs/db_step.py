@@ -76,3 +76,18 @@ def get_admin_created_dates():
         except (ValueError, KeyError) as e:
             log.warning("Cannot parse admin: %s", e)
     return dates
+
+
+def get_step_admins():
+    """Admins that aren't deleted, from step-ca's admins table: subject, provisioner name and type."""
+    names = get_active_provisioner_map(get_step_provisioners())
+    admins = []
+    for row in StepAdmin.query.all():
+        try:
+            data = json.loads(bytes(row.nvalue))
+        except ValueError as e:
+            log.warning("Cannot parse admin: %s", e)
+            continue
+        if data.get("deletedAt", "0001-01-01T00:00:00Z").startswith("0001-01-01"):
+            admins.append({"subject": data.get("subject", ""), "provisioner": names.get(data.get("provisionerID"), "—"), "type": data.get("type")})
+    return admins

@@ -1,7 +1,6 @@
-"""Roles (viewer / operator / admin), the audit log, expiry, service control and the config page."""
+"""Roles (viewer / operator / admin), the audit log, service control and the settings page."""
 
-import datetime
-import re
+import json
 from unittest import mock
 
 import pytest
@@ -9,54 +8,19 @@ import pytest
 from app.auth.roles import resolve_role
 from app.libs.auth.ldap_backend import LDAPAuthBackend
 from app.models.audit import AuditEvent
-from tests.conftest import csrf_token
-
-ADMIN_POSTS = [
-    "/step/provisioners",
-    "/step/provisioner/Admin%20JWK/delete",
-    "/step/admins",
-    "/step/admin/adm-1/update",
-    "/step/admin/adm-1/delete",
-]
-OPERATOR_POSTS = ["/x509/sign", "/x509/revoke"]
+from tests.conftest import PASSWORD, ApiClient
 
 
-def test_viewer_cannot_change_anything(login_as, ca_client):
-    viewer = login_as("viewer")
-    token = csrf_token(viewer)
-    for path in ADMIN_POSTS + OPERATOR_POSTS:
-        assert viewer.post(path, data={"csrf_token": token, "type": "1", "cert_id": "1"}).status_code == 403, path
-    assert not ca_client.method_calls
+@pytest.mark.parametrize("path", ["/api/v1/settings", "/api/v1/audit"])
+def test_system_pages_are_for_admins(api_as, path):
+    assert api_as("viewer").get(path).status_code == 403
+    assert api_as("operator").get(path).status_code == 403
+    assert api_as("admin").get(path).status_code == 200
 
 
-def test_operator_can_sign_and_revoke_only(login_as, ca_client, step_db):
-    step_db.add_cert(42)
-    operator = login_as("operator")
-    token = csrf_token(operator)
-    for path in ADMIN_POSTS:
-        assert operator.post(path, data={"csrf_token": token, "type": "1"}).status_code == 403, path
-    assert operator.post("/x509/revoke", data={"csrf_token": token, "cert_id": "42", "passphrase": "pw"}).status_code == 302
-    ca_client.revoke.assert_called_once()
-
-
-@pytest.mark.parametrize("path", ["/system/config", "/system/audit"])
-def test_system_pages_are_for_admins(login_as, path):
-    assert login_as("viewer").get(path).status_code == 403
-    assert login_as("operator").get(path).status_code == 403
-    assert login_as("admin").get(path).status_code == 200
-
-
-def test_controls_follow_the_role(login_as, step_db):
-    step_db.add_cert(42)
-    pages = {
-        role: (login_as(role).get("/x509/active").get_data(as_text=True), login_as(role).get("/step/provisioners").get_data(as_text=True))
-        for role in ("viewer", "operator", "admin")
-    }
-    assert "Submit CSR" not in pages["viewer"][0] and 'data-target="#revokeModal"' not in pages["viewer"][0]
-    assert "Submit CSR" in pages["operator"][0] and 'data-target="#revokeModal"' in pages["operator"][0]
-    assert "Add Provisioner" not in pages["operator"][1]
-    assert "Add Provisioner" in pages["admin"][1]
-    assert "Audit Log" in pages["admin"][1] and "Audit Log" not in pages["operator"][1]
+@pytest.mark.parametrize("role", ["viewer", "operator", "admin"])
+def test_the_session_says_the_role(api_as, role):
+    assert api_as(role).get("/api/v1/session").get_json()["role"] == role
 
 
 class TestResolveRole:
@@ -86,105 +50,70 @@ class TestResolveRole:
         assert resolve_role(user, self.config) == "operator"
 
 
-def test_user_without_role_cannot_log_in(app):
+def test_user_without_role_cannot_sign_in(app):
     app.config["DEFAULT_ROLE"] = "none"
-    client = app.test_client()
-    import json
-
-    users = json.load(open(app.config["LOCAL_USERS_FILE"]))
+    with open(app.config["LOCAL_USERS_FILE"]) as f:
+        users = json.load(f)
     users["norole"] = {"password_hash": users["admin"]["password_hash"]}
-    json.dump(users, open(app.config["LOCAL_USERS_FILE"], "w"))
-    response = client.post("/auth/login", data={"username": "norole", "password": "testpw", "csrf_token": csrf_token(client)})
-    assert response.status_code == 200
-    assert client.get("/").status_code == 302
+    with open(app.config["LOCAL_USERS_FILE"], "w") as f:
+        json.dump(users, f)
+    api = ApiClient(app)
+    assert api.post("/api/v1/session", json={"username": "norole", "password": PASSWORD}).status_code == 401
+    assert api.get("/api/v1/session").get_json()["authenticated"] is False
+    assert AuditEvent.query.one().detail == "no role"
 
 
-def test_actions_are_audited(client, ca_client, step_db):
+def test_actions_are_audited(api, ca_client, step_db):
+    from app.stepca.client import CAError
+
     step_db.add_cert(42)
-    token = csrf_token(client)
-    client.post("/x509/revoke", data={"csrf_token": token, "cert_id": "42", "passphrase": "pw", "reason": "4"})
-    ca_client.delete_provisioner.return_value = False
-    client.post("/step/provisioner/old/delete", data={"csrf_token": token})
+    api.post("/api/v1/certificates/42/revoke", json={"reason_code": 4})
+    ca_client.delete_provisioner.side_effect = CAError("in use")
+    api.delete("/api/v1/provisioners/old")
     events = [(e.user, e.role, e.action, e.target, e.success) for e in AuditEvent.query.order_by(AuditEvent.id)]
     assert events == [
         ("admin", "admin", "login", "admin", True),
         ("admin", "admin", "revoke", "42", True),
         ("admin", "admin", "delete_provisioner", "old", False),
     ]
-    assert "delete_provisioner" in client.get("/system/audit").get_data(as_text=True)
-
-
-def test_failed_logins_are_audited(app):
-    client = app.test_client()
-    client.post("/auth/login", data={"username": "admin", "password": "wrong", "csrf_token": csrf_token(client)})
-    event = AuditEvent.query.one()
-    assert (event.user, event.action, event.success, event.detail) == ("admin", "login", False, "invalid credentials")
-
-
-def test_expiring_certificates(client, step_db):
-    now = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1)
-    step_db.add_cert(1, "in-5-days.test", days_valid=6, not_before=now)
-    step_db.add_cert(2, "in-20-days.test", days_valid=21, not_before=now)
-    step_db.add_cert(3, "in-60-days.test", days_valid=61, not_before=now)
-    step_db.add_cert(4, "revoked.test", days_valid=3, not_before=now)
-    step_db.add_revocation(4)
-    html = client.get("/x509/expiring?days=30").get_data(as_text=True)
-    assert "in-5-days.test" in html and "in-20-days.test" in html
-    assert "in-60-days.test" not in html and "revoked.test" not in html
-    assert html.index("in-5-days.test") < html.index("in-20-days.test")
-    assert "in-20-days.test" not in client.get("/x509/expiring?days=7").get_data(as_text=True)
-    assert re.search(r"<h3>2</h3>\s*<p>Expiring within 30 days</p>", client.get("/").get_data(as_text=True))
+    assert "delete_provisioner" in api.get("/api/v1/audit").get_json()["actions"]
 
 
 class TestServiceControl:
-    def test_disabled_by_default(self, client):
-        assert client.get("/step/service").status_code == 404
-        assert client.post("/step/service/stop", data={"csrf_token": csrf_token(client)}).status_code == 404
-        assert "/step/service" not in client.get("/").get_data(as_text=True)
+    def test_disabled_by_default(self, api):
+        assert api.post("/api/v1/service", json={"action": "status"}).status_code == 404
+        assert api.get("/api/v1/session").get_json()["service_control"] is False
 
-    def test_enabled_without_sudo_returns_an_error(self, app, client):
+    def test_enabled_without_sudo_returns_an_error(self, app, api):
         app.config["SERVICE_CONTROL_ENABLED"] = True
-        assert client.get("/step/service").status_code == 200
         with mock.patch("subprocess.check_output", side_effect=FileNotFoundError("sudo")):
-            response = client.post("/step/service/restart", headers={"X-CSRFToken": csrf_token(client)})
+            response = api.post("/api/v1/service", json={"action": "restart"})
         assert response.status_code == 500
-        assert response.get_json()["success"] is False
+        assert response.get_json()["success"] is False and "Cannot run the service control script" in response.get_json()["error"]
         assert AuditEvent.query.filter_by(action="service_restart").one().success is False
 
-
-def test_config_page_never_shows_the_db_password(client):
-    html = client.get("/system/config").get_data(as_text=True)
-    assert "unused" in html  # DATABASE_HOST from the test environment
-    assert "Password" in html and "set" in html
-    assert "test-secret" not in html
-    assert "<form" not in html.split("Configuration")[-1] or 'name="db_password"' not in html
+    def test_unknown_actions_are_refused(self, app, api):
+        app.config["SERVICE_CONTROL_ENABLED"] = True
+        with mock.patch("subprocess.check_output") as run:
+            assert api.post("/api/v1/service", json={"action": "rm -rf"}).status_code == 422
+        run.assert_not_called()
 
 
-def test_config_page_masks_the_app_database_password(app, client):
+def settings_values(api):
+    return {item["label"]: item["value"] for section in api.get("/api/v1/settings").get_json()["sections"] for item in section["items"]}
+
+
+def test_settings_never_show_the_database_password(api):
+    values = settings_values(api)
+    assert values["Host"] == "unused" and values["Password"] == "set"
+
+
+def test_settings_mask_the_app_database_password(app, api):
     app.config["SQLALCHEMY_BINDS"] = {"app": "postgresql+psycopg://stepca_web:s3cret@db.test/stepca_web"}
-    html = client.get("/system/config").get_data(as_text=True)
-    assert "postgresql+psycopg://stepca_web:***@db.test/stepca_web" in html
-    assert "s3cret" not in html
+    assert settings_values(api)["App database"] == "postgresql+psycopg://stepca_web:***@db.test/stepca_web"
 
 
-def test_admins_are_read_only_with_an_admin_identity(client, ca_client):
-    ca_client.identity = "ADMIN"
-    html = client.get("/step/admins").get_data(as_text=True)
-    assert "admins are read-only here" in html
-    assert "Add Admin" not in html and "editAdminModal" not in html
-    token = csrf_token(client)
-    response = client.post(
-        "/step/admins", data={"csrf_token": token, "subject": "x", "provisioner": "Admin JWK", "type": "1"}, follow_redirects=True
-    )
-    assert "manage admins with `step ca admin`" in response.get_data(as_text=True)
-    client.post("/step/admin/adm-1/update", data={"csrf_token": token, "type": "2"})
-    client.post("/step/admin/adm-1/delete", data={"csrf_token": token})
-    ca_client.create_admin.assert_not_called()
-    ca_client.update_admin.assert_not_called()
-    ca_client.delete_admin.assert_not_called()
-
-
-def test_app_identity_type_from_the_admin_list_and_the_db(app, step_db, monkeypatch):
+def test_app_identity_type_from_the_admin_list_and_the_db(app, step_db):
     """The Admin API gives admins a provisioner id; provisioner names come from step-ca's database."""
     from app.services import provisioners
 
@@ -203,3 +132,10 @@ def test_app_identity_type_from_the_admin_list_and_the_db(app, step_db, monkeypa
     assert provisioners.identity_type() == "ADMIN", "cached"
     fake.identity_cache = (float("-inf"), None)
     assert provisioners.identity_type() == "SUPER_ADMIN"
+
+
+def test_admin_creation_date_falls_back_to_the_database(api, ca_client, step_db):
+    """Admins added since the CA started have no created_at in the Admin API's answer."""
+    step_db.add_admin("adm-1", "step", "prov-admin-jwk")
+    (admin,) = api.get("/api/v1/admins").get_json()["admins"]
+    assert admin["created_at"].startswith("2026-10-29T12:30:08")

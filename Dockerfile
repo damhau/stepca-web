@@ -1,9 +1,19 @@
 # Installs dependencies with uv. Dockerfile.pip builds the same image with plain pip.
 
+# --- Frontend stage: the React app, built to static files ---
+FROM node:22-slim AS frontend
+WORKDIR /frontend
+# Exact versions from package-lock.json
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+
 # --- Build stage: install Python dependencies into a venv ---
 FROM python:3.12-slim AS builder
 
-# uv from PyPI, so the build only needs Docker Hub and PyPI
+# uv from PyPI, so the build only needs Docker Hub, PyPI and npm
 RUN pip install --no-cache-dir uv==0.9.5
 
 ENV UV_COMPILE_BYTECODE=1 \
@@ -34,6 +44,7 @@ RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin app \
 
 COPY --from=builder /opt/venv /opt/venv
 COPY app /app/app
+COPY --from=frontend /frontend/dist /app/frontend/dist
 
 WORKDIR /data
 USER app
@@ -41,6 +52,6 @@ USER app
 EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/auth/login', timeout=4)"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=4)"]
 
 CMD ["gunicorn", "app:create_app()"]

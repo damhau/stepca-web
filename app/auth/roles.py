@@ -1,6 +1,6 @@
 from functools import wraps
 
-from flask import abort, request, session
+from flask import abort, session
 
 # Ordered from least to most privileged
 ROLES = ("viewer", "operator", "admin")
@@ -14,13 +14,13 @@ def current_role():
     return session.get("role")
 
 
-def role_required(minimum, methods=None):
-    """Refuse (403) users below `minimum`; with `methods`, only for those HTTP methods."""
+def role_required(minimum):
+    """Refuse (403) users below `minimum`."""
 
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            if (methods is None or request.method in methods) and not role_at_least(current_role(), minimum):
+            if not role_at_least(current_role(), minimum):
                 abort(403)
             return f(*args, **kwargs)
 

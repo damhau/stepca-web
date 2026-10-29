@@ -1,7 +1,6 @@
 import base64
 import datetime
 import json
-import re
 from unittest import mock
 
 import pytest
@@ -75,14 +74,24 @@ def make_settings(data_dir, **overrides):
     return IsolatedSettings(**{**values, **overrides})
 
 
+# What `npm run build` writes to frontend/dist, in miniature
+INDEX_HTML = """<!doctype html><html><head><meta name="csp-nonce" content="__CSP_NONCE__" />
+<script type="module" crossorigin src="/assets/index-abc123.js"></script></head><body><div id="root"></div></body></html>"""
+
+
 @pytest.fixture
 def app(tmp_path, monkeypatch):
+    frontend = tmp_path / "dist"
+    (frontend / "assets").mkdir(parents=True)
+    (frontend / "index.html").write_text(INDEX_HTML)
+    (frontend / "assets" / "index-abc123.js").write_text("console.log('app')")
+    (frontend / "theme.js").write_text("// theme")
     users = tmp_path / "local_users.json"
     password_hash = generate_password_hash(PASSWORD)
     users.write_text(json.dumps({role: {"password_hash": password_hash, "role": role} for role in ("viewer", "operator", "admin")}))
     # Nothing may depend on the working directory: every file is in the data directory
     monkeypatch.chdir("/")
-    app = create_app(make_settings(tmp_path))
+    app = create_app(make_settings(tmp_path, frontend_dir=frontend))
 
     # The app context below stays pushed for the whole test, so `g` outlives each request (unlike in
     # production). Reset Flask-WTF's per-request token cache, or a token cleared at login would be reused.
@@ -114,30 +123,6 @@ def ca_client(app, monkeypatch):
     fake.identity = "SUPER_ADMIN"
     monkeypatch.setattr("app.services.provisioners.identity_type", lambda: fake.identity)
     return fake
-
-
-def csrf_token(client):
-    html = client.get("/auth/login").get_data(as_text=True)
-    return re.search(r'name="csrf_token" value="([^"]+)"', html).group(1)
-
-
-def login(app, username):
-    client = app.test_client()
-    response = client.post("/auth/login", data={"username": username, "password": PASSWORD, "csrf_token": csrf_token(client)})
-    assert response.status_code == 302
-    return client
-
-
-@pytest.fixture
-def client(app, ca_client):
-    """A test client logged in as an admin."""
-    return login(app, "admin")
-
-
-@pytest.fixture
-def login_as(app, ca_client):
-    """Log in with a given role: login_as("viewer")."""
-    return lambda role: login(app, role)
 
 
 @pytest.fixture

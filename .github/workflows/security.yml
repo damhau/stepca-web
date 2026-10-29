@@ -27,3 +27,18 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       # requirements.txt is uv.lock exported with hashes (the CI workflow checks they match)
       - run: uvx pip-audit==2.9.0 -r requirements.txt --require-hashes --disable-pip --progress-spinner off
+
+  frontend-dependencies:
+    name: Known vulnerabilities in frontend dependencies (npm audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+      # The packages that end up in the browser; build tools only run on the build machine
+      - run: npm audit --omit=dev --audit-level=moderate
+      - run: npm audit --audit-level=high

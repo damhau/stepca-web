@@ -74,7 +74,7 @@ def test_invalid_requests_do_not_echo_what_was_sent(app):
     [
         ("POST", "/api/v1/certificates", {}),
         ("POST", "/api/v1/certificates/1/revoke", {"reason_code": 0}),
-        ("PUT", "/api/v1/provisioners/x", {"x509_enabled": True}),
+        ("PUT", "/api/v1/provisioners/x", {}),
         ("PATCH", "/api/v1/admins/x", {"type": "ADMIN"}),
         ("DELETE", "/api/v1/admins/x", None),
         ("DELETE", "/api/v1/session", None),
@@ -94,7 +94,7 @@ class TestRoles:
     ]
     OPERATOR_REFUSED = [
         ("POST", "/api/v1/provisioners", {"name": "x", "type": "ACME"}),
-        ("PUT", "/api/v1/provisioners/x", {"x509_enabled": True}),
+        ("PUT", "/api/v1/provisioners/x", {}),
         ("DELETE", "/api/v1/provisioners/x", None),
         ("POST", "/api/v1/admins", {"subject": "x", "provisioner": "p", "type": "ADMIN"}),
         ("PATCH", "/api/v1/admins/x", {"type": "ADMIN"}),
@@ -237,7 +237,8 @@ class TestCertificates:
 
 
 def test_dashboard(api, step_db):
-    step_db.add_cert(1, "a.test", days_valid=10)
+    # 20 days left of 100: expiring; a 10-day certificate would be short-lived, and never expiring
+    step_db.add_cert(1, "a.test", days_valid=100, not_before=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=80))
     step_db.add_cert(2, "b.test", days_valid=100)
     step_db.add_acme_issuance(3, "acme.test")
     body = api.get("/api/v1/dashboard").get_json()
@@ -340,17 +341,17 @@ class TestProvisioners:
     def test_update(self, api, ca_client):
         ca_client.get_provisioner.return_value = json.loads(json.dumps(ACME_FROM_API))
         ca_client.update_provisioner.side_effect = lambda name, record: record
-        body = {"x509_enabled": True, "durations": {"max": "720h"}, "disable_renewal": True, "acme": {"challenges": ["TLS_ALPN_01"], "require_eab": False, "force_cn": False}}
+        body = {"durations": {"max": "720h"}, "disable_renewal": True, "acme": {"challenges": ["TLS_ALPN_01"], "require_eab": False, "force_cn": False}}
         response = api.put("/api/v1/provisioners/acme", json=body)
         assert response.status_code == 200
         sent = ca_client.update_provisioner.call_args.args[1]
-        assert sent["claims"]["x509"] == {"enabled": True, "durations": {"max": "720h"}} and sent["claims"]["disableRenewal"] is True
+        assert sent["claims"]["x509"] == {"durations": {"max": "720h"}} and sent["claims"]["disableRenewal"] is True
         # Challenges the form doesn't offer are kept
         assert sent["details"]["ACME"]["challenges"] == ["TLS_ALPN_01", "DEVICE_ATTEST_01"]
 
     def test_the_app_provisioner_is_protected(self, api, ca_client):
         ca_client.get_provisioner.return_value = json.loads(json.dumps(JWK_FROM_API))
-        response = api.put("/api/v1/provisioners/Admin%20JWK", json={"x509_enabled": False})
+        response = api.put("/api/v1/provisioners/Admin%20JWK", json={"durations": {"max": "1h"}})
         assert response.status_code == 422 and "the app's own provisioner" in response.get_json()["error"]
         assert api.delete("/api/v1/provisioners/Admin%20JWK").status_code == 422
         ca_client.update_provisioner.assert_not_called()
@@ -360,7 +361,7 @@ class TestProvisioners:
         assert api.delete("/api/v1/provisioners/old").get_json() == {"message": "Provisioner 'old' deleted."}
         ca_client.delete_provisioner.assert_called_once_with("old")
         ca_client.get_provisioner.return_value = None
-        assert api.put("/api/v1/provisioners/gone", json={"x509_enabled": True}).status_code == 404
+        assert api.put("/api/v1/provisioners/gone", json={}).status_code == 404
 
 
 class TestAdmins:

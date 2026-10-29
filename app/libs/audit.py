@@ -8,8 +8,6 @@ from app.models.audit import AuditEvent
 log = logging.getLogger("stepca_web.audit")
 
 
-
-
 def audit(action, target="", success=True, detail="", user=None):
     """Record an action in the audit log (and on stdout)."""
     event = AuditEvent(
@@ -24,6 +22,3 @@ def audit(action, target="", success=True, detail="", user=None):
     db.session.commit()
     log.info("user=%s role=%s action=%s target=%s success=%s", event.user, event.role, action, target, success)
 
-
-def recent_events(limit=500):
-    return AuditEvent.query.order_by(AuditEvent.id.desc()).limit(limit).all()

@@ -1,9 +1,7 @@
 import logging
 import os
 import threading
-from datetime import UTC, datetime
 
-from flask import jsonify, render_template
 from flask_openapi3 import Info, OpenAPI
 from flask_talisman import Talisman
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -29,26 +27,6 @@ def check_ldap_config(config):
         log.warning("LDAP_URL is ldap:// without LDAP_START_TLS: user passwords cross the network in cleartext. Use ldaps:// or set LDAP_START_TLS=true")
 
 
-def format_datetime(value):
-    """One format for every date shown: "2025-05-22 14:03 UTC".
-
-    Takes a datetime (naive ones are UTC), epoch seconds, or an ISO 8601 string such as Go's RFC 3339
-    with nanoseconds. Go's zero time, which step-ca uses for "never", shows as a dash.
-    """
-    if isinstance(value, str):
-        try:
-            value = datetime.fromisoformat(value)
-        except ValueError:
-            return value
-    elif isinstance(value, int | float):
-        value = datetime.fromtimestamp(value, UTC)
-    if not isinstance(value, datetime) or value.year == 1:
-        return "—"
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=UTC)
-    return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
-
-
 def warm_up_inventory(app):
     from sqlalchemy.exc import SQLAlchemyError
 
@@ -71,6 +49,8 @@ def create_app(settings: Settings | None = None):
 
     app = OpenAPI(
         __name__,
+        # The frontend's files are served by app.web
+        static_folder=None,
         info=Info(title="stepca-web", version="1"),
         # No documentation pages: the document is exported to frontend/openapi.json
         doc_ui=False,
@@ -106,34 +86,20 @@ def create_app(settings: Settings | None = None):
         session_cookie_secure=app.config["SESSION_COOKIE_SECURE"],
         frame_options="DENY",
         content_security_policy=CONTENT_SECURITY_POLICY,
+        # A nonce per response, for the one style element the frontend adds (app.web)
+        content_security_policy_nonce_in=["style-src"],
         referrer_policy="same-origin",
     )
-
-    @app.errorhandler(429)
-    def too_many_requests(error):
-        message = "Too many failed sign-ins from your address: try again later."
-        from app.api import is_api_request
-
-        if is_api_request():
-            return jsonify({"error": message}), 429
-        return render_template("auth/login.html", error=message), 429
 
     @app.route("/healthz")
     def healthz():
         """For container health checks: the app answers (it doesn't check the CA or the databases)."""
         return {"status": "ok"}
 
-    # Every route requires a session unless explicitly listed as public
+    # Every API route requires a session unless explicitly listed as public
     from app.auth.decorator import require_login
+
     app.before_request(require_login)
-
-    from app.auth.roles import current_role, role_at_least
-
-    @app.context_processor
-    def role_helpers():
-        # Templates show only the actions the user's role allows: {% if can("operator") %}
-        return {"current_role": current_role(), "can": lambda minimum: role_at_least(current_role(), minimum)}
-
 
     if not app.testing:
         # Logs step-ca's version, and warns when it isn't one the app is tested with. In the background:
@@ -151,38 +117,10 @@ def create_app(settings: Settings | None = None):
         threading.Thread(target=warm_up_inventory, args=(app,), name="inventory", daemon=True).start()
 
 
-    # Register blueprints here
-    from app.blueprint.home import bp as main_bp
-    app.register_blueprint(main_bp)
-
-    from app.blueprint.acme import bp as acme_bp
-    app.register_blueprint(acme_bp)
-
-    from app.blueprint.acme import api_bp as acme_api_bp
-    app.register_blueprint(acme_api_bp)
-
-    from app.blueprint.x509 import bp as x509_bp
-    app.register_blueprint(x509_bp)
-
-    from app.blueprint.x509 import api_bp as x509_api_bp
-    app.register_blueprint(x509_api_bp)
-
-    from app.blueprint.step import bp as step_bp
-    app.register_blueprint(step_bp)
-
-    # Register authentication blueprint
-    from app.blueprint.auth.routes import auth_bp
-    app.register_blueprint(auth_bp)
-
-    from app.blueprint.system import bp as system_bp
-
-    app.register_blueprint(system_bp)
-
-    from app import api
+    from app import api, web
 
     api.register(app)
-
-
-    app.add_template_filter(format_datetime, "datetime")
+    # Last: its catch-all route serves the frontend for every other path
+    app.register_blueprint(web.bp)
 
     return app

@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     # How often a page checks step-ca's tables for new certificates and revocations, at most
     inventory_refresh_seconds: float = 5
 
+    # The built frontend (npm run build in frontend/); frontend/dist next to the app by default
+    frontend_dir: Path = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
     @classmethod
     def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
         data_dir = Path(env_settings().get("data_dir") or init_settings().get("data_dir") or ".")
@@ -202,6 +205,7 @@ class Settings(BaseSettings):
             "ROLE_VIEWER_GROUP": self.role_viewer_group,
             "DEFAULT_ROLE": self.default_role,
             "SERVICE_CONTROL_ENABLED": self.service_control_enabled,
+            "FRONTEND_DIR": str(self.path(self.frontend_dir)),
         }
 
 

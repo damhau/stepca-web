@@ -15,6 +15,7 @@ class InventoryCertificate(db.Model):
     # UTC, without a time zone (SQLite has none)
     not_before = db.Column(db.DateTime, index=True)
     not_after = db.Column(db.DateTime, index=True)
+    lifetime_seconds = db.Column(db.Integer)
     key = db.Column(db.String, nullable=False)  # "RSA 2048", "secp256r1", "Ed25519"
     dns_names = db.Column(db.JSON, nullable=False)
     provisioner_id = db.Column(db.String)

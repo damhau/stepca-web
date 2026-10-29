@@ -18,3 +18,10 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+      # The frontend's own checks, when frontend/ changes (needs `npm ci` in frontend/ once)
+      - id: frontend
+        name: frontend lint, format and types
+        entry: sh -c 'cd frontend && npm run -s lint && npm run -s format:check && npm run -s typecheck'
+        language: system
+        files: ^frontend/
+        pass_filenames: false

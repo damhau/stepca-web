@@ -1,0 +1,153 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Security paper and registry ink: a cool, quiet surface where the only strong colours are the
+ * certificate statuses (valid, expiring, expired, revoked) and the accent of the controls.
+ */
+:root {
+  --radius: 0.5rem;
+  --background: oklch(0.972 0.004 230);
+  --foreground: oklch(0.255 0.03 245);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.405 0.13 268);
+  --primary-foreground: oklch(0.985 0.005 268);
+  --secondary: oklch(0.935 0.008 240);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.945 0.006 235);
+  --muted-foreground: oklch(0.5 0.025 240);
+  --accent: oklch(0.94 0.018 268);
+  --accent-foreground: oklch(0.32 0.11 268);
+  --destructive: oklch(0.5 0.19 22);
+  --destructive-foreground: oklch(0.985 0.005 22);
+  --border: oklch(0.9 0.009 235);
+  --input: oklch(0.87 0.01 235);
+  --ring: oklch(0.55 0.14 268);
+  --sidebar: oklch(0.95 0.007 235);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-accent: oklch(0.91 0.02 262);
+  --sidebar-accent-foreground: oklch(0.3 0.1 268);
+
+  --valid: oklch(0.52 0.12 158);
+  --valid-soft: oklch(0.95 0.035 158);
+  --expiring: oklch(0.62 0.14 68);
+  --expiring-soft: oklch(0.955 0.05 80);
+  --expired: oklch(0.56 0.02 245);
+  --expired-soft: oklch(0.94 0.006 245);
+  --revoked: oklch(0.5 0.19 22);
+  --revoked-soft: oklch(0.95 0.03 22);
+  --track: oklch(0.92 0.007 235);
+}
+
+.dark {
+  --background: oklch(0.19 0.015 240);
+  --foreground: oklch(0.92 0.01 235);
+  --card: oklch(0.225 0.017 240);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.24 0.018 240);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.72 0.11 270);
+  --primary-foreground: oklch(0.2 0.04 268);
+  --secondary: oklch(0.28 0.018 240);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.265 0.016 240);
+  --muted-foreground: oklch(0.68 0.02 240);
+  --accent: oklch(0.3 0.04 265);
+  --accent-foreground: oklch(0.88 0.05 268);
+  --destructive: oklch(0.65 0.18 22);
+  --destructive-foreground: oklch(0.18 0.03 22);
+  --border: oklch(0.31 0.017 240);
+  --input: oklch(0.36 0.018 240);
+  --ring: oklch(0.65 0.12 270);
+  --sidebar: oklch(0.205 0.016 240);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-accent: oklch(0.29 0.035 262);
+  --sidebar-accent-foreground: oklch(0.9 0.04 268);
+
+  --valid: oklch(0.72 0.13 158);
+  --valid-soft: oklch(0.3 0.05 158);
+  --expiring: oklch(0.78 0.13 75);
+  --expiring-soft: oklch(0.32 0.06 75);
+  --expired: oklch(0.66 0.02 245);
+  --expired-soft: oklch(0.29 0.012 245);
+  --revoked: oklch(0.68 0.17 22);
+  --revoked-soft: oklch(0.31 0.06 22);
+  --track: oklch(0.3 0.014 240);
+}
+
+@theme inline {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-sm: calc(var(--radius) - 3px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-valid: var(--valid);
+  --color-valid-soft: var(--valid-soft);
+  --color-expiring: var(--expiring);
+  --color-expiring-soft: var(--expiring-soft);
+  --color-expired: var(--expired);
+  --color-expired-soft: var(--expired-soft);
+  --color-revoked: var(--revoked);
+  --color-revoked-soft: var(--revoked-soft);
+  --color-track: var(--track);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    font-feature-settings: "ss02";
+  }
+  /* Serials, fingerprints and ids line up digit for digit */
+  .font-mono {
+    font-feature-settings: "zero";
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

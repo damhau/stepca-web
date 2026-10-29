@@ -1,8 +1,7 @@
-"""X.509 certificates: what counts as active or expiring, revocations, a certificate's page and its downloads."""
+"""X.509 certificates: a certificate's page and downloads, signing, revoking, and revocations that missed."""
 
 import re
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.x509.oid import NameOID
@@ -35,10 +34,6 @@ REASON_NAMES = {
 REVOCATION_REASONS = [(code, REASON_NAMES[code]) for code in (0, 1, 3, 4, 5, 9)]
 
 
-def now():
-    return datetime.now(UTC)
-
-
 def is_serial(text):
     """Certificates are identified by their decimal serial, as step-ca stores them."""
     return text.isascii() and text.isdigit()
@@ -46,31 +41,6 @@ def is_serial(text):
 
 def exists(serial):
     return is_serial(serial) and store.certificate_der(serial) is not None
-
-
-def all_certificates():
-    return store.certificates()
-
-
-def active(certificates=None, when=None):
-    """Valid now and not revoked. Pass all_certificates() to avoid reading them twice."""
-    when = when or now()
-    certificates = store.certificates() if certificates is None else certificates
-    revoked = store.revoked_serials()
-    return [cert for cert in certificates if cert.serial not in revoked and cert.is_valid_at(when)]
-
-
-@dataclass(frozen=True)
-class Expiring:
-    certificate: Certificate
-    days_left: int
-
-
-def expiring(days, certificates=None, when=None):
-    """Active certificates that expire within `days`, soonest first."""
-    when = when or now()
-    found = [Expiring(cert, cert.days_left(when)) for cert in active(certificates, when) if cert.days_left(when) < days]
-    return sorted(found, key=lambda item: item.certificate.not_after)
 
 
 def misdirected_serial(serial):
@@ -102,43 +72,6 @@ def revoked():
         intended = misdirected_serial(revocation.serial) if certificate is None else None
         rows.append(RevokedRow(revocation, certificate, intended if intended in certificates else None, names.get(revocation.provisioner_id)))
     return rows
-
-
-@dataclass(frozen=True)
-class CertificateView:
-    certificate: Certificate
-    status: str  # valid, expired, not yet valid or revoked
-    days_left: int | None
-    revocation: Revocation | None
-    extensions: list
-    acme_order_id: str | None
-
-
-def view(serial):
-    """Everything the certificate page shows, or None if there is no such certificate."""
-    if not is_serial(serial):
-        return None
-    certificate = store.certificate(serial)
-    if certificate is None or certificate.error:
-        return None
-    when = now()
-    revocation = store.revocation(serial)
-    if revocation:
-        status = "revoked"
-    elif certificate.not_after < when:
-        status = "expired"
-    elif certificate.not_before > when:
-        status = "not yet valid"
-    else:
-        status = "valid"
-    return CertificateView(
-        certificate=certificate,
-        status=status,
-        days_left=certificate.days_left(when),
-        revocation=revocation,
-        extensions=certificate_extensions(load_certificate(store.certificate_der(serial))),
-        acme_order_id=acme.order_id_for_serial(serial),
-    )
 
 
 FORMATS = ("pem", "der", "chain")

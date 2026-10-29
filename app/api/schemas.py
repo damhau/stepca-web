@@ -83,6 +83,8 @@ class CertificateItem(Model):
     error: str | None
     status: Status
     days_left: int | None
+    # Valid, ends within 30 days, and was issued for longer than 30 days (short-lived ones renew themselves)
+    expiring: bool
     revoked_at: datetime | None
     revocation_reason: str | None
     revocation_reason_code: int | None
@@ -90,7 +92,7 @@ class CertificateItem(Model):
 
 class CertificateListQuery(ListQuery):
     status: StatusFilter = "all"
-    days: int = Field(30, ge=1, le=3650, description="With status=expiring: expires within this many days")
+    days: int = Field(30, ge=1, le=3650, description="With status=expiring: expires within this many days. Certificates issued for 30 days or less are left out")
     provisioner: str | None = Field(None, max_length=200)
     sort: SortKey = "not_before"
     order: Literal["asc", "desc"] = "desc"
@@ -369,7 +371,6 @@ class ProvisionerItem(Model):
     name: str
     type: str
     id: str | None
-    x509_enabled: bool
     durations: Durations
     disable_renewal: bool
     allow_renewal_after_expiry: bool
@@ -394,7 +395,6 @@ class ProvisionerCreate(BaseModel):
 
 
 class ProvisionerUpdate(BaseModel):
-    x509_enabled: bool
     durations: Durations = Field(default_factory=Durations)
     disable_renewal: bool = False
     allow_renewal_after_expiry: bool = False

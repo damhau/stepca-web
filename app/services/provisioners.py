@@ -106,7 +106,6 @@ def summary(provisioner, ids_by_name=None, app_provisioner=None):
         "name": provisioner.get("name", ""),
         "type": provisioner.get("type", ""),
         "id": provisioner.get("id") or (ids_by_name or {}).get(provisioner.get("name")),
-        "x509_enabled": bool(x509.get("enabled")),
         "durations": x509.get("durations") or {},
         "disable_renewal": bool(claims.get("disableRenewal")),
         "allow_renewal_after_expiry": bool(claims.get("allowRenewalAfterExpiry")),

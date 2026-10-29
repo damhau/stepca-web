@@ -1,9 +1,6 @@
 """Signing a CSR: the form, the preview, the token sent to step-ca and the errors shown."""
 
-import io
 import ipaddress
-import json
-import re
 
 import jwt
 import pytest
@@ -97,51 +94,32 @@ def test_step_ca_refusal_is_explained(jwk_provisioner, monkeypatch):
         jwk_provisioner.sign(make_csr(), "dev", "right", not_after="900h")
 
 
-def token(client):
-    return re.search(r'name="csrf_token" value="([^"]+)"', client.get("/x509/active").get_data(as_text=True)).group(1)
-
-
-def test_sign_form_shows_the_error(client, ca_client):
+def test_sign_errors_are_readable(api, ca_client):
     ca_client.sign.side_effect = SignError("Wrong password for provisioner 'Admin JWK'")
-    response = client.post(
-        "/x509/sign", data={"csr_pem": make_csr(), "provisioner": "Admin JWK", "passphrase": "x", "csrf_token": token(client)}, follow_redirects=True
-    )
-    html = response.get_data(as_text=True)
-    assert "The certificate was not signed: Wrong password for provisioner &#39;Admin JWK&#39;." in html
-    assert "InvalidJWEData" not in html
+    response = api.post("/api/v1/certificates", json={"csr_pem": make_csr(), "provisioner": "Admin JWK", "password": "x"})
+    assert response.get_json() == {"error": "The certificate was not signed: Wrong password for provisioner 'Admin JWK'."}
+    assert "InvalidJWEData" not in response.get_data(as_text=True)
 
 
-def test_sign_takes_an_uploaded_csr_and_a_validity(client, ca_client):
+def test_sign_passes_the_csr_and_the_validity(api, ca_client):
     ca_client.sign.return_value = x509.load_der_x509_certificate(make_cert(88, "file.test"))
     csr = make_csr("file.test", sans=("file.test",))
-    client.post(
-        "/x509/sign",
-        data={"csr_file": (io.BytesIO(csr.encode()), "file.csr"), "csr_pem": "", "provisioner": "Admin JWK", "passphrase": "x",
-              "valid_for": "48h", "csrf_token": token(client)},
-        content_type="multipart/form-data",
-    )
+    api.post("/api/v1/certificates", json={"csr_pem": csr, "provisioner": "Admin JWK", "password": "x", "valid_for": "48h"})
     args, kwargs = ca_client.sign.call_args
     assert args[0] == csr and kwargs["not_after"] == "48h"
 
 
-def test_sign_refuses_an_invalid_validity(client, ca_client):
-    response = client.post(
-        "/x509/sign", data={"csr_pem": make_csr(), "provisioner": "Admin JWK", "passphrase": "x", "valid_for": "two days", "csrf_token": token(client)},
-        follow_redirects=True,
-    )
-    assert "Validity: &#39;two days&#39; is not a duration" in response.get_data(as_text=True)
+def test_sign_refuses_an_invalid_validity(api, ca_client):
+    response = api.post("/api/v1/certificates", json={"csr_pem": make_csr(), "provisioner": "Admin JWK", "password": "x", "valid_for": "two days"})
+    assert response.status_code == 422 and "'two days' is not a duration" in response.get_json()[0]["msg"]
     ca_client.sign.assert_not_called()
 
 
-def test_preview_endpoint(client):
-    headers = {"X-CSRFToken": token(client)}
-    ok = client.post("/x509/csr/preview", json={"csr_pem": make_csr()}, headers=headers)
-    assert ok.status_code == 200 and json.loads(ok.data)["common_name"] == "web.test"
-    bad = client.post("/x509/csr/preview", json={"csr_pem": "nope"}, headers=headers)
-    assert bad.status_code == 400 and "not a PEM" in json.loads(bad.data)["error"]
+def test_sign_refuses_a_huge_csr(api, ca_client):
+    response = api.post("/api/v1/certificates", json={"csr_pem": "x" * (64 * 1024 + 1), "provisioner": "Admin JWK", "password": "x"})
+    assert response.status_code == 422
+    ca_client.sign.assert_not_called()
 
 
-def test_viewers_cannot_preview(login_as):
-    viewer = login_as("viewer")
-    csrf = re.search(r'name="csrf_token" value="([^"]+)"', viewer.get("/auth/login").get_data(as_text=True)).group(1)
-    assert viewer.post("/x509/csr/preview", json={"csr_pem": make_csr()}, headers={"X-CSRFToken": csrf}).status_code == 403
+def test_viewers_cannot_preview(api_as):
+    assert api_as("viewer").post("/api/v1/csr/preview", json={"csr_pem": make_csr()}).status_code == 403

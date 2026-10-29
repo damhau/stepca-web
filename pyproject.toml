@@ -26,6 +26,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mypy>=1.13",
+    "playwright>=1.55",
     "pytest>=8",
     "ruff>=0.12",
     "types-jwcrypto>=1.6.1.20260928",

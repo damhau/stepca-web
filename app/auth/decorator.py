@@ -1,12 +1,8 @@
-from functools import wraps
+from flask import jsonify, request, session
 
-from flask import jsonify, redirect, request, session, url_for
-
-# Endpoints reachable without a session, everything else requires login
+# API endpoints reachable without a session; everything else under /api/ requires one. The other paths are
+# the frontend's page and files, the same for everyone: the frontend asks /api/v1/session who is signed in
 PUBLIC_ENDPOINTS = {
-    "auth.login",
-    "auth.logout",
-    "static",
     "healthz",
     "api_session.get_session",
     "api_session.login",
@@ -14,19 +10,9 @@ PUBLIC_ENDPOINTS = {
 }
 
 
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('auth.login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-
 def require_login():
     """before_request hook: deny by default instead of relying on per-route decorators."""
-    if request.endpoint in PUBLIC_ENDPOINTS or 'user_id' in session:
+    if not request.path.startswith("/api/") or request.endpoint in PUBLIC_ENDPOINTS or "user_id" in session:
         return None
-    if request.path.startswith('/api/'):
-        return jsonify({"error": "Authentication required"}), 401
-    return redirect(url_for('auth.login'))
+    return jsonify({"error": "Sign in first."}), 401
+

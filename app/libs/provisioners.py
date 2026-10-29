@@ -1,4 +1,4 @@
-"""Editing step-ca provisioners: the form fields, applied to the record the Admin API returns."""
+"""Editing step-ca provisioners: changes applied to the record the Admin API returns."""
 
 import copy
 import re
@@ -20,48 +20,18 @@ def duration_seconds(value):
     return sum(float(number) * GO_DURATION_UNITS[unit] for number, unit in re.findall(r"(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)", value))
 
 
-def durations_from_form(form):
-    """{"default": ..., "min": ..., "max": ...} with the fields that are filled in."""
-    durations = {}
-    for field in ("default", "min", "max"):
-        value = (form.get(f"duration_{field}") or "").strip()
-        if value:
-            duration_seconds(value)  # validates
-            durations[field] = value
-    return durations
-
-
-def changes_from_form(form):
-    """The edit form's fields as apply_changes() takes them."""
-    return {
-        "x509_enabled": "x509_enabled" in form,
-        "durations": durations_from_form(form),
-        "disable_renewal": "disable_renewal" in form,
-        "allow_renewal_after_expiry": "allow_renewal_after_expiry" in form,
-        "acme": {
-            "force_cn": "force_cn" in form,
-            "require_eab": "require_eab" in form,
-            "challenges": form.getlist("challenges"),
-        },
-    }
-
-
-def edit_provisioner(provisioner, form, app_provisioner=None):
-    return apply_changes(provisioner, changes_from_form(form), app_provisioner)
-
-
 def apply_changes(provisioner, changes, app_provisioner=None):
     """A copy of the provisioner (as GET /admin/provisioners/{name} returns it) with these changes:
-    x509_enabled, durations ({"default", "min", "max"}, empty ones left out), disable_renewal,
-    allow_renewal_after_expiry, and for an ACME provisioner acme ({"challenges", "force_cn", "require_eab"}).
+    durations ({"default", "min", "max"}, empty ones left out), disable_renewal, allow_renewal_after_expiry,
+    and for an ACME provisioner acme ({"challenges", "force_cn", "require_eab"}).
 
-    Only claims and ACME options change: step-ca refuses any change of id, type or dates.
+    Only claims and ACME options change: step-ca refuses any change of id, type or dates. claims.x509.enabled
+    is left as it is: step-ca (tested with 0.30) issues X.509 certificates whatever its value.
     Raises ValueError on invalid input.
     """
     updated = copy.deepcopy(provisioner)
     claims = updated.setdefault("claims", {})
     x509 = claims.setdefault("x509", {})
-    x509["enabled"] = bool(changes["x509_enabled"])
     durations = {field: value for field, value in (changes.get("durations") or {}).items() if value}
     for value in durations.values():
         duration_seconds(value)  # validates
@@ -83,8 +53,6 @@ def apply_changes(provisioner, changes, app_provisioner=None):
         acme["challenges"] = [name for name in offered if name in (options.get("challenges") or [])] + kept
 
     if app_provisioner and updated.get("name") == app_provisioner:
-        if not x509["enabled"]:
-            raise ValueError("this is the app's own provisioner: it must keep issuing X.509 certificates")
         if "max" in durations and duration_seconds(durations["max"]) < APP_CERTIFICATE_HOURS * 3600:
             raise ValueError(f"this is the app's own provisioner: its maximum duration must stay at least {APP_CERTIFICATE_HOURS}h")
     return updated

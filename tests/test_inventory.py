@@ -25,7 +25,7 @@ def certificates(step_db):
     """Valid, expiring, expired, not yet valid and revoked certificates."""
     yesterday = NOW - datetime.timedelta(days=1)
     step_db.add_cert(1, "valid.test", days_valid=200, not_before=yesterday)
-    step_db.add_cert(2, "expiring.test", days_valid=6, not_before=yesterday)
+    step_db.add_cert(2, "expiring.test", days_valid=106, not_before=NOW - datetime.timedelta(days=100))
     step_db.add_cert(3, "expired.test", days_valid=1, not_before=NOW - datetime.timedelta(days=10))
     step_db.add_cert(4, "future.test", days_valid=30, not_before=NOW + datetime.timedelta(days=2))
     step_db.add_cert(5, "revoked.test", days_valid=200, not_before=yesterday)
@@ -116,9 +116,13 @@ def test_sort_and_pages(app, certificates):
 
 def test_counts(app, certificates):
     certificates.add_cert(9, "unknown.test", days_valid=100, provisioner=None)
+    # Short-lived: never counted as expiring
+    certificates.add_cert(10, "daily.test", days_valid=1, not_before=NOW - datetime.timedelta(hours=2))
     counts = inventory.counts(expiring_days=30)
-    assert (counts.total, counts.valid, counts.expiring, counts.expired, counts.revoked) == (6, 3, 1, 1, 1)
-    assert counts.by_provisioner == [("Admin JWK", 5), ("Unknown", 1)]
+    assert (counts.total, counts.valid, counts.expiring, counts.expired, counts.revoked) == (7, 4, 1, 1, 1)
+    assert counts.by_provisioner == [("Admin JWK", 6), ("Unknown", 1)]
+    expiring = {item.serial for item in inventory.certificates(CertificateQuery(), per_page=None)[0] if item.expiring}
+    assert expiring == {"2"}
 
 
 def test_unparseable_certificates_are_kept(app, step_db):

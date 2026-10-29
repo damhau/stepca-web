@@ -54,11 +54,12 @@ def test_results_are_limited(populated, step_db, monkeypatch):
     assert len(results.certificates) == 1 and "certificates" in results.truncated
 
 
-def test_search_page(client, populated):
-    html = client.get("/search?q=web.test").get_data(as_text=True)
-    assert 'href="/x509/cert/1002"' in html and 'href="/acme/order/a-order"' in html
-    assert 'name="q"' in html and 'value="web.test"' in html
+def test_search_api(api, populated):
+    body = api.get("/api/v1/search?q=web.test").get_json()
+    assert [cert["serial"] for cert in body["certificates"]] == ["1002"]
+    assert [order["id"] for order in body["acme_orders"]] == ["a-order"]
 
 
-def test_nothing_found(client, populated):
-    assert "Nothing matches" in client.get("/search?q=no-such-host").get_data(as_text=True)
+def test_nothing_found(api, populated):
+    body = api.get("/api/v1/search?q=no-such-host").get_json()
+    assert all(body[kind] == [] for kind in ("certificates", "acme_accounts", "acme_orders", "provisioners", "admins"))

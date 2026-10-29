@@ -27,6 +27,11 @@ log = logging.getLogger(__name__)
 BATCH = 500
 # Even when the counts match, compare the keys this often: a row deleted by hand and one added would cancel out
 FULL_CHECK_SECONDS = 300
+# Valid certificates this close to their end are expiring...
+EXPIRING_DAYS = 30
+# ...unless they were issued for this long or less: short-lived certificates (step-ca's default is 24 hours) are
+# meant to be renewed automatically, and would otherwise always be "expiring"
+SHORT_LIVED_DAYS = 30
 
 Status = Literal["valid", "expired", "not_yet_valid", "revoked", "invalid"]
 StatusFilter = Literal["all", "valid", "expiring", "expired", "not_yet_valid", "revoked"]
@@ -83,6 +88,7 @@ def _certificate_row(cert: Certificate):
         "issuer": cert.issuer,
         "not_before": _naive_utc(cert.not_before),
         "not_after": _naive_utc(cert.not_after),
+        "lifetime_seconds": int((cert.not_after - cert.not_before).total_seconds()) if cert.not_before and cert.not_after else None,
         "key": _key(cert),
         "dns_names": list(cert.dns_names),
         "provisioner_id": provisioner.id if provisioner else None,
@@ -196,6 +202,8 @@ class InventoryItem:
     error: str | None
     status: Status
     days_left: int | None
+    # Valid, within EXPIRING_DAYS of its end, and not short-lived
+    expiring: bool
     revoked_at: datetime | None
     revocation_reason: str | None
     revocation_reason_code: int | None
@@ -215,6 +223,8 @@ def status_of(not_before, not_after, revoked, when):
 
 def _item(cert: InventoryCertificate, revocation: InventoryRevocation | None, when):
     not_before, not_after = _aware(cert.not_before), _aware(cert.not_after)
+    status = status_of(not_before, not_after, revocation is not None, when)
+    long_lived = (cert.lifetime_seconds or 0) > SHORT_LIVED_DAYS * 86400
     return InventoryItem(
         serial=cert.serial,
         serial_hex=cert.serial_hex,
@@ -229,8 +239,9 @@ def _item(cert: InventoryCertificate, revocation: InventoryRevocation | None, wh
         provisioner_name=cert.provisioner_name,
         provisioner_type=cert.provisioner_type,
         error=cert.error,
-        status=status_of(not_before, not_after, revocation is not None, when),
+        status=status,
         days_left=(not_after - when).days if not_after else None,
+        expiring=status == "valid" and long_lived and not_after is not None and not_after < when + timedelta(days=EXPIRING_DAYS),
         revoked_at=_aware(revocation.revoked_at) if revocation else None,
         revocation_reason=revocation.reason if revocation else None,
         revocation_reason_code=revocation.reason_code if revocation else None,
@@ -240,8 +251,8 @@ def _item(cert: InventoryCertificate, revocation: InventoryRevocation | None, wh
 @dataclass(frozen=True)
 class CertificateQuery:
     status: StatusFilter = "all"
-    # For status "expiring": expires within this many days
-    days: int = 30
+    # For status "expiring": expires within this many days (short-lived certificates left out)
+    days: int = EXPIRING_DAYS
     q: str = ""
     provisioner: str | None = None
     sort: SortKey = "not_before"
@@ -279,7 +290,9 @@ def _filtered(query: CertificateQuery, when):
     valid = and_(~revoked, cert.not_before <= naive_now, cert.not_after >= naive_now)
     conditions = {
         "valid": valid,
-        "expiring": and_(valid, cert.not_after < _naive_utc(when + timedelta(days=query.days))),
+        "expiring": and_(
+            valid, cert.not_after < _naive_utc(when + timedelta(days=query.days)), cert.lifetime_seconds > SHORT_LIVED_DAYS * 86400
+        ),
         "expired": and_(~revoked, cert.not_after < naive_now),
         "not_yet_valid": and_(~revoked, cert.not_before > naive_now),
         "revoked": revoked,
@@ -330,7 +343,7 @@ class Counts:
     by_provisioner: list[tuple[str, int]]
 
 
-def counts(expiring_days=30):
+def counts(expiring_days=EXPIRING_DAYS):
     refresh()
     when = now()
 

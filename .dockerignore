@@ -8,6 +8,8 @@
 .venv
 venv
 **/__pycache__
+frontend/node_modules
+frontend/dist
 **/*.py[cod]
 
 # Not needed in the image

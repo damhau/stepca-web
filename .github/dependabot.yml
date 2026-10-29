@@ -1,8 +1,19 @@
 # Python dependencies are not listed here: Dependabot would update uv.lock but not the
 # requirements.txt exported from it. The weekly pip-audit run (security.yml) flags vulnerable ones.
+# The frontend's npm packages are, grouped so that a week's updates come as one pull request.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    # Only versions out for a week, like uv's exclude-newer for the Python side
+    cooldown:
+      default-days: 7
+    groups:
+      frontend:
+        patterns: ["*"]

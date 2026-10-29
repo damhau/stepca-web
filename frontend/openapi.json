@@ -1317,6 +1317,10 @@
             ],
             "title": "Error"
           },
+          "expiring": {
+            "title": "Expiring",
+            "type": "boolean"
+          },
           "issuer": {
             "title": "Issuer",
             "type": "string"
@@ -1457,6 +1461,7 @@
           "error",
           "status",
           "days_left",
+          "expiring",
           "revoked_at",
           "revocation_reason",
           "revocation_reason_code"
@@ -1947,17 +1952,12 @@
           "type": {
             "title": "Type",
             "type": "string"
-          },
-          "x509_enabled": {
-            "title": "X509 Enabled",
-            "type": "boolean"
           }
         },
         "required": [
           "name",
           "type",
           "id",
-          "x509_enabled",
           "durations",
           "disable_renewal",
           "allow_renewal_after_expiry",
@@ -2051,15 +2051,8 @@
           },
           "durations": {
             "$ref": "#/components/schemas/Durations"
-          },
-          "x509_enabled": {
-            "title": "X509 Enabled",
-            "type": "boolean"
           }
         },
-        "required": [
-          "x509_enabled"
-        ],
         "title": "ProvisionerUpdate",
         "type": "object"
       },
@@ -3756,13 +3749,13 @@
             }
           },
           {
-            "description": "With status=expiring: expires within this many days",
+            "description": "With status=expiring: expires within this many days. Certificates issued for 30 days or less are left out",
             "in": "query",
             "name": "days",
             "required": false,
             "schema": {
               "default": 30,
-              "description": "With status=expiring: expires within this many days",
+              "description": "With status=expiring: expires within this many days. Certificates issued for 30 days or less are left out",
               "maximum": 3650,
               "minimum": 1.0,
               "title": "Days",

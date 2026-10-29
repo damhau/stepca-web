@@ -9,26 +9,25 @@ from ldap3.core.exceptions import LDAPBindError, LDAPSocketOpenError
 from app import create_app
 from app.auth.factory import get_auth_backend
 from app.libs.auth.ldap_backend import LDAPAuthBackend, ldap_transport
-from tests.conftest import PASSWORD, csrf_token, make_settings
+from tests.conftest import PASSWORD, ApiClient, make_settings
 
 
-def test_login_starts_a_fresh_session(app):
-    client = app.test_client()
-    token = csrf_token(client)
-    with client.session_transaction() as session:
+def test_signing_in_starts_a_fresh_session(app):
+    api = ApiClient(app)
+    with api.client.session_transaction() as session:
         session["planted"] = "by an attacker"
-    client.post("/auth/login", data={"username": "admin", "password": PASSWORD, "csrf_token": token})
-    with client.session_transaction() as session:
+    assert api.post("/api/v1/session", json={"username": "admin", "password": PASSWORD}).status_code == 200
+    with api.client.session_transaction() as session:
         assert session["user_id"] == "admin"
         assert "planted" not in session
         assert session.permanent
 
 
-def test_logout_clears_the_session(client):
-    client.get("/auth/logout")
-    with client.session_transaction() as session:
-        assert dict(session) == {}
-    assert client.get("/").status_code == 302
+def test_signing_out_clears_the_session(api):
+    api.delete("/api/v1/session")
+    with api.client.session_transaction() as session:
+        assert "user_id" not in session and "role" not in session
+    assert api.get("/api/v1/dashboard").status_code == 401
 
 
 @pytest.mark.parametrize("backend", ["oidc", "saml", "radius"])
@@ -143,10 +142,11 @@ def test_missing_ldap_ca_file_stops_the_app(tmp_path):
         create_app(make_settings(tmp_path, auth_backend="ldap", ldap_url="ldaps://dc.corp", ldap_ca_file="/nonexistent/ca.crt"))
 
 
-def test_config_page_warns_about_cleartext_ldap(app, client):
+def test_settings_warn_about_cleartext_ldap(app, api):
     app.config.update(AUTH_BACKEND="ldap", LDAP_URL="ldap://dc.corp", LDAP_START_TLS=False)
-    html = client.get("/system/config").get_data(as_text=True)
-    assert "alert-warning" in html and "cleartext" in html
+    body = api.get("/api/v1/settings").get_json()
+    assert any("cleartext" in warning for warning in body["warnings"])
     app.config.update(LDAP_URL="ldaps://dc.corp")
-    html = client.get("/system/config").get_data(as_text=True)
-    assert "alert-warning" not in html and "LDAPS, server certificate verified" in html
+    body = api.get("/api/v1/settings").get_json()
+    values = {item["label"]: item["value"] for section in body["sections"] for item in section["items"]}
+    assert body["warnings"] == [] and values["LDAP transport"] == "LDAPS, server certificate verified"

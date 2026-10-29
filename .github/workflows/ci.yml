@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
 
+env:
+  # uv.lock was resolved with exclude-newer = "7 days" (only packages published at least a week
+  # earlier); uv records that setting in the lock, so CI must use it too or the lock looks stale
+  UV_EXCLUDE_NEWER: "7 days"
+
 jobs:
   test:
     name: Lint and unit tests

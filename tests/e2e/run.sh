@@ -11,13 +11,15 @@
 #   DOCKERFILE=Dockerfile.pip     test the pip image;  KEEP=1  leave the stack running
 set -euo pipefail
 cd "$(dirname "$0")"
+E2E_DIR="$PWD"
 
 PORT="${E2E_PORT:-15000}"
 LDAP_PORT="${E2E_LDAP_PORT:-15389}"
 LDAPS_PORT="${E2E_LDAPS_PORT:-15636}"
 IDENTITY="${E2E_IDENTITY:-admin}"
-DC="docker compose -f compose.yml"
-[ "$IDENTITY" = super ] && DC="$DC -f compose.legacy-key.yml"
+# Absolute paths: the cleanup below runs after the cd to the repository root
+DC="docker compose -f $E2E_DIR/compose.yml"
+[ "$IDENTITY" = super ] && DC="$DC -f $E2E_DIR/compose.legacy-key.yml"
 STEP="$DC exec -T step-ca step"
 CA="--ca-url https://localhost:9000 --root /home/step/certs/root_ca.crt"
 

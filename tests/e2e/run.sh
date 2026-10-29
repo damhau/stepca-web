@@ -2,7 +2,8 @@
 # End-to-end test against a real step-ca:
 #   1. step-ca with remote management, its database on PostgreSQL
 #   2. stepca-web connected with a read-only role, TLS pinned with the root fingerprint
-#   3. pytest tests/e2e against the running app
+#   3. OpenLDAP with TLS, for the LDAP login tests
+#   4. pytest tests/e2e against the running app and LDAP server
 # Usage: tests/e2e/run.sh
 #   E2E_IDENTITY=admin (default)  the app is a dedicated ADMIN "stepca-web"; its key is decrypted in memory
 #                                 from a password file (the recommended setup)
@@ -12,6 +13,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 PORT="${E2E_PORT:-15000}"
+LDAP_PORT="${E2E_LDAP_PORT:-15389}"
+LDAPS_PORT="${E2E_LDAPS_PORT:-15636}"
 IDENTITY="${E2E_IDENTITY:-admin}"
 DC="docker compose -f compose.yml"
 [ "$IDENTITY" = super ] && DC="$DC -f compose.legacy-key.yml"
@@ -48,9 +51,21 @@ json.dump(config, open("work/ca.json", "w"), indent=2)
 EOF
 $DC run --rm --no-deps -T --entrypoint sh step-ca -c 'cat > /home/step/config/ca.json' < work/ca.json
 
-$DC up -d db step-ca
+echo "== Test CA and certificate for OpenLDAP"
+uv run python ldap/make_certs.py work/ldap-certs
+
+$DC up -d db step-ca openldap
 for _ in $(seq 1 30); do $STEP ca health $CA >/dev/null 2>&1 && break; sleep 2; done
 $STEP ca health $CA
+
+echo "== Waiting for OpenLDAP"
+# The image runs a temporary slapd to load the test directory, then restarts it
+LDAP_READY="ldapsearch -x -H ldap://localhost -D uid=bob,ou=people,dc=example,dc=org -w bobpw -b dc=example,dc=org (uid=alice)"
+for _ in $(seq 1 60); do
+  $DC logs openldap 2>&1 | grep -q "First start is done" && $DC exec -T openldap $LDAP_READY >/dev/null 2>&1 && break
+  sleep 1
+done
+$DC exec -T openldap $LDAP_READY >/dev/null || { $DC logs openldap; exit 1; }
 
 echo "== Read-only database role for the app"
 $DC exec -T db psql -q -U step-ca -d step_ca_db -c "
@@ -102,4 +117,6 @@ docker inspect -f '{{.State.Health.Status}}' "$WEB" | grep -qx healthy || { $DC 
 echo "== Running the end-to-end tests"
 cd ../..
 E2E_BASE_URL="http://127.0.0.1:$PORT" E2E_COMPOSE="tests/e2e/compose.yml" E2E_IDENTITY="$IDENTITY" \
+  E2E_LDAP_URL="ldap://localhost:$LDAP_PORT" E2E_LDAPS_URL="ldaps://localhost:$LDAPS_PORT" \
+  E2E_LDAP_CA="tests/e2e/work/ldap-certs/ca.crt" \
   uv run pytest tests/e2e -v -p no:cacheprovider

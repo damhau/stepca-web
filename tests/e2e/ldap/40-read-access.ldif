@@ -1,0 +1,5 @@
+# Signed-in users may read the directory, as in Active Directory
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+add: olcAccess
+olcAccess: {2}to * by dn="cn=admin,dc=example,dc=org" write by users read by * none

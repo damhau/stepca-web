@@ -324,6 +324,22 @@ To keep the behaviour from before roles existed (every LDAP user can do everythi
 
 Two auth backends are available, selected with the `AUTH_BACKEND` environment variable: `ldap` (default) and `local`. The factory dispatching the choice lives in `app/auth/factory.py`.
 
+### LDAP setup
+
+```bash
+AUTH_BACKEND=ldap
+LDAP_URL=ldaps://dc.example.com          # or ldap:// with LDAP_START_TLS=true
+LDAP_CA_FILE=/data/ldap-ca.crt           # CA of the LDAP server's certificate; system CAs if unset
+LDAP_DOMAIN=example.com                  # Active Directory: users bind as <username>@LDAP_DOMAIN
+# LDAP_BIND_DN=uid={username},ou=people,dc=example,dc=com   # other servers: bind with a DN
+LDAP_BASE_DN=dc=example,dc=com
+LDAP_USER_SEARCH_FILTER=(sAMAccountName={username})         # (uid={username}) by default
+```
+
+- **The server certificate is always verified** for `ldaps://` and StartTLS: against `LDAP_CA_FILE`, or the system CAs. A server whose certificate doesn't verify, or doesn't name the host in `LDAP_URL`, refuses every login, and the reason is logged.
+- **`ldap://` without StartTLS sends passwords in cleartext.** It still works, but the app logs a warning at startup and the Configuration page shows one.
+- Groups come from the user's `memberOf` attribute (on OpenLDAP, enable the memberof overlay) and are mapped to roles (see [Roles](#roles)). `LDAP_REQUIRED_GROUP_DN` optionally restricts login to one group.
+
 ### Local auth setup
 
 Use this when you want a self-contained login without an external identity provider. Users are read from `local_users.json` in the working directory (override the path with `LOCAL_USERS_FILE`). The file is git-ignored: never commit it.

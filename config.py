@@ -50,6 +50,13 @@ class Config:
     LDAP_URL = os.environ.get('LDAP_URL') or get_config('ldap.url', 'ldap://localhost')
     LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN') or get_config('ldap.base_dn', '')
     LDAP_DOMAIN = os.environ.get('LDAP_DOMAIN') or get_config('ldap.domain', '')
+    # Users bind as <username>@LDAP_DOMAIN (Active Directory), or with this DN template,
+    # e.g. uid={username},ou=people,dc=example,dc=org
+    LDAP_BIND_DN = os.environ.get('LDAP_BIND_DN') or get_config('ldap.bind_dn')
+    # ldap:// sends passwords in cleartext unless StartTLS is on; ldaps:// and StartTLS verify the
+    # server certificate against LDAP_CA_FILE, or the system CAs when it isn't set
+    LDAP_START_TLS = str(os.environ.get('LDAP_START_TLS') or get_config('ldap.start_tls', 'false')).lower() == 'true'
+    LDAP_CA_FILE = os.environ.get('LDAP_CA_FILE') or get_config('ldap.ca_file')
     LDAP_USER_SEARCH_FILTER = os.environ.get('LDAP_USER_SEARCH_FILTER') or get_config('ldap.user_search_filter', '(uid={username})')
     LDAP_USER_SEARCH_BASE = os.environ.get('LDAP_USER_SEARCH_BASE') or get_config('ldap.user_search_base', LDAP_BASE_DN)
     # Optional: only members of this group may log in (DEFAULT_ROLE=none does the same with role groups)

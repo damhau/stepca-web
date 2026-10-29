@@ -1,4 +1,5 @@
-# End-to-end stack: step-ca on PostgreSQL and stepca-web on a read-only role. Started by run.sh.
+# End-to-end stack: step-ca on PostgreSQL, stepca-web on a read-only role, and an OpenLDAP
+# server for the LDAP login tests. Started by run.sh.
 name: stepca-e2e
 
 services:
@@ -20,6 +21,28 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # Test directory (ldap/50-directory.ldif) over ldap:// with StartTLS (389) and ldaps:// (636),
+  # with a certificate from a test CA (ldap/make_certs.py) for the names openldap and localhost
+  openldap:
+    image: osixia/openldap:1.5.0
+    command: --copy-service
+    environment:
+      LDAP_ORGANISATION: E2E
+      LDAP_DOMAIN: example.org
+      LDAP_ADMIN_PASSWORD: adminpw
+      LDAP_TLS_CRT_FILENAME: ldap.crt
+      LDAP_TLS_KEY_FILENAME: ldap.key
+      LDAP_TLS_CA_CRT_FILENAME: ca.crt
+      # No client certificates
+      LDAP_TLS_VERIFY_CLIENT: never
+    ports:
+      - "127.0.0.1:${E2E_LDAP_PORT:-15389}:389"
+      - "127.0.0.1:${E2E_LDAPS_PORT:-15636}:636"
+    volumes:
+      - ./work/ldap-certs:/container/service/slapd/assets/certs
+      - ./ldap/40-read-access.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/40-read-access.ldif:ro
+      - ./ldap/50-directory.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/50-directory.ldif:ro
 
   stepca-web:
     build:

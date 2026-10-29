@@ -6,6 +6,7 @@ from app.auth.roles import role_required
 from app.blueprint.system import bp
 from app.libs import ca
 from app.libs.audit import recent_events
+from app.libs.auth.ldap_backend import ldap_transport
 from config import (
     CA_ADMIN_PROVISIONER_NAME,
     CA_ADMIN_SUBJECT,
@@ -18,6 +19,20 @@ from config import (
     DB_PORT,
     DB_USER,
 )
+
+LDAP_TRANSPORTS = {
+    "ldaps": "LDAPS, server certificate verified",
+    "starttls": "StartTLS, server certificate verified",
+    "cleartext": "cleartext: passwords are readable on the network",
+}
+
+
+def config_warnings():
+    config = current_app.config
+    warnings = []
+    if config["AUTH_BACKEND"] == "ldap" and ldap_transport(config) == "cleartext":
+        warnings.append("LDAP passwords cross the network in cleartext: use an ldaps:// LDAP_URL or set LDAP_START_TLS=true.")
+    return warnings
 
 
 def effective_settings():
@@ -50,6 +65,8 @@ def effective_settings():
             [
                 ("Backend", config["AUTH_BACKEND"]),
                 ("LDAP URL", config["LDAP_URL"] if config["AUTH_BACKEND"] == "ldap" else "—"),
+                ("LDAP transport", LDAP_TRANSPORTS[ldap_transport(config)] if config["AUTH_BACKEND"] == "ldap" else "—"),
+                ("LDAP CA file", (config["LDAP_CA_FILE"] or "system CAs") if config["AUTH_BACKEND"] == "ldap" else "—"),
                 ("Admin group", config["ROLE_ADMIN_GROUP"] or "—"),
                 ("Operator group", config["ROLE_OPERATOR_GROUP"] or "—"),
                 ("Viewer group", config["ROLE_VIEWER_GROUP"] or "—"),
@@ -71,7 +88,7 @@ def effective_settings():
 @login_required
 @role_required("admin")
 def config():
-    return render_template("system/config.html", title="Configuration", settings=effective_settings())
+    return render_template("system/config.html", title="Configuration", settings=effective_settings(), warnings=config_warnings())
 
 
 @bp.route("/audit")

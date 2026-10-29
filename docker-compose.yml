@@ -24,6 +24,8 @@ services:
       - stepca-web-data:/data
       # Users for AUTH_BACKEND=local (see README)
       # - ./local_users.json:/data/local_users.json:ro
+      # CA of the LDAP server's certificate, for LDAP_CA_FILE=/data/ldap-ca.crt
+      # - ./ldap-ca.crt:/data/ldap-ca.crt:ro
     extra_hosts:
       # Lets the container reach a step-ca / PostgreSQL running on the host
       - "host.docker.internal:host-gateway"

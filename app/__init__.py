@@ -9,6 +9,17 @@ from app.models.audit import AuditEvent  # noqa: F401  registers the model for c
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
 from config import CA_URL, DB_HOST, Config
 
+log = logging.getLogger(__name__)
+
+
+def check_ldap_config(config):
+    from app.libs.auth.ldap_backend import ldap_transport
+
+    if config["LDAP_CA_FILE"] and not os.path.isfile(config["LDAP_CA_FILE"]):
+        raise RuntimeError(f"LDAP_CA_FILE {config['LDAP_CA_FILE']} does not exist")
+    if ldap_transport(config) == "cleartext":
+        log.warning("LDAP_URL is ldap:// without LDAP_START_TLS: user passwords cross the network in cleartext. Use ldaps:// or set LDAP_START_TLS=true")
+
 
 def create_app(config_class=Config):
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -20,6 +31,8 @@ def create_app(config_class=Config):
     missing = [name for name, value in (("CA_URL", CA_URL), ("DATABASE_HOST", DB_HOST)) if not value]
     if missing:
         raise RuntimeError(f"Missing configuration: {', '.join(missing)} (see .env.example)")
+    if app.config["AUTH_BACKEND"] == "ldap":
+        check_ldap_config(app.config)
 
     # Initialize Flask extensions here
     db.init_app(app)

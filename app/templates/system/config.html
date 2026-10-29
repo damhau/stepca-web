@@ -56,6 +56,9 @@
   <!-- Main content -->
   <section class="content">
     <div class="container-fluid">
+      {% for warning in warnings %}
+      <div class="alert alert-warning" role="alert"><i class="fas fa-exclamation-triangle mr-1"></i> {{ warning }}</div>
+      {% endfor %}
       <p class="text-muted">Read-only. The configuration comes from environment variables (see <code>.env.example</code>); restart the app after changing it.</p>
       {% for section, rows in settings %}
       <div class="card">

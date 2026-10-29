@@ -1,0 +1,27 @@
+# Test directory: alice is in the admin group, bob in no group
+dn: ou=people,dc=example,dc=org
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=example,dc=org
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=alice,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+uid: alice
+cn: Alice
+sn: Admin
+userPassword: alicepw
+
+dn: uid=bob,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+uid: bob
+cn: Bob
+sn: Viewer
+userPassword: bobpw
+
+dn: cn=pki-admins,ou=groups,dc=example,dc=org
+objectClass: groupOfUniqueNames
+cn: pki-admins
+uniqueMember: uid=alice,ou=people,dc=example,dc=org

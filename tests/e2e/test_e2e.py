@@ -1,9 +1,11 @@
 """End-to-end tests against a real step-ca. Run with tests/e2e/run.sh, which starts the stack."""
 
+import json
 import os
 import re
 import subprocess
 from html import unescape
+from urllib.parse import quote
 
 import pytest
 import requests
@@ -159,3 +161,32 @@ def test_dedicated_admin_identity(session):
         "print(c.subject.rfc4514_string(), issuing_provisioner(c), os.path.exists('/data/jwk_key.json'))",
     )
     assert check.stdout.splitlines()[-1].split() == ["CN=stepca-web", "stepca-web", "False"], check.stderr
+
+
+def test_provisioner_can_be_edited_and_deleted(session):
+    """A name with a space: the Admin API paths and the token audience must escape it the same way."""
+    name = "e2e edit"
+    edit_url = f"{BASE_URL}/step/provisioner/{quote(name)}/edit"
+    html = session.post(
+        f"{BASE_URL}/step/provisioners",
+        data={"name": name, "type": "ACME", "duration_default": "24h", "challenges": "DNS_01", "csrf_token": session.csrf},
+    ).text
+    assert ("success", f"Provisioner '{name}' created successfully.") in flashes(html)
+    assert 'value="24h"' in session.get(edit_url).text
+
+    changes = {"x509_enabled": "on", "duration_default": "12h", "duration_max": "36h", "force_cn": "on", "challenges": ["HTTP_01", "TLS_ALPN_01"]}
+    html = session.post(edit_url, data={**changes, "csrf_token": session.csrf}).text
+    assert ("success", f"Provisioner '{name}' updated.") in flashes(html)
+    listed = next(p for p in json.loads(step("ca", "provisioner", "list", *CA).stdout) if p["name"] == name)
+    assert listed["forceCN"] is True
+    assert sorted(listed["challenges"]) == ["http-01", "tls-alpn-01"]
+    assert 'value="12h"' in session.get(edit_url).text and 'value="36h"' in session.get(edit_url).text
+
+    # step-ca's own validation: a default longer than the maximum is refused, with its message
+    html = session.post(edit_url, data={**changes, "duration_default": "48h", "csrf_token": session.csrf}).text
+    (kind, message), *_ = flashes(html)
+    assert kind == "danger" and message.startswith(f"Provisioner '{name}' was not updated:"), message
+
+    html = session.post(f"{BASE_URL}/step/provisioner/{quote(name)}/delete", data={"csrf_token": session.csrf}).text
+    assert ("success", f"Provisioner '{name}' deleted successfully.") in flashes(html)
+    assert name not in [p["name"] for p in json.loads(step("ca", "provisioner", "list", *CA).stdout)]

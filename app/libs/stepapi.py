@@ -10,7 +10,7 @@ import time
 import uuid
 import warnings
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 import jwt as python_jwt
 import requests
@@ -416,9 +416,36 @@ class StepCAClient:
             log.warning("step-ca returned %s: %s", response.status_code, response.text)
             return None
 
+    @staticmethod
+    def _provisioner_path(name):
+        # Names may contain spaces: step-ca matches the token audience against the decoded path
+        return f"/admin/provisioners/{quote(name, safe='')}"
+
+    @staticmethod
+    def _error_message(response):
+        try:
+            return response.json().get("message") or response.text
+        except ValueError:
+            return response.text
+
+    def get_provisioner(self, name):
+        """step-ca's full record of a provisioner (with its id, details and claims), or None."""
+        response = self._request("GET", self._provisioner_path(name))
+        if response.ok:
+            return response.json()
+        log.warning("step-ca returned %s: %s", response.status_code, response.text)
+        return None
+
+    def update_provisioner(self, name, provisioner):
+        """Replace a provisioner with an edited copy of get_provisioner(). Raises with step-ca's message."""
+        response = self._request("PUT", self._provisioner_path(name), json_payload=provisioner)
+        if response.ok:
+            return response.json()
+        raise RuntimeError(self._error_message(response))
+
     # Delete a provisioner
     def delete_provisioner(self, name):
-        response = self._request("DELETE", f"/admin/provisioners/{name}")
+        response = self._request("DELETE", self._provisioner_path(name))
 
         try:
             data = response.json()

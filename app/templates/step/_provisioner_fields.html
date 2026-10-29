@@ -1,0 +1,42 @@
+{# Form fields shared by the create and edit provisioner forms #}
+
+{% macro durations(values={}) %}
+<div class="form-group">
+  <label>X.509 certificate durations</label>
+  <div class="form-row">
+    {% for field, placeholder in [("default", "Default, e.g. 24h"), ("min", "Minimum, e.g. 5m"), ("max", "Maximum, e.g. 720h")] %}
+    <div class="col">
+      <input type="text" name="duration_{{ field }}" class="form-control" placeholder="{{ placeholder }}" aria-label="{{ placeholder }}"
+        value="{{ values.get(field, '') }}" pattern="([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+" title="A duration such as 24h, 90m or 1h30m">
+    </div>
+    {% endfor %}
+  </div>
+  <small class="form-text text-muted">Go durations such as 24h, 90m or 1h30m. Empty: the CA's defaults.</small>
+</div>
+{% endmacro %}
+
+{% macro acme_options(challenges_offered, acme={}) %}
+<div class="form-group">
+  <label>ACME challenge types</label>
+  {% for name, label in challenges_offered %}
+  <div class="form-check">
+    <input type="checkbox" name="challenges" value="{{ name }}" class="form-check-input" id="challenge-{{ name }}"
+      {% if name in acme.get("challenges", []) %}checked{% endif %}>
+    <label for="challenge-{{ name }}" class="form-check-label">{{ label }}</label>
+  </div>
+  {% endfor %}
+  <small class="form-text text-muted">None checked: step-ca allows http-01, dns-01 and tls-alpn-01.</small>
+</div>
+<div class="form-check">
+  <input type="checkbox" name="force_cn" class="form-check-input" id="forceCn" {% if acme.get("forceCn") %}checked{% endif %}>
+  <label for="forceCn" class="form-check-label">Force a common name in the certificate</label>
+</div>
+<div class="form-check">
+  <input type="checkbox" name="require_eab" class="form-check-input" id="requireEab" {% if acme.get("requireEab") %}checked{% endif %}>
+  <label for="requireEab" class="form-check-label">Require External Account Binding (EAB)</label>
+  <small class="form-text text-warning">
+    Open-source step-ca can't create EAB keys (only Smallstep's Certificate Manager can), so ACME clients
+    can't register with a provisioner that requires EAB.
+  </small>
+</div>
+{% endmacro %}

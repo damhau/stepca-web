@@ -9,6 +9,9 @@ from app.libs import ca
 from app.libs.audit import audit
 from app.libs.ca import client
 from app.libs.db_step import get_active_provisioner_map, get_admin_created_dates, get_step_provisioners
+from app.libs.provisioners import ACME_CHALLENGES, durations_from_form
+from app.libs.provisioners import edit_provisioner as edit_provisioner_record
+from config import CA_ADMIN_PROVISIONER_NAME
 
 
 @bp.route("/provisioners", methods=["GET", "POST"])
@@ -16,67 +19,75 @@ from app.libs.db_step import get_active_provisioner_map, get_admin_created_dates
 @role_required("admin", methods={"POST"})
 def provisioner():
     if request.method == "POST":
-        data = request.form.to_dict()
-
-        resp = None
-        if data.get("type") == "JWK":
-
-            # Build full provisioner JSON
-            provisioner_type = data["type"]
-
-            # Send to backend
-            claims = {
-                "x509": {
-                    "enabled": True,
-                    "durations": {"default": data["duration_default"], "min": data["duration_min"], "max": data["duration_max"]},
-                }
-            }
-            resp = client.create_provisioner_jwk(data["name"], data["passphrase"], claims=claims)
-
-        elif data.get("type") == "ACME":
-            # Convert checkbox to bool
-            data["require_eab"] = "require_eab" in request.form
-
-            # Build full provisioner JSON
-            provisioner_type = data["type"]
-
-            # Send to backend
-            resp = client.create_provisioner_acme(
-                name=data["name"],
-                details={
-                    provisioner_type: {
-                        "require_eab": data["require_eab"],
-                        "force_cn": data.get("force_cn") == "on",
-                        "challenges": [int(c) for c in request.form.getlist("challenges")],
-                    }
-                },
-                claims={
-                    "x509": {
-                        "enabled": True,
-                        "durations": {
-                            "default": data["duration_default"],
-                            "min": data["duration_min"],
-                            "max": data["duration_max"],
-                        },
-                    }
-                },
-            )
-
-        else:
-            flash(f"Unknown provisioner type '{data.get("type")}'.", "danger")
+        name = request.form.get("name", "")
+        provisioner_type = request.form.get("type")
+        try:
+            claims = {"x509": {"enabled": True, "durations": durations_from_form(request.form)}}
+        except ValueError as e:
+            flash(f"Provisioner '{name}' was not created: {e}.", "danger")
             return redirect(url_for("step.provisioner"))
 
-        audit("create_provisioner", data["name"], success=bool(resp), detail=data.get("type"))
-        if resp:
-            flash(f"Provisioner '{data["name"]}' created successfully.", "success")
+        if provisioner_type == "JWK":
+            resp = client.create_provisioner_jwk(name, request.form.get("passphrase", ""), claims=claims)
+        elif provisioner_type == "ACME":
+            offered = [challenge for challenge, _ in ACME_CHALLENGES]
+            details = {
+                "ACME": {
+                    "requireEab": "require_eab" in request.form,
+                    "forceCn": "force_cn" in request.form,
+                    "challenges": [challenge for challenge in request.form.getlist("challenges") if challenge in offered],
+                }
+            }
+            resp = client.create_provisioner_acme(name=name, details=details, claims=claims)
         else:
-            flash(f"Failed to create provisioner '{data["name"]}'.", "danger")
+            flash(f"Unknown provisioner type '{provisioner_type}'.", "danger")
+            return redirect(url_for("step.provisioner"))
+
+        audit("create_provisioner", name, success=bool(resp), detail=provisioner_type)
+        if resp:
+            flash(f"Provisioner '{name}' created successfully.", "success")
+        else:
+            flash(f"Failed to create provisioner '{name}'.", "danger")
         return redirect(url_for("step.provisioner"))
 
     provisioners = client.list_provisioners()
     if provisioners is None:
         flash("Could not load the provisioners from the CA.", "danger")
-    return render_template("step/provisioners.html", title="StepCA Provisioners", provisioners=(provisioners or {}).get("provisioners", []))
+    return render_template(
+        "step/provisioners.html",
+        title="StepCA Provisioners",
+        provisioners=(provisioners or {}).get("provisioners", []),
+        acme_challenges=ACME_CHALLENGES,
+    )
+
+
+@bp.route("/provisioner/<name>/edit", methods=["GET", "POST"])
+@login_required
+@role_required("admin")
+def edit_provisioner(name):
+    prov = client.get_provisioner(name)
+    if prov is None:
+        flash(f"Could not load the provisioner '{name}' from the CA.", "danger")
+        return redirect(url_for("step.provisioner"))
+
+    if request.method == "POST":
+        try:
+            client.update_provisioner(name, edit_provisioner_record(prov, request.form, app_provisioner=CA_ADMIN_PROVISIONER_NAME))
+        except (ValueError, RuntimeError) as e:
+            audit("update_provisioner", name, success=False, detail=str(e))
+            flash(f"Provisioner '{name}' was not updated: {e}", "danger")
+            return redirect(url_for("step.edit_provisioner", name=name))
+        audit("update_provisioner", name)
+        flash(f"Provisioner '{name}' updated.", "success")
+        return redirect(url_for("step.provisioner"))
+
+    return render_template(
+        "step/provisioner_edit.html",
+        title=f"Edit provisioner {name}",
+        prov=prov,
+        acme_challenges=ACME_CHALLENGES,
+        is_app_provisioner=name == CA_ADMIN_PROVISIONER_NAME,
+    )
 
 
 @bp.route("/provisioner/<name>/delete", methods=["POST"])
@@ -87,10 +98,9 @@ def delete_provisioner(name):
     audit("delete_provisioner", name, success=bool(resp))
     if resp:
         flash(f"Provisioner '{name}' deleted successfully.", "success")
-        return redirect("/step/provisioners")
     else:
         flash(f"Failed to delete provisioner '{name}'.", "danger")
-        return redirect("/step/provisioners")
+    return redirect(url_for("step.provisioner"))
 
 
 def admins_manageable():

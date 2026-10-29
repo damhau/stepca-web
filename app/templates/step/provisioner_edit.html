@@ -1,0 +1,71 @@
+{% extends "layouts/base.html" %}
+{% from "step/_provisioner_fields.html" import durations, acme_options %}
+
+{% block title %} {{ title }} {% endblock %}
+
+{% block body_class %} sidebar-mini {% endblock body_class %}
+
+{% block content %}
+{% set claims = prov.get("claims", {}) %}
+{% set x509 = claims.get("x509", {}) %}
+<div class="content-wrapper">
+  <div class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-6">
+          <h1 class="m-0 text-dark">{{ prov.name }}</h1>
+        </div>
+        <div class="col-sm-6">
+          <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="{{ url_for('home.index') }}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('step.provisioner') }}">Provisioners</a></li>
+            <li class="breadcrumb-item active">Edit</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="content">
+    {% include "includes/flashes.html" %}
+    <div class="container-fluid">
+      {% if is_app_provisioner %}
+      <div class="alert alert-info" role="alert">
+        This is the app's own provisioner: it issues the app's 24-hour admin certificate, so it must keep issuing
+        X.509 certificates for at least 24 hours.
+      </div>
+      {% endif %}
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">{{ prov.type }} provisioner</h3></div>
+        <form method="POST" action="{{ url_for('step.edit_provisioner', name=prov.name) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="card-body">
+            <p class="text-muted mb-3">ID <code>{{ prov.id }}</code>, created {{ prov.createdAt | datetime }}. The name and type can't be changed.</p>
+            <div class="form-check mb-3">
+              <input type="checkbox" name="x509_enabled" class="form-check-input" id="x509Enabled" {% if x509.get("enabled") %}checked{% endif %}>
+              <label for="x509Enabled" class="form-check-label">Issues X.509 certificates</label>
+            </div>
+            {{ durations(x509.get("durations", {})) }}
+            <div class="form-check">
+              <input type="checkbox" name="disable_renewal" class="form-check-input" id="disableRenewal" {% if claims.get("disableRenewal") %}checked{% endif %}>
+              <label for="disableRenewal" class="form-check-label">Disable renewal</label>
+            </div>
+            <div class="form-check mb-3">
+              <input type="checkbox" name="allow_renewal_after_expiry" class="form-check-input" id="allowRenewalAfterExpiry" {% if claims.get("allowRenewalAfterExpiry") %}checked{% endif %}>
+              <label for="allowRenewalAfterExpiry" class="form-check-label">Allow renewal after expiry</label>
+            </div>
+            {% if prov.type == "ACME" %}
+            <h5 class="mt-4">ACME</h5>
+            {{ acme_options(acme_challenges, prov.get("details", {}).get("ACME", {})) }}
+            {% endif %}
+          </div>
+          <div class="card-footer">
+            <a href="{{ url_for('step.provisioner') }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock content %}

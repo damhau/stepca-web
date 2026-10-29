@@ -2,9 +2,11 @@ import logging
 import os
 from datetime import UTC, datetime
 
-from flask import Flask
+from flask import Flask, render_template
+from flask_talisman import Talisman
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-from app.extensions import csrf, db
+from app.extensions import CONTENT_SECURITY_POLICY, csrf, db, limiter
 from app.models.audit import AuditEvent  # noqa: F401  registers the model for create_all
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
 from config import CA_URL, DB_HOST, Config
@@ -54,10 +56,31 @@ def create_app(config_class=Config):
     if app.config["AUTH_BACKEND"] == "ldap":
         check_ldap_config(app.config)
 
+    if app.config["TRUSTED_PROXIES"]:
+        # Behind reverse proxies: take the client address and scheme from their X-Forwarded-* headers
+        proxies = app.config["TRUSTED_PROXIES"]
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxies, x_proto=proxies)
+
     # Initialize Flask extensions here
     db.init_app(app)
     # Every POST/PUT/PATCH/DELETE must carry the session's CSRF token
     csrf.init_app(app)
+    limiter.init_app(app)
+    # Security headers. HTTPS is terminated by a reverse proxy, so no redirect to it here;
+    # HSTS is only sent over HTTPS, and only when the UI is served over HTTPS (SESSION_COOKIE_SECURE)
+    Talisman(
+        app,
+        force_https=False,
+        strict_transport_security=app.config["SESSION_COOKIE_SECURE"],
+        session_cookie_secure=app.config["SESSION_COOKIE_SECURE"],
+        frame_options="DENY",
+        content_security_policy=CONTENT_SECURITY_POLICY,
+        referrer_policy="same-origin",
+    )
+
+    @app.errorhandler(429)
+    def too_many_requests(error):
+        return render_template("auth/login.html", error="Too many failed sign-ins from your address: try again later."), 429
 
     # Every route requires a session unless explicitly listed as public
     from app.auth.decorator import require_login

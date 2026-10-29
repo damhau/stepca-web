@@ -2,11 +2,14 @@ from flask import Blueprint, current_app, redirect, render_template, request, se
 
 from app.auth.factory import get_auth_backend
 from app.auth.roles import resolve_role
+from app.extensions import limiter
 from app.libs.audit import audit
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+# Only failed sign-ins count: a successful one redirects
+@limiter.limit(lambda: current_app.config["LOGIN_RATE_LIMIT"], methods=["POST"], deduct_when=lambda response: response.status_code != 302)
 def login():
     if request.method == 'POST':
         username = request.form['username']

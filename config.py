@@ -91,7 +91,13 @@ class Config:
     # Session cookie is not sent on cross-site POSTs or subresource requests
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_HTTPONLY = True
-    # Set to true when the UI is served over HTTPS
+    # Set to true when the UI is served over HTTPS (also turns HSTS on)
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+    # Number of reverse proxies in front of the app, whose X-Forwarded-For/-Proto are trusted
+    TRUSTED_PROXIES = int(os.environ.get("TRUSTED_PROXIES", "0"))
+    # Failed sign-ins allowed per client address (limits syntax: https://limits.readthedocs.io)
+    LOGIN_RATE_LIMIT = os.environ.get("LOGIN_RATE_LIMIT", "10 per minute;50 per hour")
+    # Where the rate limit counters live: memory:// is per process; e.g. redis://redis:6379 to share them
+    RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
     # CSRF tokens stay valid for the whole session instead of 1 hour
     WTF_CSRF_TIME_LIMIT = None

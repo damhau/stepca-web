@@ -10,7 +10,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from jwcrypto import jwk as jwcrypto_jwk
 
-from app.libs import stepapi
+from app.libs import cert_utils, stepapi
 from app.libs.stepapi import CAToken, StepCAClient
 from tests.conftest import make_cert
 
@@ -184,15 +184,15 @@ def admin_cert(common_name, provisioner, days=1):
         .serial_number(1)
         .not_valid_before(now - datetime.timedelta(minutes=1))
         .not_valid_after(now + datetime.timedelta(days=days))
-        .add_extension(x509.UnrecognizedExtension(stepapi.STEP_PROVISIONER_OID, extension), critical=False)
+        .add_extension(x509.UnrecognizedExtension(cert_utils.STEP_PROVISIONER_OID, extension), critical=False)
         .sign(key, hashes.SHA256())
     )
     return cert
 
 
 def test_issuing_provisioner_is_read_from_the_step_extension():
-    assert stepapi.issuing_provisioner(admin_cert("stepca-web", "stepca-web")) == "stepca-web"
-    assert stepapi.issuing_provisioner(x509.load_der_x509_certificate(make_cert(1, "plain.test"))) is None
+    assert cert_utils.issuing_provisioner(admin_cert("stepca-web", "stepca-web")) == "stepca-web"
+    assert cert_utils.issuing_provisioner(x509.load_der_x509_certificate(make_cert(1, "plain.test"))) is None
 
 
 @pytest.mark.parametrize(

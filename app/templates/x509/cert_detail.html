@@ -41,9 +41,12 @@
             <span class="badge {{ 'badge-danger' if days_left < 7 else 'badge-warning' if days_left < 30 else 'badge-light' }}">{{ days_left }} days left</span>
             {% endif %}
           </h3>
-          <a href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success ml-2">
-            <i class="fas fa-download"></i> Download PEM
-          </a>
+          <div class="btn-group ml-2" role="group" aria-label="Download">
+            <a href="{{ url_for('x509.download_cert', serial=cert.nkey) }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> PEM</a>
+            <a href="{{ url_for('x509.download_cert', serial=cert.nkey, format='chain') }}" class="btn btn-sm btn-success"
+              title="The certificate followed by its intermediate">Chain</a>
+            <a href="{{ url_for('x509.download_cert', serial=cert.nkey, format='der') }}" class="btn btn-sm btn-success">DER</a>
+          </div>
           {% if not revocation and can("operator") %}
           <button type="button" class="btn btn-sm btn-danger ml-2" data-toggle="modal" data-target="#revokeModal"
             data-cert-id="{{ cert.nkey }}" data-cert-subject="{{ data.subject }}">
@@ -67,6 +70,23 @@
               <tr><th>Revoked at</th><td>{{ revocation.RevokedAt | datetime }}</td></tr>
               <tr><th>Revocation reason</th><td>{{ revocation.Reason or reason_names.get(revocation.ReasonCode, "—") }} ({{ revocation.ReasonCode }})</td></tr>
               {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">Extensions</h3></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody>
+              {% for name, value, critical in extensions %}
+              <tr>
+                <th class="w-25">{{ name }}{% if critical %} <span class="badge badge-secondary">critical</span>{% endif %}</th>
+                <td class="text-break">{{ value }}</td>
+              </tr>
+              {% else %}
+              <tr><td class="text-muted">No extensions.</td></tr>
+              {% endfor %}
             </tbody>
           </table>
         </div>

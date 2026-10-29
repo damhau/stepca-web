@@ -47,6 +47,8 @@ python3 - <<'EOF'
 import json
 config = json.load(open("work/ca.json"))
 config["db"] = {"type": "postgresql", "dataSource": "postgresql://step-ca:test@db:5432/", "database": "step_ca_db"}
+# A CRL, regenerated on each revocation: the tests check that revocations from the UI land in it
+config["crl"] = {"enabled": True, "generateOnRevoke": True}
 json.dump(config, open("work/ca.json", "w"), indent=2)
 EOF
 $DC run --rm --no-deps -T --entrypoint sh step-ca -c 'cat > /home/step/config/ca.json' < work/ca.json

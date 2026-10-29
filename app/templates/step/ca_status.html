@@ -1,0 +1,125 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} {{ title }} {% endblock %}
+
+{% block body_class %} sidebar-mini {% endblock body_class %}
+
+{% macro expiry_badge(days_left) %}
+<span class="badge {{ 'badge-danger' if days_left < 30 else 'badge-warning' if days_left < 180 else 'badge-light' }}">{{ days_left }} days left</span>
+{% endmacro %}
+
+{% macro certificate_table(certs, kind) %}
+<table class="table table-sm mb-0">
+  <thead>
+    <tr><th>Subject</th><th>Valid to</th><th>Key</th><th>SHA-256 fingerprint</th></tr>
+  </thead>
+  <tbody>
+    {% for cert in certs %}
+    <tr>
+      <td>{{ cert.subject }}{% if cert.pinned %} <span class="badge badge-success" title="Matches CA_FINGERPRINT: the app verifies the CA's TLS against it">pinned</span>{% endif %}</td>
+      <td>{{ cert.not_after | datetime }} {{ expiry_badge(cert.days_left) }}</td>
+      <td>{{ cert.key_size }}{% if cert.key_size is number %} bit{% endif %}</td>
+      <td><code class="text-break">{{ cert.fingerprint }}</code></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="text-muted">The CA returned no {{ kind }}.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
+{% block content %}
+<div class="content-wrapper">
+  <div class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-6">
+          <h1 class="m-0 text-dark">{{ title }}</h1>
+        </div>
+        <div class="col-sm-6">
+          <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="{{ url_for('home.index') }}">Home</a></li>
+            <li class="breadcrumb-item active">{{ title }}</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="content">
+    {% include "includes/flashes.html" %}
+    <div class="container-fluid">
+      {% for error in errors %}
+      <div class="alert alert-danger" role="alert">Could not read {{ error }}</div>
+      {% endfor %}
+
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">step-ca</h3></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr><th class="w-25">URL</th><td><code>{{ url }}</code></td></tr>
+              <tr>
+                <th>Health</th>
+                <td>
+                  {% if health == "ok" %}<span class="badge badge-success">ok</span>
+                  {% else %}<span class="badge badge-danger">{{ health or "unreachable" }}</span>{% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th>Version</th>
+                <td>
+                  {{ version or "—" }}
+                  {% if version and not version_tested %}
+                  <span class="badge badge-warning">not tested</span>
+                  <small class="text-muted">This app is tested with step-ca {{ tested_versions | join(", ") }}: it reads step-ca's database directly, whose format can change.</small>
+                  {% endif %}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header d-flex align-items-center">
+          <h3 class="card-title mr-auto">Root certificates</h3>
+          {% if roots %}<a href="{{ url_for('step.ca_certificates', kind='roots') }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> roots.pem</a>{% endif %}
+        </div>
+        <div class="card-body p-0">{{ certificate_table(roots or [], "roots") }}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header d-flex align-items-center">
+          <h3 class="card-title mr-auto">Intermediate certificates</h3>
+          {% if intermediates %}<a href="{{ url_for('step.ca_certificates', kind='intermediates') }}" class="btn btn-sm btn-success"><i class="fas fa-download"></i> intermediates.pem</a>{% endif %}
+        </div>
+        <div class="card-body p-0">{{ certificate_table(intermediates or [], "intermediates") }}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header d-flex align-items-center">
+          <h3 class="card-title mr-auto">Certificate revocation list</h3>
+          {% if crl %}
+          <a href="{{ url_for('step.ca_crl') }}" class="btn btn-sm btn-success ml-2"><i class="fas fa-download"></i> DER</a>
+          <a href="{{ url_for('step.ca_crl', pem='') }}" class="btn btn-sm btn-success ml-2"><i class="fas fa-download"></i> PEM</a>
+          {% endif %}
+        </div>
+        <div class="card-body {{ 'p-0' if crl else '' }}">
+          {% if crl %}
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr><th class="w-25">Revoked certificates</th><td>{{ crl.entries }}</td></tr>
+              <tr><th>Issued</th><td>{{ crl.this_update | datetime }}</td></tr>
+              <tr><th>Next update</th><td>{{ crl.next_update | datetime }}</td></tr>
+            </tbody>
+          </table>
+          {% elif "crl" not in errors | join(" ") %}
+          <p class="text-muted mb-0">step-ca doesn't publish a CRL: set <code>"crl": {"enabled": true}</code> in <code>ca.json</code> to turn it on.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock content %}

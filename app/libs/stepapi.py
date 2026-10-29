@@ -19,13 +19,13 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.x509.oid import NameOID, ObjectIdentifier
+from cryptography.x509.oid import NameOID
 from jwcrypto import jwa
 from jwcrypto import jwe as jwcrypto_jwe
 from jwcrypto import jwk as jwcrypto_jwk
 from jwt.algorithms import ECAlgorithm
 
-from app.libs.cert_utils import extract_sans_from_csr
+from app.libs.cert_utils import extract_sans_from_csr, issuing_provisioner
 from config import CA_ADMIN_PASSWORD, CA_ADMIN_PASSWORD_FILE, CA_ADMIN_PROVISIONER_NAME, CA_ADMIN_SUBJECT, CA_FINGERPRINT, CA_ROOT
 
 # step encrypts provisioner keys with PBES2 and 600,000 iterations; jwcrypto refuses more than its own small
@@ -36,36 +36,6 @@ log = logging.getLogger(__name__)
 
 # Seconds before a request to the CA is abandoned
 TIMEOUT = 30
-# step-ca's certificate extension naming the provisioner that issued a certificate
-STEP_PROVISIONER_OID = ObjectIdentifier("1.3.6.1.4.1.37476.9000.64.1")
-
-
-def _der_element(data, pos):
-    """One DER element at `pos`: (contents, position after it)."""
-    length = data[pos + 1]
-    pos += 2
-    if length & 0x80:
-        size = length & 0x7F
-        length = int.from_bytes(data[pos : pos + size], "big")
-        pos += size
-    return data[pos : pos + length], pos + length
-
-
-def issuing_provisioner(cert):
-    """Name of the step-ca provisioner that issued `cert`, or None.
-
-    The extension is SEQUENCE { type INTEGER, name OCTET STRING, credentialID, keyValuePairs }.
-    """
-    try:
-        raw = cert.extensions.get_extension_for_oid(STEP_PROVISIONER_OID).value.value
-    except x509.ExtensionNotFound:
-        return None
-    sequence, _ = _der_element(raw, 0)
-    _, pos = _der_element(sequence, 0)
-    name, _ = _der_element(sequence, pos)
-    return name.decode()
-
-
 class CAToken:
     def __init__(self, ca_url, ca_path, ca_fingerprint, provisioner_name, subject, jwk_privkey, sans=None):
         self.ca_url = ca_url
@@ -321,15 +291,42 @@ class StepCAClient:
         )
         return resp
 
-    def _request_noauth(self, method, path, json_payload=None, params=None):
+    def _request_noauth(self, method, path, json_payload=None, params=None, expected=()):
+        """A request to step-ca's public API. Errors are logged, except the `expected` statuses."""
         url = f"{self.ca_url}/{path.lstrip('/')}"
         headers = {"Content-Type": "application/json"}
         resp = requests.request(
             method, url, params=params, json=json_payload, headers=headers, verify=self._ca_root(), timeout=TIMEOUT
         )
-        if not resp.ok:
+        if not resp.ok and resp.status_code not in expected:
             log.warning("step-ca %s %s returned %s: %s", method, path, resp.status_code, resp.text)
         return resp
+
+    def _public_json(self, path):
+        response = self._request_noauth("GET", path)
+        response.raise_for_status()
+        return response.json()
+
+    def health(self):
+        return self._public_json("/health")
+
+    def version(self):
+        """{"version": "0.30.2", ...}"""
+        return self._public_json("/version")
+
+    def roots(self):
+        return [x509.load_pem_x509_certificate(pem.encode()) for pem in self._public_json("/roots")["crts"]]
+
+    def intermediates(self):
+        return [x509.load_pem_x509_certificate(pem.encode()) for pem in self._public_json("/intermediates")["crts"]]
+
+    def crl(self):
+        """The CA's certificate revocation list (DER), or None when CRLs are not enabled in ca.json."""
+        response = self._request_noauth("GET", "/crl", expected=(404,))
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.content
 
     def extract_cn_from_csr(self, csr_pem):
         csr = x509.load_pem_x509_csr(csr_pem.encode("utf-8"), default_backend())

@@ -1,6 +1,8 @@
+import base64
 import subprocess
 
-from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
+from cryptography.hazmat.primitives import serialization
+from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, url_for
 
 from app.auth.decorator import login_required
 from app.auth.roles import role_required
@@ -88,6 +90,50 @@ def edit_provisioner(name):
         acme_challenges=ACME_CHALLENGES,
         is_app_provisioner=name == CA_ADMIN_PROVISIONER_NAME,
     )
+
+
+@bp.route("/ca")
+@login_required
+def ca_status():
+    return render_template("step/ca_status.html", title="CA status", **ca.ca_status())
+
+
+def download(content, filename, content_type):
+    response = make_response(content)
+    response.headers["Content-Type"] = content_type
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@bp.route("/ca/<kind>.pem")
+@login_required
+def ca_certificates(kind):
+    """The CA's roots or intermediates as one PEM file, fetched from the CA (which browsers may not reach)."""
+    fetch = {"roots": client.roots, "intermediates": client.intermediates}.get(kind)
+    if fetch is None:
+        abort(404)
+    try:
+        certs = fetch()
+    except ca.CA_ERRORS as e:
+        flash(f"Could not load the {kind} from the CA: {e}", "danger")
+        return redirect(url_for("step.ca_status"))
+    return download(b"".join(cert.public_bytes(serialization.Encoding.PEM) for cert in certs), f"{kind}.pem", "application/x-pem-file")
+
+
+@bp.route("/ca/crl")
+@login_required
+def ca_crl():
+    try:
+        der = client.crl()
+    except ca.CA_ERRORS as e:
+        der = None
+        flash(f"Could not load the CRL from the CA: {e}", "danger")
+    if der is None:
+        return redirect(url_for("step.ca_status"))
+    if "pem" in request.args:
+        pem = b"-----BEGIN X509 CRL-----\n" + base64.encodebytes(der) + b"-----END X509 CRL-----\n"
+        return download(pem, "crl.pem", "application/x-pem-file")
+    return download(der, "crl.crl", "application/pkix-crl")
 
 
 @bp.route("/provisioner/<name>/delete", methods=["POST"])

@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 from datetime import UTC, datetime
 
 from flask import Flask, render_template
@@ -93,6 +94,13 @@ def create_app(config_class=Config):
         # Templates show only the actions the user's role allows: {% if can("operator") %}
         return {"current_role": current_role(), "can": lambda minimum: role_at_least(current_role(), minimum)}
 
+
+    if not app.testing:
+        # Logs step-ca's version, and warns when it isn't one the app is tested with. In the background:
+        # the app starts even when the CA is down
+        from app.libs.ca import check_ca_version
+
+        threading.Thread(target=check_ca_version, name="ca-version-check", daemon=True).start()
 
     with app.app_context():
         # Only the app's own SQLite tables: step-ca's database is never modified

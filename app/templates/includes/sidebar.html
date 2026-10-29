@@ -47,6 +47,7 @@
             ("x509.all_certs", "fas fa-list", "All"),
           ]),
           ("Step CA", [
+            ("step.ca_status", "fas fa-heartbeat", "Status"),
             ("step.provisioner", "fas fa-key", "Provisioners"),
             ("step.admins", "fas fa-user-cog", "Admins"),
           ] + ([("step.step_service", "fas fa-power-off", "Service")] if can("admin") and config.SERVICE_CONTROL_ENABLED else [])),

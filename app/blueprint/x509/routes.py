@@ -8,8 +8,10 @@ from flask import flash, make_response, redirect, render_template, request, url_
 from app.auth.decorator import login_required
 from app.auth.roles import role_required
 from app.blueprint.x509 import bp
+from app.libs import ca
 from app.libs.audit import audit
 from app.libs.ca import client
+from app.libs.cert_utils import certificate_extensions
 from app.libs.db_step import get_jwk_provisioner_names, get_step_provisioners
 from app.libs.db_x509 import (
     get_expiring_certs,
@@ -102,6 +104,7 @@ def cert_detail(serial):
         revocation=get_revocation(serial),
         status=status,
         days_left=(not_after - now).days,
+        extensions=certificate_extensions(get_x509_cert(serial)),
         revocation_reasons=REVOCATION_REASONS,
         reason_names=REASON_NAMES,
     )
@@ -110,6 +113,7 @@ def cert_detail(serial):
 @bp.route("/download/<serial>")
 @login_required
 def download_cert(serial):
+    """The certificate stored by step-ca: ?format=pem (default), der, or chain (with its intermediate)."""
     cert = get_x509_cert(serial) if serial.isascii() and serial.isdigit() else None
     if cert is None:
         flash(f"Certificate {serial} not found", "danger")
@@ -117,11 +121,25 @@ def download_cert(serial):
 
     common_names = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
     filename = re.sub(r"[^A-Za-z0-9._-]", "_", common_names[0].value if common_names else serial)
+    file_format = request.args.get("format", "pem")
+    if file_format == "der":
+        content, filename, content_type = cert.public_bytes(serialization.Encoding.DER), f"{filename}.crt", "application/pkix-cert"
+    elif file_format == "chain":
+        try:
+            intermediates = client.intermediates()
+        except ca.CA_ERRORS as e:
+            flash(f"Could not load the intermediate certificates from the CA: {e}", "danger")
+            return redirect(url_for("x509.cert_detail", serial=serial))
+        # The intermediate that issued it; step-ca usually has one
+        issuers = [i for i in intermediates if i.subject == cert.issuer] or intermediates
+        content = b"".join(c.public_bytes(serialization.Encoding.PEM) for c in [cert, *issuers])
+        filename, content_type = f"{filename}-chain.pem", "application/x-pem-file"
+    else:
+        content, filename, content_type = cert.public_bytes(serialization.Encoding.PEM), f"{filename}.pem", "application/x-pem-file"
 
-    # Serve the PEM of the certificate stored by step-ca as a downloadable file
-    response = make_response(cert.public_bytes(serialization.Encoding.PEM))
-    response.headers["Content-Type"] = "application/x-pem-file"
-    response.headers["Content-Disposition"] = f'attachment; filename="{filename}.pem"'
+    response = make_response(content)
+    response.headers["Content-Type"] = content_type
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 
 

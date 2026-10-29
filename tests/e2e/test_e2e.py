@@ -89,6 +89,8 @@ def test_sign_download_and_revoke(session):
 
     pem = session.get(f"{BASE_URL}/x509/download/{serial}").content
     assert str(x509.load_pem_x509_certificate(pem).serial_number) == serial
+    chain = x509.load_pem_x509_certificates(session.get(f"{BASE_URL}/x509/download/{serial}?format=chain").content)
+    assert len(chain) == 2 and chain[1].subject == chain[0].issuer, "the chain is the certificate and its intermediate"
     compose_exec("step-ca", "sh", "-c", "cat > /tmp/ui.crt", stdin=pem.decode())
     renew = ["ca", "renew", "--force", *CA, "--out", "/tmp/renewed.crt", "/tmp/ui.crt", "/tmp/ui.key"]
     assert step(*renew).returncode == 0, "renewal must work before the revocation"
@@ -97,6 +99,8 @@ def test_sign_download_and_revoke(session):
     assert ("success", f"Certificate {serial} has been revoked successfully.") in flashes(html)
     assert "Superseded (4)" in html, "the revocation reason recorded by step-ca is shown on the certificate page"
     assert step(*renew).returncode != 0, "step-ca must refuse to renew a revoked certificate"
+    crl = x509.load_der_x509_crl(session.get(f"{BASE_URL}/step/ca/crl").content)
+    assert crl.get_revoked_certificate_by_serial_number(int(serial)) is not None, "the CRL lists the revoked serial"
     assert serial not in session.get(f"{BASE_URL}/x509/active").text
 
 
@@ -156,7 +160,7 @@ def test_dedicated_admin_identity(session):
         "stepca-web",
         "python",
         "-c",
-        "import os; from cryptography import x509; from app.libs.stepapi import issuing_provisioner; "
+        "import os; from cryptography import x509; from app.libs.cert_utils import issuing_provisioner; "
         "c = x509.load_pem_x509_certificate(open('/data/admin.crt', 'rb').read()); "
         "print(c.subject.rfc4514_string(), issuing_provisioner(c), os.path.exists('/data/jwk_key.json'))",
     )
@@ -190,3 +194,13 @@ def test_provisioner_can_be_edited_and_deleted(session):
     html = session.post(f"{BASE_URL}/step/provisioner/{quote(name)}/delete", data={"csrf_token": session.csrf}).text
     assert ("success", f"Provisioner '{name}' deleted successfully.") in flashes(html)
     assert name not in [p["name"] for p in json.loads(step("ca", "provisioner", "list", *CA).stdout)]
+
+
+def test_ca_status(session):
+    html = session.get(f"{BASE_URL}/step/ca").text
+    assert 'badge-success">ok' in html
+    assert "0.30.2" in html and "not tested" not in html
+    assert ">pinned<" in html, "the root matches CA_FINGERPRINT"
+    roots = x509.load_pem_x509_certificates(session.get(f"{BASE_URL}/step/ca/roots.pem").content)
+    root = compose_exec("step-ca", "cat", "/home/step/certs/root_ca.crt").stdout.encode()
+    assert roots == [x509.load_pem_x509_certificate(root)]

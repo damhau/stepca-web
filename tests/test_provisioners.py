@@ -85,7 +85,7 @@ def token(client):
 def test_edit_page_shows_the_current_values(client, ca_client):
     ca_client.get_provisioner.return_value = ACME
     html = client.get("/step/provisioner/acme/edit").get_data(as_text=True)
-    assert 'name="duration_max" class="form-control"' in html and 'value="48h"' in html
+    assert re.search(r'name="duration_max"[^>]*value="48h"', html)
     assert re.search(r'value="HTTP_01"[^>]*\s+checked', html)
     assert not re.search(r'value="DNS_01"[^>]*\s+checked', html)
 

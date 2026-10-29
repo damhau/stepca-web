@@ -159,6 +159,7 @@ def test_ldap_transport(url, start_tls, transport):
 
 
 class LDAPConfig(Config):
+    TESTING = True  # no version check against the CA in the background
     AUTH_BACKEND = "ldap"
     SQLALCHEMY_DATABASE_URI = "sqlite://"
     SQLALCHEMY_BINDS = {"app": "sqlite://"}

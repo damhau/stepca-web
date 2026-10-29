@@ -4,9 +4,10 @@
 <div class="form-group">
   <label>X.509 certificate durations</label>
   <div class="form-row">
-    {% for field, placeholder in [("default", "Default, e.g. 24h"), ("min", "Minimum, e.g. 5m"), ("max", "Maximum, e.g. 720h")] %}
+    {% for field, label, placeholder in [("default", "Default", "e.g. 24h"), ("min", "Minimum", "e.g. 5m"), ("max", "Maximum", "e.g. 720h")] %}
     <div class="col">
-      <input type="text" name="duration_{{ field }}" class="form-control" placeholder="{{ placeholder }}" aria-label="{{ placeholder }}"
+      <label for="duration_{{ field }}" class="small text-muted mb-1">{{ label }}</label>
+      <input type="text" name="duration_{{ field }}" id="duration_{{ field }}" class="form-control" placeholder="{{ placeholder }}"
         value="{{ values.get(field, '') }}" pattern="([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+" title="A duration such as 24h, 90m or 1h30m">
     </div>
     {% endfor %}

@@ -222,11 +222,7 @@ def test_the_inventory_follows_step_ca(api):
     token = step("ca", "token", "e2e-cli.test", "--provisioner", "Admin JWK", "--password-file", "/home/step/secrets/password", *CA).stdout.strip()
     assert step("ca", "certificate", "e2e-cli.test", "/tmp/cli.crt", "/tmp/cli.key", "--token", token, "--force", *CA).returncode == 0
     # The inventory looks for new certificates at most every INVENTORY_REFRESH_SECONDS (5)
-    for _ in range(20):
-        found = api.get("/api/v1/certificates?q=e2e-cli.test").json()
-        assert "total" in found, found
-        if found["total"]:
-            break
-        time.sleep(0.5)
-    assert found["total"] == 1 and found["items"][0]["provisioner_name"] == "Admin JWK"
+    time.sleep(6)
+    found = api.get("/api/v1/certificates?q=e2e-cli.test").json()
+    assert found["total"] == 1 and found["items"][0]["provisioner_name"] == "Admin JWK", found
     assert api.get("/api/v1/dashboard").json()["total"] >= 3

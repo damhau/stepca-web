@@ -3,51 +3,52 @@
 | | |
 |---|---|
 | **Analysis** | 2026-10-13, revision `67caf4a` (`main`). After the history rewrite (SEC-1), the same code is commit `15c481f`. |
-| **Status update** | 2026-10-29, revision `db57ce4`. Three rounds of fixes: `21c8ab6` to `9e6e23c`, `a76538f` to `e359cf3`, then `5647f08` to `db57ce4`. |
+| **Status update** | 2026-10-29, revision `1de8a1a`. Four rounds of fixes: `21c8ab6` to `9e6e23c`, `a76538f` to `e359cf3`, `5647f08` to `db57ce4`, then `83a97d0` to `1de8a1a`. |
 | **step-ca reference** | `smallstep/certificates` at `v0.30.2-283-g69d3c36f` (local checkout `~/code/perso/certificates`) |
-| **Method** | **Analysis:** I read all first-party code (39 Python files, 20 Jinja templates) and checked it against the step-ca source. I also linted it with ruff (F/B/S/E9 rules), compiled it under Python 3.11 and scanned the git history. I did **not** run the app against a live CA, so the UX findings came from reading the templates, routes and JavaScript. **Status update:** I re-checked every finding against the code at `db57ce4`. The app now has 270 unit tests, and 25 end-to-end tests against a real step-ca 0.30.2 (with an ACME client) and an OpenLDAP server. I also drove the UI in a browser. |
+| **Method** | **Analysis:** I read all first-party code (39 Python files, 20 Jinja templates) and checked it against the step-ca source. I also linted it with ruff (F/B/S/E9 rules), compiled it under Python 3.11 and scanned the git history. I did **not** run the app against a live CA, so the UX findings came from reading the templates, routes and JavaScript. **Status update:** I re-checked every finding against the code at `1de8a1a`. The app now has 233 unit tests, 11 frontend unit tests, and 25 end-to-end tests against a real step-ca 0.30.2 (with an ACME client) and an OpenLDAP server, 6 of them in a browser. |
 
-> **How to read this report.** Sections 1 to 10 keep each finding as it was found at `67caf4a`, so file and line references point at that revision. Each finding now has a status at `db57ce4`: ✅ fixed, ⚠️ partly fixed, ❌ open. The executive summary and §11 describe the current state.
+> **How to read this report.** Sections 1 to 10 keep each finding as it was found at `67caf4a`, so file and line references point at that revision. Each finding now has a status at `1de8a1a`: ✅ fixed, ⚠️ partly fixed, ❌ open. The executive summary and §11 describe the current state.
 
 ---
 
 ## Executive summary
 
-### Status at `db57ce4`
+### Status at `1de8a1a`
 
-Three rounds of fixes addressed the findings:
+Four rounds of fixes addressed the findings:
 
 - **Every security finding is fixed.**
   - No secrets in the history; login and a role for everything; CSRF protection.
   - The CA and LDAP connections verify the server's certificate.
   - Failed sign-ins are rate-limited.
-  - A strict Content-Security-Policy: no inline scripts or styles.
-  - Secret and dependency scanning in CI.
+  - A strict Content-Security-Policy: no inline scripts or styles (a per-response nonce covers the two style elements the frontend's dialogs add).
+  - Secret and dependency scanning in CI, for the Python and the npm packages.
   - **By decision,** plain `ldap://` still works, with warnings.
 - **Every correctness bug is fixed,** the 20 found in the analysis and the 4 found while testing.
 - **The code structure findings are fixed:**
   - Settings are loaded by `create_app`, and every file is in one data directory.
-  - One adapter reads step-ca's database into typed records, under a service layer, with routes that only do HTTP.
+  - One adapter reads step-ca's database into typed records, under a service layer.
   - One service owns provisioners and admins.
   - mypy checks the app in CI.
-- **Of the 52 original findings, 47 are fixed, 4 partly fixed and 1 open:**
-  - Partly fixed: the inventory is parsed on every view (PERF-1); one CA identity for all users (INT-5, A-8); PostgreSQL only (INT-9).
-  - Open: there is no inventory cache (A-7).
+- **The scale findings are fixed** (A-7, PERF-1): the certificate lists read an inventory in the app's database, kept in step with step-ca's tables by adding only the new rows, and filter, sort and page in SQL.
+- **A new frontend:** a React app (Vite, TypeScript, Tailwind, shadcn/ui, TanStack) over a JSON API with an OpenAPI document, replacing the Jinja pages and AdminLTE 3 on the end-of-life Bootstrap 4.
+- **Of the 52 original findings, 49 are fixed and 3 partly fixed:** one CA identity for all users (INT-5, A-8); PostgreSQL only (INT-9). None is open.
 - **The UX items are done:**
   - an ACME drill-down;
   - signing with CSR upload, preview, validity and readable errors;
-  - a global search, CSV export and a loading indicator.
+  - a global search, CSV export, a loading indicator;
+  - each certificate's lifetime drawn to scale, an expiry horizon, light and dark themes, phone layouts.
 
-**Verdict now:** fit for production as an internal admin console, behind a TLS reverse proxy with `ldaps://` or StartTLS. For a CA with tens of thousands of certificates, add the inventory cache first (§8).
+**Verdict now:** fit for production as an internal admin console, behind a TLS reverse proxy with `ldaps://` or StartTLS, including for CAs with tens of thousands of certificates (§8).
 
 ### Scorecard
 
-| Area | `67caf4a` | `db57ce4` | What changed |
+| Area | `67caf4a` | `1de8a1a` | What changed |
 |---|:-:|:-:|---|
-| 1. Architecture | 2 | **4** | **Improved:** typed settings loaded by `create_app`; one data directory; one adapter for step-ca's database and one client for its API, in `app/stepca`; a service layer; step-ca's database is only read. **Still missing:** an inventory cache. |
-| 2. Code quality | 1.5 | **4** | **Improved:** 270 unit tests and 25 end-to-end tests; CI with ruff, mypy, a lockfile check and scans; typed records instead of nested dicts; no `except Exception` left; no inline scripts or styles. |
+| 1. Architecture | 2 | **4.5** | **Improved:** typed settings loaded by `create_app`; one data directory; one adapter for step-ca's database and one client for its API, in `app/stepca`; a service layer; a JSON API whose pydantic models are its OpenAPI document; an incremental certificate inventory; step-ca's database is only read. |
+| 2. Code quality | 1.5 | **4.5** | **Improved:** 233 unit tests, 11 frontend tests and 25 end-to-end tests (6 in a browser); CI with ruff, mypy, ESLint, Prettier, TypeScript, lockfile checks and scans; typed records instead of nested dicts; frontend types generated from the API; no `except Exception` left. |
 | 3. Feature set | 2.5 | **4** | **Added:** revocation with a reason, certificate pages and downloads, an expiry view, roles and an audit log, provisioner editing, a CA status page with the CRL, the ACME drill-down, search, CSV export. **Missing:** SSH, policies, webhooks. EAB keys can't be made with open-source step-ca. |
-| 4. UX quality | 2 | **4** | **Improved:** every object has a page and links to the related ones; tables have tools; one date format; messages on every page; readable errors; a loading indicator. **Still there:** the AdminLTE 3 / Bootstrap 4 look. |
+| 4. UX quality | 2 | **4.5** | **Improved:** a React frontend: every object has a page and links to the related ones; lists filtered, sorted and paged by the server, kept in the URL; lifetimes drawn to scale and an expiry horizon; readable errors; dialogs for every change; light and dark themes. **Missing:** bulk actions, notifications. |
 | 5. step-ca integration | 2.5 | **4** | **Improved:** correct serials, pinned TLS, full pagination, a dedicated ADMIN identity, the key decrypted in memory, version check, CRL, tests against a real step-ca with ACME. **Still missing:** PostgreSQL is the only supported database. |
 | 6. Security | 1 | **4.5** | **Improved:** everything in SEC-1 to SEC-13, and a strict CSP. **Still open:** cleartext LDAP is allowed (by decision); one CA identity for all users. |
 
@@ -58,9 +59,9 @@ Three rounds of fixes addressed the findings:
 | Security (SEC-1 to SEC-12) | 12 | 0 | 0 | SEC-13 (Low), fixed |
 | step-ca integration (INT-1 to INT-10) | 8 | 2 | 0 | |
 | Correctness (BUG-1 to BUG-20) | 20 | 0 | 0 | BUG-21 to BUG-24 (Low), fixed |
-| Architecture (A-1 to A-9) | 7 | 1 | 1 | |
-| Performance (PERF-1) | 0 | 1 | 0 | |
-| **Total (52)** | **47** | **4** | **1** | **5, all fixed** |
+| Architecture (A-1 to A-9) | 8 | 1 | 0 | |
+| Performance (PERF-1) | 1 | 0 | 0 | |
+| **Total (52)** | **49** | **3** | **0** | **5, all fixed** |
 
 Appendix B lists every finding with its status. §11 orders what is left.
 
@@ -68,7 +69,6 @@ Appendix B lists every finding with its status. §11 orders what is left.
 
 | ID | Severity | What remains |
 |---|---|---|
-| [PERF-1](#8-performance-and-scalability) / A-7 | Medium | Each list parses every certificate on every view, and the browser receives every row. Fine for a few thousand certificates; beyond that, cache the parsed certificates in the app's database and page on the server. |
 | [INT-5](#int-5-medium-every-web-user-acts-as-the-same-ca-super-admin) / A-8 | Medium | All users act on the CA as one identity (an ADMIN, in the recommended setup), which can still create provisioners. step-ca's logs can't name the user; the app's audit log does. |
 | [SEC-6](#sec-6-high-cleartext-and-unverified-transport) | Low (by decision) | `ldap://` without StartTLS still works, with warnings. |
 | [INT-9](#int-9-medium-coupling-to-step-cas-database) | Low | PostgreSQL is the only database step-ca can use with this app. |
@@ -89,7 +89,7 @@ stepca-web is a Flask + AdminLTE admin console for a [step-ca](https://github.co
 
 #### Top findings at `67caf4a`
 
-| ID | Severity | Finding | Status at `db57ce4` |
+| ID | Severity | Finding | Status at `1de8a1a` |
 |---|---|---|---|
 | [SEC-1](#sec-1-critical-secrets-in-public-git-history) | Critical | The public GitHub history contains a **decrypted admin JWK private key**, two private keys and a `settings.json` with the DB password. | ✅ |
 | [SEC-2](#sec-2-critical-15-of-26-routes-have-no-authentication) | Critical | 15 of 26 functional routes are unauthenticated. Anyone who can reach the app can **create a SUPER_ADMIN, delete provisioners or admins, and stop the CA**. | ✅ |
@@ -116,7 +116,7 @@ To work, the app needs:
 - For service control: a sudoers rule plus `/usr/local/bin/stepca_ctl.sh`. Neither is in the repo or documented.
 - An LDAP/AD server (the default auth backend), or local users hard-coded in source.
 
-**At `db57ce4`:**
+**At `1de8a1a`:**
 - **step-ca:** PostgreSQL and remote management are still required. A **read-only** database role is enough.
 - **Admin key:** `jwk_key.json` is replaced by `CA_ADMIN_PASSWORD_FILE`, the password of the app's own provisioner (in Docker, a secret file). The app decrypts that provisioner's key in memory. `jwk_key.json` still works as a legacy fallback and logs a warning.
 - **Configuration:** comes from environment variables (`.env.example` documents them), and `settings.json` is optional. `SECRET_KEY`, `CA_URL` and `DATABASE_HOST` are required.
@@ -153,56 +153,58 @@ flowchart LR
   CA --> PG
 ```
 
-At `db57ce4`:
+At `1de8a1a`:
 
 ```mermaid
 flowchart LR
   subgraph B["Browser"]
-    UI["Jinja pages<br/>jQuery, Bootstrap, tables.js (served by the app)"]
+    UI["React app (frontend/dist)<br/>TanStack Router + Query, typed API client"]
   end
   subgraph W["stepca-web (Flask under gunicorn)"]
-    MW["Every request: login required,<br/>CSRF token on writes, role checks"]
-    BP["Blueprints<br/>home, acme, x509, step, system, auth"]
-    LIB["libs<br/>db_*.py, ca.py + stepapi.py, audit.py"]
-    AUTH["Auth backends<br/>LDAP, local (OIDC/SAML/RADIUS = stubs)"]
+    WEB["app/web.py<br/>the page (CSP nonce), assets, old URLs"]
+    MW["/api/*: session required,<br/>CSRF header on writes, role checks"]
+    API["app/api: JSON API /api/v1<br/>pydantic models = OpenAPI document"]
+    SVC["app/services<br/>inventory, certificates, acme, provisioners, ..."]
+    STEP["app/stepca<br/>store.py (database), client.py (API)"]
+    AUTH["Auth backends<br/>LDAP, local"]
   end
   SECRET[("Docker secret<br/>CA_ADMIN_PASSWORD_FILE")]
-  FS[("Working dir /data<br/>admin.crt, admin.key (0600), ca_root.crt")]
-  SQ[("SQLite stepca-web.db<br/>audit log, generated_certs")]
+  FS[("Data directory /data<br/>admin.crt, admin.key (0600), ca_root.crt")]
+  SQ[("SQLite stepca-web.db<br/>audit log, inventory, generated_certs")]
   PG[("PostgreSQL<br/>step-ca nosql tables<br/>(read-only role)")]
   CA["step-ca<br/>/admin/* (x5c token)<br/>/1.0/sign, /1.0/revoke (JWK OTT)<br/>/provisioners, /root/{fingerprint}"]
   SYS["sudo stepca_ctl.sh<br/>(only if enabled)"]
   LDAP[("LDAP / AD")]
 
-  UI -- "POST forms with CSRF token, /api/* JSON" --> MW --> BP
-  BP --> LIB
-  BP --> AUTH --> LDAP
-  LIB -- "SQLAlchemy, SELECT only" --> PG
-  LIB --> SQ
-  LIB -- "HTTPS, verified against the pinned root" --> CA
-  LIB <--> FS
-  SECRET --> LIB
-  BP -.->|"subprocess, if SERVICE_CONTROL_ENABLED"| SYS
+  UI -- "GET /, /assets/*" --> WEB
+  UI -- "fetch /api/v1 (session cookie, X-CSRFToken)" --> MW --> API --> SVC --> STEP
+  API --> AUTH --> LDAP
+  STEP -- "SQLAlchemy, SELECT only" --> PG
+  SVC -- "new rows only" --> SQ
+  STEP -- "HTTPS, verified against the pinned root" --> CA
+  STEP <--> FS
+  SECRET --> STEP
+  SVC -.->|"subprocess, if SERVICE_CONTROL_ENABLED"| SYS
   CA --> PG
 ```
 
 ### 1.3 Code organisation
 
-| Layer | Location | Responsibility | Notes at `67caf4a` | At `db57ce4` |
+| Layer | Location | Responsibility | Notes at `67caf4a` | At `1de8a1a` |
 |---|---|---|---|---|
 | Entry and config | `run.py`, `config.py` | Start the dev server; load `settings.json`, with env override | Config is read **at import time** (`config.py:9`) | `app/settings.py`: typed settings (environment, then settings.json, then defaults), loaded by `create_app`. Nothing is read at import. |
-| App factory | `app/__init__.py` | Register 8 blueprints; create the `generated_certs` table | Runs DDL against the CA database at startup (`app/__init__.py:23-26`) | Creates only the app's own SQLite tables. Installs the login check, CSRF and role helpers. Refuses to start without the required settings. |
-| Routes | `app/blueprint/{home,acme,x509,step,system,auth}` | HTML views plus two small JSON APIs (`/api/acme/*`, `/api/x509/*`) | Business logic lives in the route functions | Routes only do HTTP; the domain rules are in `app/services/`. |
+| App factory | `app/__init__.py` | Register 8 blueprints; create the `generated_certs` table | Runs DDL against the CA database at startup (`app/__init__.py:23-26`) | Creates only the app's own SQLite tables; registers the API and the frontend; installs the session check, CSRF and the CSP. Refuses to start without the required settings. |
+| Routes | `app/blueprint/{home,acme,x509,step,system,auth}` | HTML views plus two small JSON APIs (`/api/acme/*`, `/api/x509/*`) | Business logic lives in the route functions | `app/api/`: one JSON API under `/api/v1`, its pydantic models exported as `frontend/openapi.json`. Routes only do HTTP; the domain rules are in `app/services/`. `app/web.py` serves the frontend. |
 | Data access | `app/libs/db_*.py`, `app/models/*.py` | Decode step-ca's key/value tables | **Two mechanisms:** SQLAlchemy ORM (X.509, ACME) and raw psycopg2 with a connection per call (provisioners, admins) | `app/stepca/store.py`, the one module that knows step-ca's tables, returns typed records (`app/stepca/records.py`). SQLAlchemy only, read-only. |
 | CA client | `app/libs/stepapi.py` (535 lines) | Admin API, sign, revoke, JWK generation | One large class plus a `CAToken` helper | `app/stepca/client.py`, built by `create_app` from the settings and stored in `app.extensions`. |
 | Crypto helpers | `app/libs/cert_utils.py` | Parse certificates and CSRs | Two near-duplicate parsers | One parser, plus readable extensions and step-ca's provisioner extension |
-| Auth | `app/auth/`, `app/libs/auth/` | Backend factory and `login_required` | Only LDAP and local are implemented | Adds the login check for every request (`decorator.py`) and roles (`roles.py`) |
-| UI | `app/templates/`, `app/static/` | AdminLTE 3 / Bootstrap 4 / jQuery | 1,891 vendored static files (65 MB), about 6 of them used | 27 static files (4 MB) |
+| Auth | `app/auth/`, `app/libs/auth/` | Backend factory and `login_required` | Only LDAP and local are implemented | Adds the session check for every API request (`decorator.py`) and roles (`roles.py`) |
+| UI | `app/templates/`, `app/static/` | AdminLTE 3 / Bootstrap 4 / jQuery | 1,891 vendored static files (65 MB), about 6 of them used | `frontend/`: React and TypeScript, 44 source files and 19 shadcn/ui components, built by Vite into about 250 kB of gzipped JavaScript, split per page. Nothing is vendored. |
 
 ### 1.4 Main flows
 
 1. **Read path** (for example, *Active certificates*): `db_x509.get_x509_active_certs()` loads every row of `x509_certs`. For each row it then loads **every** row of `x509_certs_data` to find the matching provisioner (`db_x509.py:19,43-52`). It then loads every revoked row, parses each DER certificate with `cryptography`, filters by date and renders all of them, with no pagination.
-   **Now:** one query per table. Revoked serials come from the table keys and certificates are matched by decimal serial. The browser pages through the rendered rows 50 at a time.
+   **Now:** the lists read the inventory in the app's database, which each read first brings up to date (new rows only, at most every 5 seconds). Filters, sort and page are SQL; the browser receives one page of JSON.
 2. **Admin write path** (for example, *create admin*): `StepCAClient._request()` calls `_get_jwt_token()`. If `admin.crt` is missing or has less than 1 hour left, the client generates a P-256 key and CSR. It then signs an OTT with the plaintext `jwk_key.json`, calls `/sign` and **writes `admin.crt` and `admin.key` to the working directory** (`stepapi.py:143-201`). Finally it builds an x5c JWT (`iss=step-admin-client/1.0`, `aud=<request URL>`) and calls `/admin/...`.
    **Now:**
    - The certificate is also renewed when it was issued to another subject or by another provisioner.
@@ -220,7 +222,7 @@ flowchart LR
 
 ### 1.5 Trust boundaries and secrets held
 
-| Secret | Where it lives | What it grants | At `db57ce4` |
+| Secret | Where it lives | What it grants | At `1de8a1a` |
 |---|---|---|---|
 | DB credentials | `settings.json` (plaintext) or env vars | Read **and write** access to step-ca's DB. The app needs CREATE privilege for `generated_certs`. Write access means one can forge revocations, edit provisioners and so on. | Env vars (or `settings.json`). A role with SELECT only is enough. |
 | Admin JWK private key | `jwk_key.json` (plaintext) | Signs **any certificate** that the "Admin JWK" provisioner allows, and mints super-admin x5c certificates. | Decrypted in memory from `CA_ADMIN_PASSWORD_FILE`. It is the key of the app's own provisioner, and the README recommends an ADMIN rather than a SUPER_ADMIN identity. |
@@ -231,7 +233,7 @@ flowchart LR
 
 **Key insight:** stepca-web is a **tier-0 component**. It holds a super-admin identity, a plaintext signing key, write access to the CA's database and control over the CA process. Compromising the web app is equivalent to compromising the CA's issuance policy, so it needs at least the same protection as the CA itself.
 
-**At `db57ce4`** the app is still tier-0, but a smaller one. It holds an ADMIN identity (not SUPER_ADMIN) and its provisioner key only in memory, and it only reads the CA's database. An ADMIN can still create provisioners, and so can still issue certificates.
+**At `1de8a1a`** the app is still tier-0, but a smaller one. It holds an ADMIN identity (not SUPER_ADMIN) and its provisioner key only in memory, and it only reads the CA's database. An ADMIN can still create provisioners, and so can still issue certificates.
 
 ### 1.6 Assessment
 
@@ -243,7 +245,7 @@ flowchart LR
 
 **Weaknesses**
 
-| ID | Issue | Consequence | Status at `db57ce4` |
+| ID | Issue | Consequence | Status at `1de8a1a` |
 |---|---|---|---|
 | A-1 | **Side effects at import time:** `config.py` opens `settings.json` and prints; three blueprint modules each create a `StepCAClient` at import (`step/routes.py:9`, `x509/routes.py:12`, `system/routes.py:8`, where it is unused), and each reads `jwk_key.json`. `create_app` runs DDL. | The app can't be imported without real files and a database, so it can't be unit-tested. Config edits need a restart (BUG-16). | ✅ **Fixed** (`1114520`): settings are loaded by `create_app` (`app/settings.py`), the CA client is built there, and nothing reads the environment or a file at import. Tests pass their own settings. |
 | A-2 | **Two DB stacks and two configs:** SQLAlchemy uses `SQLALCHEMY_DATABASE_URI`, while psycopg2 uses `DB_*`. psycopg2 opens a new connection per call, without pooling, and doesn't close it on exceptions. | The two stacks can point at different databases. Connections can leak. | ✅ `db_conn.py` is gone. Everything goes through SQLAlchemy with psycopg 3 (`9ab380e`). |
@@ -251,7 +253,7 @@ flowchart LR
 | A-4 | **The app writes its own table into step-ca's database** (`generated_certs`). | The app needs CREATE on the CA's database and can't run with a read-only role. The table is also redundant, because `x509_certs` already stores the DER of every certificate. | ✅ App data is in SQLite (`21c8ab6`, `f6b09ce`). Downloads read `x509_certs`. The end-to-end tests run the app on a SELECT-only role. |
 | A-5 | **No service layer.** Domain rules (what counts as "active") and presentation (`not_before_pretty`) are mixed into data functions. | Hard to test, and hard to reuse in an API. | ✅ **Fixed** (`7b5475d`): `app/services/` holds the rules (active, expiring, misdirected revocations, certificate status and downloads, dashboard, search, CA status); routes parse, call a service and render. |
 | A-6 | **Coupled to step-ca's internal storage format** (nosql key/value tables and Go JSON field names). | This is unavoidable for listing certificates, since open-source step-ca has no list-certificates API. It should be isolated in one adapter with fixture-based tests. Today the knowledge is spread out, and part of it is wrong (INT-1, INT-2). | ✅ **Fixed** (`5647f08`, `7b5475d`): `app/stepca/store.py` is the only code that knows step-ca's tables and field names; it returns typed records, tested on rows in step-ca's format and end to end. |
-| A-7 | **Synchronous full-table reads on every page view**, with no caching. Certificates are immutable, so they are ideal to cache. | See §8. | ❌ Open (see PERF-1) |
+| A-7 | **Synchronous full-table reads on every page view**, with no caching. Certificates are immutable, so they are ideal to cache. | See §8. | ✅ **Fixed** (`83a97d0`): the inventory (`app/services/inventory.py`) keeps parsed certificates and revocations in the app's database. |
 | A-8 | **One shared CA identity** (`step`) for every web user. | No attribution in step-ca's logs and no least privilege (INT-5). | ⚠️ **Fixed:** a dedicated identity (`CA_ADMIN_SUBJECT`), and the app's audit log names the user. **Still there:** step-ca's own logs show one subject for every user. |
 | A-9 | **State in the working directory** (`settings.json`, `jwk_key.json`, `admin.crt`/`admin.key`, all relative paths). | Behaviour depends on where the process starts. Multiple workers race on the admin certificate (BUG-17). | ✅ **Fixed** (`1114520`): every file is in `DATA_DIR` (`/data` in the images); relative file settings are relative to it. The unit tests run from `/` to prove nothing uses the working directory. |
 
@@ -260,9 +262,9 @@ flowchart LR
 - **Config:** load settings once in `create_app` from env or a file, for example with `pydantic-settings`. No I/O at import time. Make config read-only in the UI, or reload it explicitly. *Status:* ✅ pydantic-settings, loaded by `create_app`; the config page is read-only.
 - **CA client:** a single `StepCAClient` built in `create_app` and stored in `app.extensions`. It should use a `requests.Session` with the **pinned root** (bootstrapped from the fingerprint, see INT-4), timeouts and retries. Load secrets from a secret store, or keep the key encrypted at rest. *Status:* ✅ built in `create_app`, in `app.extensions`, with the pinned root, 30 s timeouts and the key decrypted from a secret file. It doesn't use a `Session` or retry.
 - **Data access:** one read-only SQLAlchemy engine for step-ca's tables, behind a `StepDBRepository`. The repository should own the step-ca encoding rules (serial key = decimal ASCII) and return typed dataclasses. *Status:* ✅ `app/stepca/store.py`, returning `app/stepca/records.py` dataclasses.
-- **App state:** the app's own data (audit log, users and roles, metadata about issued certificates, cached inventory) belongs in a **separate** database or schema, managed with migrations (Flask-Migrate/Alembic). *Status:* ⚠️ the app has a separate SQLite database (`APP_DATABASE_URI` can point elsewhere) holding the audit log and `generated_certs`. Tables are created with `create_all`; there are no migrations yet.
+- **App state:** the app's own data (audit log, users and roles, metadata about issued certificates, cached inventory) belongs in a **separate** database or schema, managed with migrations (Flask-Migrate/Alembic). *Status:* ⚠️ the app has a separate SQLite database (`APP_DATABASE_URI` can point elsewhere) holding the audit log, the certificate inventory and `generated_certs`. Tables are created with `create_all`; there are no migrations yet.
 - **Service control:** keep a tightly scoped sudoers rule, or remove the feature and leave CA lifecycle to systemd or Kubernetes. It doesn't work inside the provided container anyway. *Status:* ✅ opt-in, off by default.
-- **UI:** keep server-side rendering. Add DataTables, which is already vendored, or HTMX for interactivity. At this size a SPA rewrite would mostly add cost. *Status:* ✅ server-rendered. I didn't restore the vendored DataTables 1.10.21, because it has published XSS advisories. Search, sort and paging come from a 100-line `tables.js` that only reads cells as text. All page scripts are static files, so the CSP can forbid inline scripts.
+- **UI:** keep server-side rendering. Add DataTables, which is already vendored, or HTMX for interactivity. At this size a SPA rewrite would mostly add cost. *Status:* replaced, against this advice, by a React frontend over a JSON API (`1de8a1a`). The service layer made the API cheap, and the owner wanted a current UI on maintained libraries. The server filters, sorts and pages; the strict CSP stays.
 
 ---
 
@@ -270,14 +272,14 @@ flowchart LR
 
 ### 2.1 Metrics
 
-| Metric | `67caf4a` | `db57ce4` |
+| Metric | `67caf4a` | `1de8a1a` |
 |---|---|---|
-| First-party Python | 39 files, 2,106 lines (about 1,440 SLOC). 243 comment lines, mostly **commented-out code**. | 3,364 lines of app code, typed records and a service layer. Commented-out blocks removed. |
-| Templates | 20 files, 2,412 lines | 32 files, sharing `layouts/page.html` and `includes/macros.html` |
-| Vendored front-end | 1,891 files, 65 MB, 60 AdminLTE plugin packages, about 6 of them used | 33 files, 4 MB, 8 of them the app's own CSS and JavaScript |
-| Automated tests | **0** | 270 unit tests (about 2,400 lines), plus 25 end-to-end tests against step-ca 0.30.2 on PostgreSQL (with an ACME client) and an OpenLDAP server |
-| CI, linter, type-checker, pre-commit config | **None** | GitHub Actions runs ruff, mypy, the unit tests, a lockfile check, and the end-to-end tests with both Dockerfiles; a security workflow runs gitleaks and pip-audit on every push and weekly. Pre-commit runs gitleaks, ruff and mypy. |
-| Dependency manifest | `requirements.txt` with 16 **unpinned** entries and no lockfile. 5 are unused (`flask-login`, `flask_wtf`, `authlib`, `psutil`, `protobuf`). `gunicorn` is installed but never used. | `pyproject.toml` (14 direct dependencies) + `uv.lock`; `requirements.txt` exported with hashes; gunicorn is the server |
+| First-party Python | 39 files, 2,106 lines (about 1,440 SLOC). 243 comment lines, mostly **commented-out code**. | 41 files, 4,604 lines: the JSON API, the services, the step-ca adapter. Commented-out blocks removed. |
+| Templates | 20 files, 2,412 lines | None: the frontend is 44 TypeScript files (about 4,900 lines) and 19 shadcn/ui components |
+| Vendored front-end | 1,891 files, 65 MB, 60 AdminLTE plugin packages, about 6 of them used | None: 18 runtime and 24 build npm packages, locked in `frontend/package-lock.json` |
+| Automated tests | **0** | 233 unit tests (about 2,200 lines), 11 frontend unit tests (Vitest), and 25 end-to-end tests against step-ca 0.30.2 on PostgreSQL (with an ACME client) and an OpenLDAP server, 6 of them in headless Chromium |
+| CI, linter, type-checker, pre-commit config | **None** | GitHub Actions runs ruff, mypy, the unit tests, lockfile checks, ESLint, Prettier, TypeScript, Vitest and the frontend build, checks that the OpenAPI document and the generated types are current, and runs the end-to-end tests with both Dockerfiles; a security workflow runs gitleaks, pip-audit and npm audit on every push and weekly. Pre-commit runs gitleaks, ruff, mypy and the frontend checks. |
+| Dependency manifest | `requirements.txt` with 16 **unpinned** entries and no lockfile. 5 are unused (`flask-login`, `flask_wtf`, `authlib`, `psutil`, `protobuf`). `gunicorn` is installed but never used. | `pyproject.toml` (15 direct dependencies) + `uv.lock`; `requirements.txt` exported with hashes; `frontend/package-lock.json`; gunicorn is the server |
 | Logging | 73 `print()` calls (many with emojis) and no `logging` | `logging` only, with no `print()` left. Audit events go to the `stepca_web.audit` logger. |
 | ruff (`F,B,S,E9`) | 36× F405 + 13× F403 (star imports), 8× F401 unused imports, 7× F811 redefinitions, 4× S113 requests without timeout, 4× F541, 3× F841, plus S104, S110, S311, S501, S603, S607 | Clean on the CI rule set (`E4,E7,E9,F,I,UP,B`). No star imports, and every request has a timeout. |
 | Python version | **Requires 3.12+.** `step/routes.py:62,64` reuses the same quote character inside f-strings (PEP 701), which fails on 3.11 with `SyntaxError: f-string: unmatched '['`. I verified this. The README says "Python 3.9+". | `requires-python = ">=3.12"`; the README says 3.12+ |
@@ -294,7 +296,7 @@ flowchart LR
 
 All 20 are fixed, mostly in `89b419e`, with BUG-8 also in `f6b09ce` and BUG-16 in `763da5a`. Unit or end-to-end tests cover most of them. BUG-21 to BUG-24 were found while re-checking and testing, and are fixed too.
 
-| ID | Location | Defect | Effect | Status at `db57ce4` |
+| ID | Location | Defect | Effect | Status at `1de8a1a` |
 |---|---|---|---|---|
 | BUG-1 | `app/blueprint/step/routes.py:18-61` | `resp` is only assigned inside two independent `if` branches | Any other `type` value raises `UnboundLocalError` (HTTP 500) | ✅ An unknown type shows an error message |
 | BUG-2 | `step/routes.py:66-67`, `stepapi.py:285-287` | `list_provisioners()` returns `None` on error, and the route then indexes it | Any CA or API error gives HTTP 500 instead of an error message | ✅ Shows "Could not load the provisioners" |
@@ -327,8 +329,8 @@ All 20 are fixed, mostly in `89b419e`, with BUG-8 also in `f6b09ce` and BUG-16 i
 - **Duplication:**
   - ✅ `parse_cert` and `parse_cert_from_bytes` are about 80% identical. *One parser now; `parse_cert` decodes the ACME leaf and calls it.*
   - ✅ `decrypt_and_merge` exists twice. *One copy left.*
-  - ✅ The flash-message block is copied into 5 templates. *One partial, `includes/flashes.html`, included by every page.*
-  - ✅ Every template re-declares the font, Font Awesome and AdminLTE CSS links that `base.html` already loads, so `adminlte.min.css` loads twice per page. *`base.html` loads the CSS and JavaScript once; no template repeats them.*
+  - ✅ The flash-message block is copied into 5 templates. *Fixed in the second round with one partial; the templates are gone since, and the frontend shows messages as toasts and inline alerts.*
+  - ✅ Every template re-declares the font, Font Awesome and AdminLTE CSS links that `base.html` already loads, so `adminlte.min.css` loads twice per page. *Fixed with one base layout; the templates are gone since: Vite builds one stylesheet and per-page scripts.*
 - ✅ **Dead code** is removed:
   - `models/post.py` and `models/question.py` (leftovers from a Flask tutorial).
   - `db_jwk.py` and `db_init.py` (the `jwk_keys` table is no longer used).
@@ -358,7 +360,7 @@ All 20 are fixed, mostly in `89b419e`, with BUG-8 also in `f6b09ce` and BUG-16 i
 
 ### 3.1 What the README claims vs. what the code does
 
-| Advertised feature | Status at `67caf4a` | Notes at `67caf4a` | At `db57ce4` |
+| Advertised feature | Status at `67caf4a` | Notes at `67caf4a` | At `1de8a1a` |
 |---|---|---|---|
 | ACME: "list **and manage**" accounts, orders, certs, authorizations, challenges | ⚠️ Read-only, partial | Flat lists only. No deactivation and no links between related objects. The order → certificate link is broken (BUG-15). The pages are unauthenticated (SEC-2). | ⚠️ Still read-only, by design, now with a page per account and per order linking orders, authorizations, challenges and certificates. |
 | X.509: valid and revoked certificates with details and provisioners | ⚠️ Partial | The lists work. Revoked status is wrong for revocations made outside the UI (INT-2). The details modal only works on *Active*. | ✅ Correct revoked status, with the reason. Every certificate has a page with its extensions and PEM, chain and DER downloads. New *Expiring* list (7, 30 or 90 days). |
@@ -375,7 +377,7 @@ All 20 are fixed, mostly in `89b419e`, with BUG-8 also in `f6b09ce` and BUG-16 i
 
 ### 3.2 Coverage of step-ca's capabilities
 
-| step-ca capability | Interface | stepca-web at `67caf4a` | At `db57ce4` |
+| step-ca capability | Interface | stepca-web at `67caf4a` | At `1de8a1a` |
 |---|---|---|---|
 | X.509 inventory | DB only (no API) | ✅ List and detail | ✅ Plus the certificate page and the expiring list |
 | Sign with a JWK OTT | `POST /1.0/sign` | ✅ | ✅ |
@@ -403,7 +405,7 @@ All 20 are fixed, mostly in `89b419e`, with BUG-8 also in `f6b09ce` and BUG-16 i
 7. ✅ **Provisioner editing** (claims, templates, ACME challenges) through `PUT`, and **admin type change** through `PATCH`. *Both done; templates can't be edited.*
 8. ✅ A **CA status page**: health, version, roots and fingerprints, CRL download.
 9. ❌ **SSH inventory**, then policies and webhooks.
-10. ✅ CSV export. *Of any list, from its table tools.*
+10. ✅ CSV export. *Of any list, every matching row, made by the server.*
 
 ---
 
@@ -413,11 +415,11 @@ All 20 are fixed, mostly in `89b419e`, with BUG-8 also in `f6b09ce` and BUG-16 i
 
 AdminLTE gives the app a consistent, recognisable look. The sidebar grouping (ACME / X.509 / step-ca Management / System) is logical. However, the UI still reads like a **template demo with data plugged in**: there are leftovers from the AdminLTE theme, controls that do nothing, and tables that dump raw data. It isn't organised around what an operator needs to do, such as "find the certificate for host X and revoke it" or "what expires this week?".
 
-**At `db57ce4`,** both of those tasks now work:
+**At `1de8a1a`,** both of those tasks now work:
 - **Find a certificate for a host and revoke it:** search the list, open the certificate, revoke it with a reason.
 - **What expires this week:** *Expiring*, 7 days.
 
-The template leftovers are gone; the look is stock AdminLTE 3.
+The template leftovers are gone. **At `1de8a1a`** the UI is a React app of its own: lists whose filters, sort and page live in the URL, every certificate's lifetime drawn to scale, an expiry horizon on the dashboard, dialogs for every change, light and dark themes, and layouts for phones.
 
 ### 4.2 Template leftovers and dead controls
 
@@ -467,7 +469,7 @@ The template leftovers are gone; the look is stock AdminLTE 3.
 - ✅ **Edit provisioner:** dumps the raw JSON, including the encrypted key, as a recursive form, and *Save* does nothing. *It is now a read-only JSON view written with `textContent`. The encrypted key is still shown, but it is public anyway on `/provisioners`.*
 - ✅ **Admins:** *Edit* creates a duplicate. The delete confirmation says "delete this **provisioner**". *Edit changes the type, and the confirmation says "admin".*
 - **Destructive actions:**
-  - ✅ Deleting a provisioner or an admin is a plain GET link guarded only by `confirm()`. *They are now POST forms with a CSRF token, still confirmed with `confirm()`.*
+  - ✅ Deleting a provisioner or an admin is a plain GET link guarded only by `confirm()`. *They are DELETE requests with a CSRF token, confirmed in a dialog.*
   - ✅ **Stop CA** has no confirmation at all. *Stop and restart ask first.*
 - ✅ **Config page:**
   - Says "updated successfully" although nothing applies until restart.
@@ -478,7 +480,7 @@ The template leftovers are gone; the look is stock AdminLTE 3.
 
 - ✅ Only 5 templates render flash messages. On every other page, flashed messages are lost. *Every page renders them (BUG-21).*
 - ✅ Errors appear as raw Python or jwcrypto exception text. For example, a wrong passphrase surfaces a JWE decryption exception. *Signing explains its errors in words, step-ca's own included.*
-- ✅ Slow pages have no loading indicator, and all pages load synchronously in full. *A bar shows while the next page loads; the pages are still rendered in full (PERF-1).*
+- ✅ Slow pages have no loading indicator, and all pages load synchronously in full. *Pages load their data in the background, with placeholders, and only one page of each list (PERF-1).*
 - ✅ `step/service.html` uses `fetch` without a `.catch`. If the session has expired, the response is the login HTML, JSON parsing fails, and the user sees nothing. *Errors are shown, including an expired session.*
 
 ### 4.7 Accessibility and front-end hygiene
@@ -486,10 +488,10 @@ The template leftovers are gone; the look is stock AdminLTE 3.
 - ⚠️ Icon-only buttons (view, revoke, download, edit, delete) have no `title` or `aria-label`. *Most icon-only buttons now have an `aria-label`. Table headers that sort have `aria-sort`.*
 - Library loading is inconsistent:
   - ✅ The dashboard uses a **local** jQuery.
-  - ✅ The other pages load jQuery 3.6.0 and Bootstrap 4.6.2 from **CDNs without Subresource Integrity**. *Every page now loads jQuery, Bootstrap and AdminLTE from the app, once, from `base.html`. A test checks that no page loads a script from elsewhere.*
+  - ✅ The other pages load jQuery 3.6.0 and Bootstrap 4.6.2 from **CDNs without Subresource Integrity**. *Nothing loads from elsewhere: the CSP only allows the app's own files, and the browser tests fail on any violation.*
   - ✅ Google Fonts is loaded on every page. *Removed: the CSP only allows the app's own files.*
 - ✅ **PKI environments are often air-gapped.** In such an environment the CDN-loaded scripts and fonts will fail, and modals and forms on most pages will stop working. *Nothing loads from outside the app.*
-- ❌ Bootstrap 4 reached end of life in January 2023, and AdminLTE 3 is built on it. *Left as is: moving would mean rewriting the UI.*
+- ✅ Bootstrap 4 reached end of life in January 2023, and AdminLTE 3 is built on it. *Replaced: the frontend uses Tailwind CSS and Radix components (shadcn/ui); nothing of AdminLTE, Bootstrap or jQuery is left.*
 
 ### 4.8 UX recommendations
 
@@ -497,10 +499,10 @@ The template leftovers are gone; the look is stock AdminLTE 3.
 
 - ✅ Remove the template leftovers.
 - ✅ Use one base layout that loads jQuery, Bootstrap and AdminLTE **locally**, once.
-- ✅ Enable DataTables (already vendored) on every table for search, sort and paging. *Done with `tables.js` instead of DataTables (§1.7).*
+- ✅ Enable DataTables (already vendored) on every table for search, sort and paging. *Done on the server: every list is filtered, sorted and paged by the API.*
 - ✅ Replace the "Id" column with *Serial (dec)* and a copyable *Serial (hex)*.
 - ✅ Use one date format, plus a "days left" badge (red under 7 days, amber under 30).
-- ✅ Move the flash partial into `base.html`. *Every page includes it.*
+- ✅ Move the flash partial into `base.html`. *Done, then replaced by the frontend's toasts and inline alerts.*
 - ✅ Add `aria-label`s.
 - ✅ Fix BUG-11 to BUG-15.
 
@@ -510,7 +512,7 @@ The template leftovers are gone; the look is stock AdminLTE 3.
 - ✅ An expiring-soon dashboard.
 - ✅ An ACME drill-down.
 - ✅ A revoke modal that shows the subject and serial and offers a reason.
-- ✅ Modal confirmations for destructive actions, sent as POST. *They are sent as POST, with `confirm()` rather than a modal.*
+- ✅ Modal confirmations for destructive actions, sent as POST. *Dialogs; revoking asks for a reason.*
 - ⚠️ Forms specific to each provisioner type. *The create and edit forms show the fields of the provisioner's type (JWK or ACME); other types can't be created.*
 
 **Larger**
@@ -524,9 +526,9 @@ The template leftovers are gone; the look is stock AdminLTE 3.
 
 ### 5.1 Integration surfaces
 
-| Surface | Mechanism at `67caf4a` | Used for | At `db57ce4` |
+| Surface | Mechanism at `67caf4a` | Used for | At `1de8a1a` |
 |---|---|---|---|
-| PostgreSQL, step-ca tables | SQLAlchemy models over `x509_certs`, `x509_certs_data`, `revoked_x509_certs`, `acme_*`; psycopg2 over `provisioners`, `admins` | Inventory and dashboards | SQLAlchemy only, SELECT only |
+| PostgreSQL, step-ca tables | SQLAlchemy models over `x509_certs`, `x509_certs_data`, `revoked_x509_certs`, `acme_*`; psycopg2 over `provisioners`, `admins` | Inventory and dashboards | SQLAlchemy only, SELECT only. Certificates and revocations are copied into the app's inventory as they appear. |
 | PostgreSQL, app table | `generated_certs` (created by the app) | Download of UI-signed certificates | Moved to the app's SQLite database. Downloads read `x509_certs`. |
 | Admin API | x5c JWT from a self-issued 24 h admin certificate | Provisioners and admins CRUD | Same, as `CA_ADMIN_SUBJECT`, verified against the pinned root |
 | Public API | JWK OTT from a passphrase-decrypted provisioner key | `/1.0/sign`, `/1.0/revoke`, `/provisioners` | Revoke uses the app's own provisioner key, held in memory. `/root/{fingerprint}` pins TLS. |
@@ -545,7 +547,7 @@ One correction found while fixing INT-3: step-ca checks the admin token's `aud` 
 
 ### INT-1 (Critical): revocation revokes a serial that does not exist
 
-> **Status at `db57ce4`: ✅ Fixed** (`21c8ab6`).
+> **Status at `1de8a1a`: ✅ Fixed** (`21c8ab6`).
 > - **Serial:** certificates are identified by their decimal serial, and `revoke()` sends it in decimal (`str(int(serial, 10))`) as both the serial and the token subject.
 > - **Tests:** the unit tests check the payload. The end-to-end test signs a certificate from the UI and revokes it, then checks that `step ca renew` is refused.
 > - **Past revocations:** the *Revoked* page flags revocations made by older versions of the UI and names the certificate that is still valid. That replaces the clean-up script below; re-revoke those certificates from their page.
@@ -597,7 +599,7 @@ for r in RevokedX509Cert.query.all():
 
 ### INT-2 (High): revocation status is computed with the wrong encoding
 
-> **Status at `db57ce4`: ✅ Fixed** (`21c8ab6`). Revoked serials are read from the keys of `revoked_x509_certs` and compared with the decimal keys of `x509_certs`. A unit test covers certificates revoked outside the UI.
+> **Status at `1de8a1a`: ✅ Fixed** (`21c8ab6`). Revoked serials are read from the keys of `revoked_x509_certs` and compared with the decimal keys of `x509_certs`. A unit test covers certificates revoked outside the UI.
 
 `get_x509_active_certs()` compares `revoked.Serial` (decimal, as stored by step-ca) with `cert.nkey` (hex of ASCII) (`db_x509.py:125-133`). `get_revoked_x509_with_cert_info()` makes the same mistake (`db_x509.py:77`). As a result:
 
@@ -608,7 +610,7 @@ for r in RevokedX509Cert.query.all():
 
 ### INT-3 (Medium): Admin API pagination ignored, silent truncation at 20
 
-> **Status at `db57ce4`: ✅ Fixed** (`495c8ef`).
+> **Status at `1de8a1a`: ✅ Fixed** (`495c8ef`).
 > - **Paging:** `_list_all()` asks for 100 items per page and follows `nextCursor`, and stops if a cursor repeats. It is used for `/admin/provisioners`, `/admin/admins` and `/provisioners`.
 > - **Single provisioner:** still found by scanning the public list, now across every page.
 > - **Test:** the end-to-end test creates more than 20 provisioners.
@@ -622,7 +624,7 @@ for r in RevokedX509Cert.query.all():
 
 ### INT-4 (High): TLS verification disabled, root fingerprint unused
 
-> **Status at `db57ce4`: ✅ Fixed** (`495c8ef`).
+> **Status at `1de8a1a`: ✅ Fixed** (`495c8ef`).
 > - **Bootstrap:** like `step ca bootstrap`. On first use the app fetches `/root/{CA_FINGERPRINT}`, checks its SHA-256 and saves it as `ca_root.crt`. Alternatively, `CA_ROOT` points at a root file.
 > - **Every request** is verified against that root.
 > - **Refusals:** the app refuses to talk to the CA without a fingerprint or root, and replaces a cached root that doesn't match the fingerprint.
@@ -635,7 +637,7 @@ for r in RevokedX509Cert.query.all():
 
 ### INT-5 (Medium): every web user acts as the same CA super admin
 
-> **Status at `db57ce4`: ⚠️ Option 1 done** (`211ffb0`).
+> **Status at `1de8a1a`: ⚠️ Option 1 done** (`211ffb0`).
 > - **Identity:** `CA_ADMIN_SUBJECT` and `CA_ADMIN_PROVISIONER_NAME` select the app's identity. The README gives the `step` commands to create a `stepca-web` JWK provisioner with an ADMIN of the same name.
 > - **ADMIN mode:** with that identity, the Admins page is read-only, because step-ca only lets a SUPER_ADMIN manage admins.
 > - **Switching identity:** the app re-issues its admin certificate when the identity changes. It checks the certificate's CN and step-ca's provisioner extension.
@@ -650,7 +652,7 @@ All Admin API calls are made as subject `step` (SUPER_ADMIN) (`stepapi.py:91-100
 
 ### INT-6 (Medium): plaintext provisioner key on disk makes the revoke passphrase meaningless
 
-> **Status at `db57ce4`: ✅ Fixed, with option (a)** (`211ffb0`).
+> **Status at `1de8a1a`: ✅ Fixed, with option (a)** (`211ffb0`).
 > - **Key:** with `CA_ADMIN_PASSWORD_FILE` (a Docker secret in `docker-compose.yml`), the app fetches its provisioner's encrypted key from the CA and decrypts it in memory.
 > - **Revoke:** no longer asks for a passphrase.
 > - **Legacy:** `jwk_key.json` still works, and the app logs a warning when it uses it.
@@ -664,13 +666,13 @@ Option (a) is recommended. In both cases, restrict file permissions to `0600`.
 
 ### INT-7 (Low): hard-coded template data copied from the docs example
 
-> **Status at `db57ce4`: ✅ Fixed** (`89b419e`). Sign requests send no `templateData`.
+> **Status at `1de8a1a`: ✅ Fixed** (`89b419e`). Sign requests send no `templateData`.
 
 Every sign request sends `templateData: {"subject": {"country": "US", "organization": "Coyote Corporation", …}}` (`stepapi.py:480-487`). step-ca only exposes this data as `.Insecure.User` (`certificates/authority/provisioner/options.go:166-171`), so it has no effect with the default templates. However, any custom template that uses `.Insecure.User` would stamp "Coyote Corporation / US" on production certificates. Remove it or make it configurable.
 
 ### INT-8 (Low): revocation reason fixed to keyCompromise
 
-> **Status at `db57ce4`: ✅ Fixed** (`89b419e`).
+> **Status at `1de8a1a`: ✅ Fixed** (`89b419e`).
 > - **Reasons offered:** unspecified, key compromise, affiliation changed, superseded, cessation of operation, and privilege withdrawn (codes 0, 1, 3, 4, 5 and 9). These are the RFC 5280 reasons that make sense for a passive revocation.
 > - **Default:** unspecified.
 > - **Display:** the certificate page shows the reason step-ca recorded.
@@ -679,7 +681,7 @@ Every sign request sends `templateData: {"subject": {"country": "US", "organizat
 
 ### INT-9 (Medium): coupling to step-ca's database
 
-> **Status at `db57ce4`: ⚠️ Mostly fixed.**
+> **Status at `1de8a1a`: ⚠️ Mostly fixed.**
 > - **Done:** the app runs on a read-only role. One adapter (`app/stepca/store.py`) holds all knowledge of step-ca's tables (A-6). Contract tests run against a real step-ca 0.30.2 in CI. step-ca's version is checked at startup and on the status page.
 > - **Not done:** support for databases other than PostgreSQL.
 
@@ -693,7 +695,7 @@ Every sign request sends `templateData: {"subject": {"country": "US", "organizat
 
 ### INT-10 (Low): documentation mismatch
 
-> **Status at `db57ce4`: ✅ Fixed** (`aca9478`). The README describes remote management (`step ca init --remote-management`, or `enableAdmin` in `ca.json`).
+> **Status at `1de8a1a`: ✅ Fixed** (`aca9478`). The README describes remote management (`step ca init --remote-management`, or `enableAdmin` in `ca.json`).
 
 The README asks for the "Remote Provisioner". The actual feature is **remote management** (`authority.enableAdmin: true`, `step ca init --remote-management`).
 
@@ -703,7 +705,7 @@ The README asks for the "Remote Provisioner". The actual feature is **remote man
 
 ### SEC-1 (Critical): secrets in public git history
 
-> **Status at `db57ce4`: ✅ Fixed.**
+> **Status at `1de8a1a`: ✅ Fixed.**
 > - **No rotation needed:** the leaked files came from a throwaway local test CA. The production admin provisioner has a different key.
 > - **History rewritten:** the history was rewritten and force-pushed, so the files below are no longer reachable from `main`, and the commit hashes in the table no longer exist there.
 > - **Local users:** moved out of the source code into `local_users.json`, which is git- and docker-ignored, along with every other secret file.
@@ -732,7 +734,7 @@ The README asks for the "Remote Provisioner". The actual feature is **remote man
 
 ### SEC-2 (Critical): 15 of 26 routes have no authentication
 
-> **Status at `db57ce4`: ✅ Fixed** (`21c8ab6`).
+> **Status at `1de8a1a`: ✅ Fixed** (`21c8ab6`).
 > - **Login check:** a `before_request` hook requires a session for every endpoint except login, logout and static files. Unauthenticated `/api/*` calls get 401.
 > - **Writes:** every write also needs a role (`763da5a`).
 > - **Test:** a unit test walks every registered route.
@@ -749,7 +751,7 @@ The README asks for the "Remote Provisioner". The actual feature is **remote man
 
 ### SEC-3 (High): Werkzeug debug server is the production entrypoint
 
-> **Status at `db57ce4`: ✅ Fixed.**
+> **Status at `1de8a1a`: ✅ Fixed.**
 > - **Docker** (`21c8ab6`): the image runs `gunicorn "app:create_app()"` as a non-root user.
 > - **`run.py`** (`8011cc1`): for local development only. It binds to `127.0.0.1` and only enables the debugger with `FLASK_DEBUG=1`.
 
@@ -759,7 +761,7 @@ The README asks for the "Remote Provisioner". The actual feature is **remote man
 
 ### SEC-4 (High): no CSRF protection, destructive GET endpoints
 
-> **Status at `db57ce4`: ✅ Fixed** (`495c8ef`).
+> **Status at `1de8a1a`: ✅ Fixed** (`495c8ef`).
 > - **CSRF:** `CSRFProtect` is on, and every form and `fetch` call sends the token. Tokens stay valid for the session.
 > - **Deletes:** only accept POST.
 > - **Cookie:** the session cookie is `SameSite=Lax` and `HttpOnly`.
@@ -775,7 +777,7 @@ Flask-WTF is listed as a dependency, but `CSRFProtect` is never initialised. Eve
 
 ### SEC-5 (High): no authorization model
 
-> **Status at `db57ce4`: ✅ Fixed** (`763da5a`, `a76538f`).
+> **Status at `1de8a1a`: ✅ Fixed** (`763da5a`, `a76538f`).
 > - **Roles:** viewer, operator (also signs and revokes) and admin (also provisioners, admins, configuration, audit log and service control). The server enforces them, and the UI hides what a role can't do.
 > - **Role assignment:** LDAP group DNs map to roles through `ROLE_*_GROUP`. Local users carry a role. Anyone else gets `DEFAULT_ROLE` (`viewer`, or `none` to refuse them).
 > - **Audit log:** every write, every login and every failed login goes to the audit log (SQLite, shown under System > Audit Log) and to stdout.
@@ -788,7 +790,7 @@ Every authenticated user is effectively a **CA super admin with host service con
 
 ### SEC-6 (High): cleartext and unverified transport
 
-> **Status at `db57ce4`: ✅ Fixed** (`495c8ef`, `36f1d27`), with cleartext allowed by decision.
+> **Status at `1de8a1a`: ✅ Fixed** (`495c8ef`, `36f1d27`), with cleartext allowed by decision.
 > - **CA traffic:** verified (INT-4).
 > - **LDAP:** `ldaps://` and StartTLS (`LDAP_START_TLS=true`) verify the server's certificate and name, against `LDAP_CA_FILE` or the system CAs. ldap3 didn't check them at all before.
 > - **Cleartext:** plain `ldap://` still works, as decided, but the app logs a warning at startup and the Configuration page shows one. `.env.example` now defaults to `ldaps://`.
@@ -801,7 +803,7 @@ Every authenticated user is effectively a **CA super admin with host service con
 
 ### SEC-7 (Medium): secrets in logs
 
-> **Status at `db57ce4`: ✅ Fixed.**
+> **Status at `1de8a1a`: ✅ Fixed.**
 > - **Logging:** no `print()` is left (the last ones went in `8011cc1`). The code uses `logging`, and nothing logs a passphrase, a token or a payload.
 > - **Startup:** `config.py` no longer prints the database connection details.
 
@@ -813,7 +815,7 @@ Every authenticated user is effectively a **CA super admin with host service con
 
 ### SEC-8 (Medium): secrets at rest
 
-> **Status at `db57ce4`: ✅ Fixed.**
+> **Status at `1de8a1a`: ✅ Fixed.**
 > - **Admin key:** `admin.key` is written with mode `0600` (`89b419e`). The provisioner key stays in memory (`211ffb0`).
 > - **Config page:** shows no secrets (`763da5a`), including the password of `APP_DATABASE_URI` (SEC-13).
 > - **Docker:** `.dockerignore` keeps every secret file out of the image.
@@ -826,7 +828,7 @@ Every authenticated user is effectively a **CA super admin with host service con
 
 ### SEC-9 (Medium): session and login hardening
 
-> **Status at `db57ce4`: ✅ Fixed** (`89b419e`, `495c8ef`, `306f731`).
+> **Status at `1de8a1a`: ✅ Fixed** (`89b419e`, `495c8ef`, `306f731`).
 > - **Session:** `SECRET_KEY` is required, login and logout call `session.clear()`, sessions last 8 hours, the cookie is `HttpOnly` and `SameSite=Lax`, plus `Secure` with `SESSION_COOKIE_SECURE=true`. Failed logins are audited.
 > - **Rate limiting:** Flask-Limiter allows 10 failed sign-ins per minute and 50 per hour per client address (`LOGIN_RATE_LIMIT`). Behind proxies, `TRUSTED_PROXIES` takes the address from `X-Forwarded-For`, which is ignored otherwise.
 > - **Headers:** Flask-Talisman sends a Content-Security-Policy that only allows the app's own scripts, `frame-ancestors 'none'` and `X-Frame-Options: DENY`, `nosniff` and `Referrer-Policy: same-origin`, and HSTS over HTTPS.
@@ -845,12 +847,10 @@ Every authenticated user is effectively a **CA super admin with host service con
 
 ### SEC-10 (Medium): DOM-XSS sinks
 
-> **Status at `db57ce4`: ✅ Fixed** (`89b419e`).
-> - **Provisioner view:** shows the JSON with `textContent`.
-> - **Certificate details:** the modal is replaced by the server-rendered certificate page, with autoescaping.
-> - **Dashboard chart:** escapes provisioner names.
-> - **Tables:** `tables.js` only reads cells as text.
-> - **Test:** a unit test checks that certificate fields are escaped.
+> **Status at `1de8a1a`: ✅ Fixed** (`89b419e`, then `1de8a1a`).
+> - **The frontend renders every value as text:** React escapes what it renders, and the app never uses `dangerouslySetInnerHTML`. The API returns JSON, never HTML.
+> - **The CSP** refuses inline scripts and event handlers, so an injected `<script>` or `onerror=` would not run anyway.
+> - **CSV exports** escape cells that spreadsheets would run as formulas.
 
 Two places build HTML from data:
 
@@ -863,13 +863,13 @@ With step-ca's default templates, attackers can't control these fields: ACME onl
 
 ### SEC-11 (Low): LDAP filter injection
 
-> **Status at `db57ce4`: ✅ Fixed** (`89b419e`). The username is escaped with `escape_filter_chars`.
+> **Status at `1de8a1a`: ✅ Fixed** (`89b419e`). The username is escaped with `escape_filter_chars`.
 
 `ldap_backend.py:27` inserts the username into the search filter without escaping. Exploitation is limited because the bind happens first, but the fix is a one-liner: `ldap3.utils.conv.escape_filter_chars`.
 
 ### SEC-12 (Low): supply chain and container
 
-> **Status at `db57ce4`: ✅ Fixed.**
+> **Status at `1de8a1a`: ✅ Fixed.**
 > - **Dependencies:** locked in `uv.lock`, and `requirements.txt` is exported with hashes for `pip --require-hashes` (`9ab380e`). pip-audit checks them in CI, on every push and weekly; Dependabot keeps the GitHub Actions current (`a76538f`).
 > - **Front end:** nothing loads from outside the app, Google Fonts included, and the vendored assets are down to 25 files.
 > - **Image:** multi-stage and non-root, with no compiler (psycopg 3 binary wheels) and with a `HEALTHCHECK`.
@@ -884,13 +884,13 @@ With step-ca's default templates, attackers can't control these fields: ACME onl
 
 ### SEC-13 (Low, new): the config page shows the app database URI verbatim
 
-> **Status at `db57ce4`: ✅ Fixed** (`a76538f`). The password in the URI shows as `***`.
+> **Status at `1de8a1a`: ✅ Fixed** (`a76538f`). The password in the URI shows as `***`.
 
 `/system/config` masks the step-ca database password, but prints `APP_DATABASE_URI` as it is (`app/blueprint/system/routes.py`). With the default SQLite path that is harmless. If someone points it at a server database with a password in the URI, admins see that password. **Fix:** mask the password with SQLAlchemy's `make_url(uri).render_as_string(hide_password=True)`.
 
 ### Threat summary
 
-| Attacker | At `67caf4a` | At `db57ce4` |
+| Attacker | At `67caf4a` | At `1de8a1a` |
 |---|---|---|
 | Anyone on the network | CA admin takeover, provisioner deletion, CA shutdown, inventory disclosure | Login page only, with failed sign-ins rate-limited per address |
 | Malicious site visited by an admin | Any action through CSRF or a GET link | Blocked (CSRF tokens, SameSite, POST-only). Can only log the user out. |
@@ -933,16 +933,11 @@ With step-ca's default templates, attackers can't control these fields: ACME onl
 
 ## 8. Performance and scalability
 
-> **Status at `db57ce4`: ⚠️ Mostly fixed** (`495c8ef`, `4903a97`).
-> - **Listing:** O(N). Each list runs one query per table and loads `x509_certs_data` once, as a dict.
-> - **Single certificate:** looked up by primary key for the certificate page, revocation and the API.
-> - **Dashboard:** parses the inventory once; the counts and both charts come from that one read.
-> - **Paging:** done in the browser.
-> - **Still open:**
->   - Every list view parses every certificate.
->   - Every row is rendered to the browser, which then hides all but 50.
-> - **Cost:** parsing alone costs about 33 µs per certificate (0.33 s for 10,000, measured on the development machine). Loading the rows and rendering the HTML weren't measured, and will dominate at that size.
-> - **Next step:** cache parsed metadata per serial, and page on the server (fixes 3 and 4 below).
+> **Status at `1de8a1a`: ✅ Fixed** (`495c8ef`, `4903a97`, `83a97d0`).
+> - **The inventory:** certificates and revocations are parsed once into the app's database (`app/services/inventory.py`). Neither ever changes once step-ca has written it, so each read only adds the new rows: two row counts when nothing changed, a comparison of the table keys when something did, at most every `INVENTORY_REFRESH_SECONDS` (5). It is built in the background at startup; signing and revoking refresh it at once.
+> - **Lists:** filtered, sorted and paged in SQL; the browser receives one page. CSV exports stream every matching row.
+> - **Measured** on SQLite with 10,000 certificates (development machine): building the inventory takes 0.8 s (81 µs per certificate, once); a full key comparison 13 ms; a page of 50 sorted by expiry 13 ms; a text filter 6 ms; the dashboard's counts 10 ms.
+> - **Still read in full:** the ACME tables (orders grow with renewals) and the audit log (the last 10,000 events).
 
 **PERF-1 (High): quadratic certificate listing**
 
@@ -963,29 +958,29 @@ With step-ca's default templates, attackers can't control these fields: ACME onl
 **Fixes, in order of effort**
 1. ✅ Load `x509_certs_data` **once** into a dict keyed by `nkey` (O(N)).
 2. ✅ Look up a single certificate by primary key: `WHERE nkey = :serial_ascii_bytes`.
-3. ⚠️ Paginate on the server, or render once and let DataTables page on the client as a stopgap. *The stopgap is in place, with `tables.js`.*
-4. ❌ Certificates are **immutable**, so cache the parsed metadata per serial, ideally materialised into the app's own table with incremental sync. Querying, filtering by expiry and indexing then become trivial.
+3. ✅ Paginate on the server, or render once and let DataTables page on the client as a stopgap. *On the server, over the inventory.*
+4. ✅ Certificates are **immutable**, so cache the parsed metadata per serial, ideally materialised into the app's own table with incremental sync. Querying, filtering by expiry and indexing then become trivial. *Done: the inventory.*
 
 ---
 
 ## 9. Testing strategy
 
-At `67caf4a` there were no tests. At `db57ce4`, `uv run pytest` runs 270 unit tests in about 35 seconds, and mypy checks the app. `tests/e2e/run.sh` starts step-ca 0.30.2 on PostgreSQL (with a CRL), gets a certificate over ACME, starts an OpenLDAP server with a test CA, runs the app in Docker on a read-only role, and runs 25 end-to-end tests. CI runs all of it, the end-to-end tests with each Dockerfile and each identity setup. Against the suggested layers:
+At `67caf4a` there were no tests. At `1de8a1a`, `uv run pytest` runs 233 unit tests in about 25 seconds, mypy checks the app, and `npm test` runs the frontend's unit tests. `tests/e2e/run.sh` starts step-ca 0.30.2 on PostgreSQL (with a CRL), gets a certificate over ACME, starts an OpenLDAP server with a test CA, runs the app in Docker on a read-only role, and runs 25 end-to-end tests: the API, LDAP, and the frontend in headless Chromium. CI runs all of it, the end-to-end tests with each Dockerfile and each identity setup. Against the suggested layers:
 
 1. ✅ **Unit tests for the decoders.** Use real rows captured from a step-ca Postgres database: `x509_certs`, `x509_certs_data`, `revoked_x509_certs`, `provisioners` (base64 `details`) and `acme_*`. *The rows are built in step-ca's format, the ACME ones copied from a real step-ca's tables; the end-to-end tests then cover the real tables.*
 2. ✅ **A regression test for the serial round-trip** (INT-1 and INT-2): decimal key → display → revoke payload → matching against revoked rows.
 3. ✅ **Tests for the token builders.** Check x5c and OTT claims (`iss`, `aud`, `sub`, `sans`, `exp`) against the expectations in step-ca's `authorize.go`.
 4. ✅ **Integration tests in CI.** Use `smallstep/step-ca` with `DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true` and `DOCKER_STEPCA_INIT_ACME=true`, with `ca.json`'s `db` pointing at a Postgres service container. Exercise create/delete provisioner and admin, sign, revoke, then **assert with `step ca revoke` / `/crl` that the right serial was revoked**. *The tests cover signing, downloading and revoking. They then check that `step ca renew` is refused, which is stronger than reading the CRL. They also cover more than 20 provisioners, admin type changes, root pinning, and both identity modes (an ADMIN with a password file, and the SUPER_ADMIN with `jwk_key.json`).* *Since then, they also check that the revoked serial is in the CRL downloaded through the app, edit and delete a provisioner whose name has a space, and log in over LDAPS, StartTLS and cleartext, refusing an unknown CA or a wrong name.*
-5. ✅ **Route security tests.** Every route except login and static must return 302 or 401 without a session, and every state-changing route must reject GET and requests without a CSRF token. *Roles are covered too, in 18 tests.*
-6. ✅ **Template smoke tests.** Render every page with fixture data. This would have caught BUG-14, BUG-15 and BUG-19.
+5. ✅ **Route security tests.** Every route except login and static must return 302 or 401 without a session, and every state-changing route must reject GET and requests without a CSRF token. *Every API route returns 401 without a session and 400 for a write without the token; roles are covered for each write.*
+6. ✅ **Template smoke tests.** Render every page with fixture data. This would have caught BUG-14, BUG-15 and BUG-19. *The browser tests open every page against the real stack, and fail on any script error or anything the CSP refuses.*
 
-**Still missing:** browser tests for the JavaScript in CI. It was checked by hand with Playwright: the dashboard charts, the forms and dialogs, the CSR preview, the table tools and CSV export, the loading bar, and that no page breaks the CSP.
+**Browser tests** run in CI (Playwright, headless Chromium): signing in and out, every page without script errors or CSP violations, signing a CSR and revoking it through the dialogs, old bookmarks, the list filter and the CSV export.
 
 ---
 
 ## 10. Documentation accuracy
 
-| README statement | Reality at `67caf4a` | At `db57ce4` |
+| README statement | Reality at `67caf4a` | At `1de8a1a` |
 |---|---|---|
 | "Python 3.9+" | 3.12+ (PEP 701 f-strings) | ✅ README says 3.12+ |
 | "Edit and validate the `ca.json` file with JSON syntax highlighting" | Not implemented. The page edits the app's `settings.json`. | ✅ Claim removed |
@@ -994,7 +989,7 @@ At `67caf4a` there were no tests. At `db57ce4`, `uv run pytest` runs 270 unit te
 | "Edit `app/settings.json`" | `settings.json` in the working directory | ✅ Env vars documented, `settings.json` optional |
 | Auth backends `ldap`, `radius`, `saml`, `oidc`, `local` | Only `ldap` and `local` work | ✅ `ldap` and `local`; the stubs are gone |
 | To-do: "Add user authentication" | Partly done, but not applied to most routes | ✅ The to-do list is current |
-| "extend `layout.html`" | `layouts/base.html` | ✅ |
+| "extend `layout.html`" | `layouts/base.html` | ✅ The README now describes the frontend (`frontend/src/routes/`, one file per page) |
 | Service control | Needs an undocumented `stepca_ctl.sh` plus a sudoers rule | ✅ Documented as optional and off by default, with a script and a sudoers rule |
 | (missing) | No warning that `jwk_key.json` is a plaintext CA signing key and needs `0600` permissions and backup hygiene | ✅ "CA identity" section: the password file replaces it, and `jwk_key.json` is called legacy |
 | (missing) | No Docker usage, env var reference, production run command or upgrade notes | ✅ Docker, env vars (`.env.example`), roles, LDAP, reverse proxy setup, tests and upgrade notes are documented |
@@ -1035,15 +1030,20 @@ At `67caf4a` there were no tests. At `db57ce4`, `uv run pytest` runs 270 unit te
   - The ACME drill-down; signing with CSR upload, preview, validity and readable errors; global search, CSV export, a loading indicator; a CSP without inline styles.
   - Settings loaded by `create_app` and one data directory (A-1, A-9); one adapter for step-ca with typed records (A-6); a service layer (A-5) with one place for provisioners (A-3); mypy in CI.
 
+- **Fourth round (`83a97d0` to `1de8a1a`)** ✅
+  - A JSON API (`/api/v1`) with an OpenAPI document; the certificate inventory with server-side filters, sort and paging (A-7, PERF-1).
+  - A React frontend replacing the Jinja pages and AdminLTE; browser tests in CI; npm audit and Dependabot for the frontend.
+  - Short-lived certificates (30 days or less) no longer count as expiring; the provisioner form drops a flag step-ca ignores (`claims.x509.enabled`).
+
 ### Next
 
-**P1: scale**
-- **Inventory cache** (PERF-1, A-7): keep the parsed certificates in the app's database, synced incrementally from `x509_certs` (certificates never change), and page and search on the server. Worth it from tens of thousands of certificates.
+**P1: identity**
+- A provisioner policy that limits what the app's key can issue, then one CA identity per user (INT-5, A-8).
 
-**P2: identity and breadth**
-- **Identity:** a provisioner policy that limits the app's key, then one CA identity per user (INT-5).
+**P2: breadth**
 - **More of step-ca:** SSH inventory, policies, webhooks. EAB keys need Certificate Manager or writing to step-ca's database.
-- **Notifications:** expiry alerts and metrics (left out on purpose so far).
+- **Operations:** expiry notifications and metrics; bulk revocation.
+- **Scale beyond X.509:** an inventory for the ACME tables too, if a CA's renewals make them large.
 
 ---
 
@@ -1082,44 +1082,30 @@ At `67caf4a` there were no tests. At `db57ce4`, `uv run pytest` runs 270 unit te
 | ✅ | POST | `/x509/sign` | `x509.sign_cert` | No CSRF |
 | ❌ | POST | `/x509/revoke` | `x509.revoke_cert` | **Revokes the wrong serial (INT-1)** |
 
-### At `db57ce4`
+### At `1de8a1a`
 
-Every route needs a session except `/auth/login`, `/auth/logout` and `/static/*`. Without one, pages redirect to the login page and `/api/*` returns 401. Every POST needs a CSRF token. *Role* is the minimum role.
+The frontend's page is public and the same for everyone; it asks `/api/v1/session` who is signed in. Every API route needs a session except the session routes and `/healthz`; without one it returns 401. Every write needs the session's CSRF token in `X-CSRFToken`. *Role* is the minimum role. The old pages' URLs redirect to the new ones.
 
-| Role | Method | Path | Handler | Notes |
-|---|---|---|---|---|
-| public | GET, POST | `/auth/login` | `auth.login` | CSRF-protected, clears the session, logs attempts to the audit log. Failed sign-ins are rate-limited per address. |
-| public | GET | `/auth/logout` | `auth.logout` | Clears the session. A GET, so another site can log a user out. |
-| viewer | GET | `/` | `home.index` | Counts, expiring tile, two charts |
-| viewer | GET | `/search?q=` | `home.search` | New: certificates, ACME accounts and orders, provisioners, admins |
-| viewer | GET | `/acme/accounts`, `/acme/orders`, `/acme/certs`, `/acme/authzs`, `/acme/challenges` | `acme.*` | Read-only lists, linking to the account, order and certificate pages |
-| viewer | GET | `/acme/account/<id>`, `/acme/order/<id>` | `acme.account`, `acme.order` | New: an account with its orders; an order with its authorizations, challenges and certificate |
-| viewer | GET | `/api/acme/{accounts,orders,certs,authzs,challenges}` | `acme_api.*` | JSON records, ISO dates, `[]` when empty |
-| viewer | GET | `/api/x509/certs` | `x509_api.api_get_x509_certs` | JSON. No longer used by the dashboard. |
-| viewer | GET | `/api/x509/certs/<id>` | `x509_api.api_get_x509_certs_by_id` | Lookup by decimal serial (primary key) |
-| viewer | GET | `/x509/all`, `/x509/active`, `/x509/revoked` | `x509.*` | Search, sort and 50-row pages |
-| viewer | GET | `/x509/expiring?days=7\|30\|90` | `x509.expiring_certs` | New |
-| viewer | GET | `/x509/cert/<serial>` | `x509.cert_detail` | New: status, days left, revocation reason, extensions, downloads, revoke |
-| viewer | GET | `/x509/download/<serial>?format=pem\|chain\|der` | `x509.download_cert` | Any certificate, from `x509_certs`. The chain adds its intermediate, from the CA. |
-| operator | POST | `/x509/sign` | `x509.sign_cert` | CSR pasted or uploaded, optional validity, provisioner password. Audited. |
-| operator | POST | `/x509/csr/preview` | `x509.csr_preview` | New: what a CSR asks for (JSON) |
-| operator | POST | `/x509/revoke` | `x509.revoke_cert` | Decimal serial and a reason. Audited. |
-| viewer | GET | `/step/ca` | `step.ca_status` | New: health, version, roots, intermediates, CRL |
-| viewer | GET | `/step/ca/roots.pem`, `/step/ca/intermediates.pem`, `/step/ca/crl` | `step.ca_certificates`, `step.ca_crl` | New: the CA's certificates and CRL (DER, or PEM with `?pem`), fetched from the CA |
-| viewer / admin | GET / POST | `/step/provisioners` | `step.provisioner` | Lists every provisioner. Creating one (POST) needs admin. Audited. |
-| admin | GET, POST | `/step/provisioner/<name>/edit` | `step.edit_provisioner` | New: claims and ACME options (`PUT`). Audited. |
-| admin | POST | `/step/provisioner/<name>/delete` | `step.delete_provisioner` | Audited |
-| viewer / admin | GET / POST | `/step/admins` | `step.admins` | Creating one (POST) needs admin **and** a SUPER_ADMIN identity. Audited. |
-| admin | POST | `/step/admin/<id>/update` | `step.update_admin` | New: type change (`PATCH`). Needs a SUPER_ADMIN identity. Audited. |
-| admin | POST | `/step/admin/<id>/delete` | `step.delete_admin` | Needs a SUPER_ADMIN identity. Audited. |
-| admin | GET | `/step/service` | `step.step_service` | 404 unless `SERVICE_CONTROL_ENABLED=true` |
-| admin | POST | `/step/service/<action>` | `step.stepca_service_action` | 404 unless enabled. Audited, except `status`. |
-| admin | GET | `/system/config` | `system.config` | Read-only, secrets masked, warns about cleartext LDAP |
-| admin | GET | `/system/audit` | `system.audit_log` | New: last 500 events |
+| Role | Method | Path | Notes |
+|---|---|---|---|
+| public | GET | `/`, `/<any page>`, `/assets/*` | The frontend (`app/web.py`), with a per-response CSP nonce |
+| public | GET | `/healthz` | For container health checks |
+| public | GET, POST, DELETE | `/api/v1/session` | Who is signed in and the CSRF token; sign in (rate-limited per address, audited); sign out |
+| viewer | GET | `/api/v1/dashboard`, `/api/v1/search?q=`, `/api/v1/reference` | Counts and charts; search; the forms' fixed choices |
+| viewer | GET | `/api/v1/certificates` | `status`, `days`, `q`, `provisioner`, `sort`, `order`, `page`, `per_page`; `format=csv` for every matching row |
+| viewer | GET | `/api/v1/certificates/<serial>`, `/download?format=pem\|chain\|der` | Status, revocation, extensions, PEM; downloads |
+| viewer | GET | `/api/v1/certificates/provisioners`, `/api/v1/revocations/unmatched` | The list's provisioner filter; revocations of serials step-ca never issued |
+| operator | POST | `/api/v1/certificates`, `/api/v1/certificates/<serial>/revoke`, `/api/v1/csr/preview` | Sign a CSR; revoke with a reason; what a CSR asks for. Audited. |
+| viewer | GET | `/api/v1/acme/{accounts,orders,authorizations,challenges,certificates}`, `/acme/accounts/<id>`, `/acme/orders/<id>` | Paged lists with `q` and `status`, CSV; the drill-down |
+| viewer / admin | GET / POST, PUT, DELETE | `/api/v1/provisioners[/<name>]` | Changes need admin; the app's own provisioner can't be deleted. Audited. |
+| viewer / admin | GET / POST, PATCH, DELETE | `/api/v1/admins[/<id>]` | Changes need admin **and** a SUPER_ADMIN identity. Audited. |
+| viewer | GET | `/api/v1/ca`, `/ca/roots.pem`, `/ca/intermediates.pem`, `/ca/crl?format=der\|pem` | Health, version, roots, intermediates, CRL, fetched from the CA |
+| admin | GET | `/api/v1/settings`, `/api/v1/audit` | Read-only settings, secrets masked; the audit log, filtered, paged, CSV |
+| admin | POST | `/api/v1/service` | 404 unless `SERVICE_CONTROL_ENABLED=true`. Audited, except `status`. |
 
 ## Appendix B: finding index
 
-| ID | Severity | Finding | Status at `db57ce4` |
+| ID | Severity | Finding | Status at `1de8a1a` |
 |---|---|---|---|
 | SEC-1 | Critical | Secrets in public git history | ✅ |
 | SEC-2 | Critical | 15 of 26 routes unauthenticated | ✅ |
@@ -1155,7 +1141,7 @@ Every route needs a session except `/auth/login`, `/auth/logout` and `/static/*`
 | A-4 | | App table in step-ca's database | ✅ |
 | A-5 | | No service layer | ✅ |
 | A-6 | | Format knowledge spread out | ✅ |
-| A-7 | | No caching | ❌ |
+| A-7 | | No caching | ✅ The inventory |
 | A-8 | | One shared CA identity | ⚠️ Dedicated identity, app-side audit |
 | A-9 | | State in the working directory | ✅ |
-| PERF-1 | High | Quadratic certificate listing | ⚠️ O(N), parsed once per view; no cache or server-side paging |
+| PERF-1 | High | Quadratic certificate listing | ✅ Inventory, server-side paging |

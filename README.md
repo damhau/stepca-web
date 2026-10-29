@@ -1,6 +1,6 @@
 # Step CA Admin
 
-A web-based dashboard for managing [Step CA](https://smallstep.com/docs/step-ca) – the open-source certificate authority. Built with Flask and styled with AdminLTE, it lets you browse ACME objects and X.509 certificates, sign and revoke certificates, and manage provisioners and admins.
+A web-based dashboard for managing [Step CA](https://smallstep.com/docs/step-ca) – the open-source certificate authority. A React frontend over a Flask JSON API, it lets you browse ACME objects and X.509 certificates, sign and revoke certificates, and manage provisioners and admins.
 
 ## What is Step CA?
 
@@ -22,15 +22,15 @@ https://smallstep.com/docs/step-ca
 ## Features
 
 - **X.509 certificates**
-  - All, active, expiring (7, 30 or 90 days) and revoked certificates; search, sort and paging on every list.
+  - All, valid, expiring (7, 30 or 90 days), expired and revoked certificates, filtered, sorted and paged by the server, with each certificate's lifetime drawn to scale. Certificates issued for 30 days or less (step-ca's default is 24 hours) are short-lived and never counted as expiring: they are meant to renew themselves.
   - A page per certificate: details, extensions, revocation status and reason; PEM, chain and DER downloads.
   - Sign a CSR (pasted or uploaded, previewed, with a chosen validity) with a JWK provisioner; revoke with an RFC 5280 reason.
 - **ACME** (read-only): accounts, orders, certificates, authorizations and challenges, and the drill-down from an account to its orders, from an order to its authorizations, challenges and certificate.
 - **Provisioners**: list, add (JWK, ACME), edit (durations, renewal, ACME options) and delete.
 - **Admins**: list, add, change type and delete (when the app's CA identity is a super admin).
 - **CA status**: health, version, root and intermediate certificates with their expiry, the CRL.
-- **Dashboard**: active, expiring and revoked certificates, provisioners, charts.
-- **Search** across certificates (serial in decimal or hex, subject, DNS name), ACME accounts and orders, provisioners and admins; **CSV export** of any list.
+- **Dashboard**: the renewals due in the next 13 weeks, the inventory by status, certificates per provisioner, ACME orders by status.
+- **Search** across certificates (serial in decimal or hex, subject, DNS name), ACME accounts and orders, provisioners and admins; **CSV export** of any list, every matching row.
 - **Roles and audit log**: viewer, operator and admin roles; every change and sign-in is recorded.
 - **Systemd service control** (optional, off by default): start, stop or restart step-ca.
 
@@ -43,19 +43,24 @@ stepca-web/
 ├── app/
 │   ├── __init__.py        # create_app(settings)
 │   ├── settings.py        # typed settings: environment, then settings.json, then defaults
-│   ├── blueprint/         # routes: parse the request, call a service, render
-│   │   ├── acme/  home/  step/  system/  x509/  auth/
-│   ├── services/          # what the pages show: certificates, acme, provisioners, dashboard, search, ca
+│   ├── api/               # the JSON API under /api/v1: pydantic models (schemas.py) and routes
+│   ├── web.py             # serves the built frontend, and redirects the old pages' URLs
+│   ├── services/          # what the API returns: certificates, inventory, acme, provisioners, dashboard, search, ca
 │   ├── stepca/            # everything that knows step-ca
 │   │   ├── client.py      # its API: Admin API (x5c token), sign and revoke (JWK token), public endpoints
 │   │   ├── store.py       # its database: the key/value tables, read into records
 │   │   └── records.py     # typed records: certificates, revocations, provisioners, admins, ACME objects
-│   ├── auth/              # login check, roles, auth backend factory
-│   ├── libs/              # auth backends (LDAP, local), audit log, certificate parsing, provisioner forms
-│   ├── models/            # SQLAlchemy tables: step-ca's (read-only) and the app's own
-│   ├── templates/         # Jinja2; pages extend layouts/page.html
-│   └── static/            # AdminLTE, Bootstrap, jQuery, Flot, and the app's own JS and CSS
-├── tests/                 # unit tests; tests/e2e/run.sh runs them against a real step-ca
+│   ├── auth/              # session check, roles, auth backend factory
+│   ├── libs/              # auth backends (LDAP, local), audit log, certificate parsing, provisioner edits
+│   └── models/            # SQLAlchemy tables: step-ca's (read-only) and the app's own
+├── frontend/              # the React app (Vite, TypeScript); `npm run build` writes frontend/dist
+│   ├── openapi.json       # the API's OpenAPI document, which src/api/schema.d.ts is generated from
+│   └── src/
+│       ├── routes/        # one file per page (TanStack Router)
+│       ├── features/      # dialogs and forms: sign, revoke, provisioners, ACME tables
+│       ├── components/    # the shell, tables, status badges, lifetime bars; ui/ holds the shadcn/ui components
+│       └── api/           # the typed API client and session hooks
+├── tests/                 # unit tests; tests/e2e/run.sh runs the API and browser tests against a real step-ca
 ├── docs/analysis-report.md
 ├── pyproject.toml / uv.lock
 ├── requirements.txt       # exported from uv.lock, for Dockerfile.pip
@@ -65,68 +70,37 @@ stepca-web/
 
 step-ca's database is only read, by `app/stepca/store.py`. Changes go through step-ca's API (`app/stepca/client.py`). Provisioners and admins are listed from the Admin API; the database only fills in what the API leaves out (provisioner ids, some admins' creation dates).
 
-### Routes
+The certificate lists read an **inventory** in the app's own database (`app/services/inventory.py`): step-ca's certificates and revocations, parsed once. Neither ever changes once step-ca has written it, so keeping it current only means adding the new rows; each read checks for them at most every `INVENTORY_REFRESH_SECONDS` (5). It is built in the background at startup.
 
-Every route needs a session except `/auth/login`. Changes need a role (see [Roles](#roles)) and a CSRF token.
+### Pages and API
 
-#### ACME
+The frontend's pages are `/`, `/certificates` (`?status=valid|expiring|expired|revoked`), `/certificates/<serial>`, `/acme/accounts[/<id>]`, `/acme/orders[/<id>]`, `/acme/authorizations`, `/acme/challenges`, `/acme/certificates`, `/ca`, `/provisioners[/<name>]`, `/admins`, `/settings`, `/audit`, `/search?q=` and `/service`. The old pages' URLs (`/x509/cert/<serial>`, `/step/provisioners`, ...) redirect to them.
 
-- `/acme/accounts`, `/acme/orders`, `/acme/certs`, `/acme/authzs`, `/acme/challenges` – lists
-- `/acme/account/<id>`, `/acme/order/<id>` – an account with its orders; an order with its authorizations, challenges and certificate
-- `/api/acme/<kind>` – the same as JSON
+Everything the frontend shows comes from the JSON API under `/api/v1`, documented by `frontend/openapi.json` (regenerate it with `uv run python -m app.api.openapi`):
 
-#### X.509
+- `GET/POST/DELETE /api/v1/session` – who is signed in and the CSRF token; sign in; sign out
+- `GET /api/v1/certificates` – filtered (`status`, `days`, `q`, `provisioner`), sorted (`sort`, `order`) and paged (`page`, `per_page`); `format=csv` returns every matching row as a file. The ACME lists and the audit log take the same `q`, `page`, `per_page` and `format`
+- `GET /api/v1/certificates/<serial>`, `/download?format=pem|chain|der`; `POST /api/v1/certificates` (sign a CSR), `/<serial>/revoke` (operator)
+- `GET /api/v1/acme/{accounts,orders,authorizations,challenges,certificates}`, `/acme/accounts/<id>`, `/acme/orders/<id>`
+- `GET/POST/PUT/DELETE /api/v1/provisioners[/<name>]`, `GET/POST/PATCH/DELETE /api/v1/admins[/<id>]` (changes: admin)
+- `GET /api/v1/ca`, `/ca/roots.pem`, `/ca/intermediates.pem`, `/ca/crl?format=der|pem`
+- `GET /api/v1/dashboard`, `/search?q=`, `/settings` and `/audit` (admin), `POST /api/v1/service` (admin, if enabled)
 
-- `/x509/all`, `/x509/active`, `/x509/revoked` – lists
-- `/x509/expiring?days=7|30|90` – certificates expiring soon
-- `/x509/cert/<serial>` – one certificate (decimal serial)
-- `/x509/download/<serial>?format=pem|chain|der` – download a certificate
-- `/x509/sign` (POST, operator) – sign a CSR; `/x509/csr/preview` (POST, operator) – what a CSR asks for
-- `/x509/revoke` (POST, operator) – revoke a certificate
-- `/api/x509/certs`, `/api/x509/certs/<serial>` – JSON
-
-#### Step CA
-
-- `/step/ca` – CA status; `/step/ca/roots.pem`, `/step/ca/intermediates.pem`, `/step/ca/crl` – downloads
-- `/step/provisioners` – list; POST (admin) adds one
-- `/step/provisioner/<name>/edit` (admin) – edit a provisioner
-- `/step/provisioner/<name>/delete` (POST, admin) – delete a provisioner
-- `/step/admins` – list; POST (admin) adds one
-- `/step/admin/<id>/update`, `/step/admin/<id>/delete` (POST, admin) – change an admin's type, delete it
-- `/step/service`, `/step/service/<action>` (POST) (admin, if enabled) – service control
-
-#### System
-
-- `/system/config` (admin) – the settings in effect, read-only
-- `/system/audit` (admin) – the audit log
-
-#### Home
-
-- `/` – Dashboard overview
-- `/search?q=` – search
+Every API route needs a session except `/api/v1/session`; writes need the session's CSRF token in an `X-CSRFToken` header, and a role (see [Roles](#roles)). Errors are `{"error": "..."}`. Scripts can use it the same way: `GET /api/v1/session` for a token, `POST` it with the credentials, then send the new token with each write.
 
 
-## Frontend: GUI Overview
+## Frontend
 
-The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Bootstrap.
-
-- **Dashboard**: KPIs for active, expiring and revoked certificates and provisioners.
-- **ACME Management**: Tables for accounts, orders, certs, authorizations, and challenges, with a page per account and per order.
-- **X.509 Management**: Tables for all, active, expiring and revoked certificates, and a page per certificate with its extensions, downloads (PEM, chain, DER) and revoke (with a reason).
-- **Every list** can be searched, sorted by any column, paged (50 rows per page) and exported as CSV, without any third-party script.
-- **Search** box in the top bar.
-- **Provisioner Management**: Table of provisioners with view, add, edit and delete.
-- **CA Status**: Health, version, roots, intermediates and CRL of the CA.
-- **Admin Management**: Table of admins with add, type change and delete (when the app's CA identity is a super admin).
-- **Configuration**: Read-only view of the settings in effect.
-- **Audit Log**: Who did what, for admins.
-- **Service Control** (optional, `SERVICE_CONTROL_ENABLED=true`): Buttons to start/stop/restart Step CA via systemd.
-- **Navigation**: Sidebar for quick access to all sections.
+- **Built with** Vite, React, TypeScript, Tailwind CSS and [shadcn/ui](https://ui.shadcn.com) components (Radix), TanStack Router, Query and Table. The API types are generated from `frontend/openapi.json`, so the frontend stops compiling when it no longer matches the API.
+- **Served by Flask** from `frontend/dist` (`FRONTEND_DIR`), with the same strict Content-Security-Policy as the API: only the app's own scripts and styles, plus a per-response nonce for the two style elements its dialogs and selects add. No CDN.
+- **Light and dark themes** (or the system's), and layouts for phones.
+- **Lists** keep their filters, sort and page in the URL, so they can be bookmarked and shared.
+- **`/`** focuses the search box from anywhere.
 
 
 ## Requirements
 
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/) (or Docker, see below)
+- Python 3.12+ and [uv](https://docs.astral.sh/uv/), and Node.js 22 to build the frontend (or Docker, see below)
 - Linux with `systemd`, only for the optional service control page
 - Step CA installed and configured
 - step-ca with remote management enabled, its database on PostgreSQL (the app is tested with step-ca 0.30)
@@ -150,6 +124,12 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
 
    This installs the exact versions pinned in `uv.lock` into `.venv`. Without uv, `pip install --require-hashes -r requirements.txt` installs the same versions.
 
+   Then build the frontend:
+
+   ```bash
+   cd frontend && npm ci && npm run build && cd ..
+   ```
+
 3. **Create a read-only database role** for the app (see [Database Connection](#database-connection)).
 
 4. **Give the app its own identity on the CA** (see [CA identity](#ca-identity)).
@@ -159,7 +139,7 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
    - Set the environment variables listed in `.env.example` (or put the same keys in `settings.json` in the working directory).
    - Set your PostgreSQL host, user, password, database, and port, and `SECRET_KEY`.
    - Set your Step CA URL and root fingerprint.
-   - The `/system/config` page shows the settings in effect (read-only, secrets hidden).
+   - The **Settings** page shows the settings in effect (read-only, secrets hidden).
 
 6. **Run the app**
 
@@ -183,7 +163,7 @@ The GUI is built with Flask/Jinja2 templates and styled using AdminLTE and Boots
   ALTER DEFAULT PRIVILEGES FOR ROLE "step-ca" IN SCHEMA public GRANT SELECT ON TABLES TO stepca_web;
   ```
 
-- The app's own data (the audit log, and certificates signed from the UI with their CSR) lives in a SQLite file, `stepca-web.db`, in the data directory (`DATA_DIR`, `/data` in the image). Override it with `APP_DATABASE_URI`.
+- The app's own data (the audit log, the certificate inventory, and certificates signed from the UI with their CSR) lives in a SQLite file, `stepca-web.db`, in the data directory (`DATA_DIR`, `/data` in the image). Override it with `APP_DATABASE_URI`.
 - Connection parameters are set with environment variables or `settings.json` (in the data directory). Environment variables win.
 - Example config:
 
@@ -224,7 +204,7 @@ The image runs the app with gunicorn as a non-root user. All configuration comes
    docker compose up -d --build
    ```
 
-   This builds `Dockerfile`, which installs the dependencies with uv. To use plain pip instead, set `DOCKERFILE=Dockerfile.pip` in `.env`.
+   This builds `Dockerfile`, which builds the frontend with Node and installs the Python dependencies with uv. To use plain pip instead, set `DOCKERFILE=Dockerfile.pip` in `.env`. The build needs Docker Hub, PyPI and the npm registry.
 
    The UI listens on `127.0.0.1:5000` by default. Put a TLS reverse proxy in front of it, or set `STEPCA_WEB_BIND=0.0.0.0` in `.env` to expose it directly.
 
@@ -270,7 +250,7 @@ CA_ADMIN_PASSWORD_FILE=/run/secrets/ca_admin_password   # contents of stepca-web
 - **The key never touches the disk.** On first use the app fetches the provisioner's encrypted key from the CA and decrypts it in memory with the password from `CA_ADMIN_PASSWORD_FILE`. Revoking needs no passphrase.
 - **Least privilege.** An ADMIN can manage provisioners but not admins: the Admins page becomes read-only, and you manage admins with `step ca admin`. Note that an ADMIN can still create provisioners, so it can still issue certificates: protect the app accordingly.
 - **Switching identity** is safe: the app re-issues its admin certificate (`admin.crt` in the working directory) when it doesn't match `CA_ADMIN_SUBJECT` and `CA_ADMIN_PROVISIONER_NAME`.
-- **Revocations** are made with the app's provisioner, so the Revoked list shows `stepca-web` under "Revoked via".
+- **Revocations** are made with the app's provisioner, so a revoked certificate's page shows `stepca-web` as the provisioner it was revoked through.
 - **Legacy setup:** without `CA_ADMIN_PASSWORD_FILE`, the app reads the provisioner's decrypted key from `jwk_key.json` in the working directory:
 
   ```bash
@@ -290,7 +270,7 @@ CA_ADMIN_PASSWORD_FILE=/run/secrets/ca_admin_password   # contents of stepca-web
 
 - **LDAP:** set `ROLE_ADMIN_GROUP`, `ROLE_OPERATOR_GROUP` and `ROLE_VIEWER_GROUP` to group DNs. The highest matching group wins. Users in none of them get `DEFAULT_ROLE` (`viewer` by default; `none` refuses them).
 - **Local users:** set `"role"` for each user in `local_users.json`.
-- Every change (sign, revoke, provisioner and admin changes, service actions) and every login is recorded in the audit log (**System > Audit Log**, admins only) and printed to stdout.
+- Every change (sign, revoke, provisioner and admin changes, service actions) and every login is recorded in the audit log (**System > Audit log**, admins only) and printed to stdout.
 
 To keep the behaviour from before roles existed (every LDAP user can do everything), set `DEFAULT_ROLE=admin`.
 
@@ -311,7 +291,7 @@ LDAP_USER_SEARCH_FILTER=(sAMAccountName={username})         # (uid={username}) b
 ```
 
 - **The server certificate is always verified** for `ldaps://` and StartTLS: against `LDAP_CA_FILE`, or the system CAs. A server whose certificate doesn't verify, or doesn't name the host in `LDAP_URL`, refuses every login, and the reason is logged.
-- **`ldap://` without StartTLS sends passwords in cleartext.** It still works, but the app logs a warning at startup and the Configuration page shows one.
+- **`ldap://` without StartTLS sends passwords in cleartext.** It still works, but the app logs a warning at startup and the Settings page shows one.
 - Groups come from the user's `memberOf` attribute (on OpenLDAP, enable the memberof overlay) and are mapped to roles (see [Roles](#roles)). `LDAP_REQUIRED_GROUP_DN` optionally restricts login to one group.
 
 ### Local auth setup
@@ -383,29 +363,35 @@ These changes need action:
 - **Roles:** LDAP users who match no role group get `DEFAULT_ROLE`, `viewer` by default. Set `ROLE_ADMIN_GROUP` (or `DEFAULT_ROLE=admin` for the old behaviour). Local users need a `role` in `local_users.json`.
 - **LDAP:** `ldaps://` and StartTLS now verify the server certificate: set `LDAP_CA_FILE` if the system CAs don't know the one that issued it. `LDAP_REQUIRED_GROUP_DN` no longer defaults to `LDAP_BASE_DN`.
 - **Database:** the app only reads step-ca's database. Give it a read-only role (see [Database Connection](#database-connection)). The `generated_certs` table it used to create in step-ca's database can be dropped.
-- **Revocations made before the fix** revoked the wrong serial. The Revoked page marks them "Ineffective" and links to the certificate that is still valid: revoke it again from its page.
+- **Revocations made before the fix** revoked the wrong serial. The Revoked tab of the certificate list names the certificates that are still valid: revoke them again from their page.
 - **Service control** is off unless `SERVICE_CONTROL_ENABLED=true`.
 - **Data directory:** the app's files (`settings.json`, `admin.crt`, `admin.key`, `ca_root.crt`, `stepca-web.db`, `jwk_key.json`, `local_users.json`) are in `DATA_DIR`: `/data` in the image, as before; the working directory otherwise.
 - **JSON API:** `/api/x509/*` and `/api/acme/*` return the app's records (`serial`, `subject`, `not_after` in ISO 8601, ...) instead of step-ca's raw rows.
 
+## Upgrading to the React frontend
+
+- **The old JSON API is gone:** `/api/x509/*` and `/api/acme/*` are replaced by `/api/v1` (see [Pages and API](#pages-and-api)), whose lists are paged: pass `per_page` (up to 500) and `page`, or `format=csv` for every row.
+- **URLs changed;** the old pages' URLs redirect to the new ones.
+- **Building from source** needs Node.js 22 for the frontend (`cd frontend && npm ci && npm run build`). The Docker images do it themselves, and the image build now also downloads from the npm registry.
+- **Health check:** the images check `/healthz` instead of the sign-in page. Point your own monitoring there too.
+- **Expiring certificates:** certificates issued for 30 days or less no longer count as expiring, on the dashboard or in the lists.
+- **Provisioners:** the "Issues X.509 certificates" box is gone: step-ca ignores it (it issues X.509 certificates whatever its value).
+
 
 ## Development
 
-- Install everything, including the test tools: `uv sync`.
-- Lint and type-check: `uv run ruff check .` and `uv run mypy`
-- Unit tests: `uv run pytest`. They use in-memory SQLite with the same table layout as step-ca, and a fake CA client; each test builds its own settings (`tests/conftest.py`).
-- End-to-end tests: `tests/e2e/run.sh` starts a real step-ca on PostgreSQL and an OpenLDAP server, gets a certificate over ACME, runs the app on a read-only role, and tests signing, revoking (down to the CRL), provisioner editing, the ACME pages, CSRF, pagination and LDAP over TLS against them. Needs Docker. `KEEP=1` leaves the stack running; `DOCKERFILE=Dockerfile.pip` tests the pip image; `E2E_IDENTITY=super` uses the legacy `jwk_key.json` setup.
-- After changing dependencies in `pyproject.toml`, run `uv lock` and `uv export --frozen --no-dev --no-emit-project -o requirements.txt`. CI checks both are in sync.
-- Use the built-in Flask dev server for local testing.
-- For UI, modify `app/templates/` and `app/static/`.
-- To add new pages, extend `layouts/base.html` and register routes in the appropriate blueprint. Page scripts go in `app/static/assets/js/`: the Content-Security-Policy blocks inline scripts and event handlers.
-- Domain logic is in `app/services/`, step-ca's API and database in `app/stepca/`, routes in `app/blueprint/`.
+- Install everything, including the test tools: `uv sync`, and `npm ci` in `frontend/`.
+- **Backend:** lint and type-check with `uv run ruff check .` and `uv run mypy`; unit tests with `uv run pytest`. They use in-memory SQLite with the same table layout as step-ca, and a fake CA client; each test builds its own settings (`tests/conftest.py`).
+- **Frontend:** `npm run dev` in `frontend/` serves it with hot reload on <http://localhost:5173> and forwards `/api` to the Flask app on port 5000 (`API_URL` to change it), started with `AUTH_BACKEND=local uv run python run.py`. `npm run lint`, `npm run format`, `npm run typecheck` and `npm test` (Vitest) check it.
+- **API changes:** after changing `app/api/`, run `uv run python -m app.api.openapi` and `npm run api:gen` in `frontend/`: the frontend then type-checks against the new API. CI checks that both files are current.
+- **End-to-end tests:** `tests/e2e/run.sh` starts a real step-ca on PostgreSQL and an OpenLDAP server, gets a certificate over ACME, runs the app on a read-only role, and tests the API (signing, revoking down to the CRL, provisioner editing, the ACME drill-down, CSRF, the inventory) and the frontend in headless Chromium (signing in, every page without CSP or script errors, signing and revoking through the dialogs). Needs Docker, and the browser once: `uv run playwright install --only-shell chromium`. `KEEP=1` leaves the stack running on <http://127.0.0.1:15000>; `DOCKERFILE=Dockerfile.pip` tests the pip image; `E2E_IDENTITY=super` uses the legacy `jwk_key.json` setup.
+- After changing dependencies in `pyproject.toml`, run `uv lock` and `uv export --frozen --no-dev --no-emit-project -o requirements.txt`. CI checks both are in sync. Frontend dependencies are in `frontend/package-lock.json`; Dependabot proposes their updates weekly.
+- The Content-Security-Policy refuses inline scripts and styles: keep styles in Tailwind classes or React's `style` prop, and avoid libraries that add `<style>` elements (most toast libraries do; the app has its own toaster).
 
 
 ## To Do / Ideas
 
 - [ ] SSH certificates (inventory and revocation)
-- [ ] Server-side paging and a cache for CAs with tens of thousands of certificates
 - [ ] Expiry notifications
 - [ ] Bulk certificate operations
 

@@ -9,3 +9,12 @@ repos:
     rev: v0.17.1
     hooks:
       - id: ruff
+  # Type check with the project's own environment (it needs the dependencies' types)
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
+        pass_filenames: false

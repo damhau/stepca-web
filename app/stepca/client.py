@@ -37,6 +37,14 @@ log = logging.getLogger(__name__)
 
 # Seconds before a request to the CA is abandoned
 TIMEOUT = 30
+def signing_key(jwk):
+    """The EC private key of a JWK (a dict); ValueError if it has no private part ("d")."""
+    key = ECAlgorithm(ECAlgorithm.SHA256).from_jwk(jwk)
+    if not isinstance(key, ec.EllipticCurvePrivateKey):
+        raise ValueError("The provisioner key has no private part: jwk_key.json must hold the decrypted key")
+    return key
+
+
 class SignError(Exception):
     """Signing failed; the message is meant for the user."""
 
@@ -50,8 +58,7 @@ class CAToken:
         self.subject = subject
         self.sans = sans
 
-        key = ECAlgorithm(ECAlgorithm.SHA256).from_jwk(jwk_privkey)
-        self.token = python_jwt.encode(self.jwt_body(), key=key, headers={"kid": jwk_privkey["kid"]}, algorithm="ES256")
+        self.token = python_jwt.encode(self.jwt_body(), key=signing_key(jwk_privkey), headers={"kid": jwk_privkey["kid"]}, algorithm="ES256")
 
     def jwt_body(self):
         body = {
@@ -261,8 +268,7 @@ class StepCAClient:
         }
 
         admin_jwk = self._admin_jwk()
-        key = ECAlgorithm(ECAlgorithm.SHA256).from_jwk(admin_jwk)
-        token = python_jwt.encode(jwt_payload, key, algorithm="ES256", headers={"kid": admin_jwk["kid"]})
+        token = python_jwt.encode(jwt_payload, signing_key(admin_jwk), algorithm="ES256", headers={"kid": admin_jwk["kid"]})
 
         # --- Send to CA ---
         payload = {"csr": csr_pem, "ott": token, "notAfter": self.not_after}
@@ -286,6 +292,8 @@ class StepCAClient:
     def _get_jwt_token(self, audience):
         pem_cert, pem_key = self._admin_credentials()
         private_key = serialization.load_pem_private_key(pem_key, password=None)
+        if not isinstance(private_key, ec.EllipticCurvePrivateKey):
+            raise RuntimeError(f"{self.key_file} is not the EC key of the admin certificate: delete it to get a new one")
 
         certs = [
             x509.load_pem_x509_certificate(c + b"-----END CERTIFICATE-----")
@@ -362,7 +370,8 @@ class StepCAClient:
     def _list_all(self, path, key, auth=True):
         """Every item of a step-ca list: it returns at most 100 per page plus a nextCursor."""
         send = self._request if auth else self._request_noauth
-        items, cursor, seen = [], None, set()
+        items: list[dict] = []
+        cursor, seen = None, set()
         while True:
             params = {"limit": 100}
             if cursor:
@@ -568,12 +577,11 @@ class StepCAClient:
 
         # Generate the key pair
         key = jwcrypto_jwk.JWK.generate(kty="EC", crv="P-256", use="sig", alg="ES256")
-        kid = key.thumbprint()
-        key.kid = kid
+        key["kid"] = key.thumbprint()
 
         # Encrypt the private key
         jwetoken = jwcrypto_jwe.JWE(
-            plaintext=key.export_private().encode("utf-8"), protected={"alg": "PBES2-HS256+A128KW", "enc": "A128CBC-HS256"}
+            plaintext=key.export_private().encode("utf-8"), protected=json.dumps({"alg": "PBES2-HS256+A128KW", "enc": "A128CBC-HS256"})
         )
         jwetoken.add_recipient(jwcrypto_jwk.JWK.from_password(passphrase.decode()))
         encrypted_jwk = jwetoken.serialize()
@@ -590,6 +598,8 @@ class StepCAClient:
         jwetoken.decrypt(jwcrypto_jwk.JWK.from_password(passphrase))
 
         # Get private JWK
+        if jwetoken.plaintext is None:
+            raise ValueError("The encrypted provisioner key is empty")
         private_jwk_json = jwetoken.plaintext.decode("utf-8")
         private_jwk = json.loads(private_jwk_json)
 

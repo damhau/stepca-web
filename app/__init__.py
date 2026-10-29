@@ -60,7 +60,8 @@ def create_app(settings: Settings | None = None):
     if app.config["TRUSTED_PROXIES"]:
         # Behind reverse proxies: take the client address and scheme from their X-Forwarded-* headers
         proxies = app.config["TRUSTED_PROXIES"]
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxies, x_proto=proxies)
+        # Flask's documented way to wrap the WSGI app; mypy sees a method being replaced
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxies, x_proto=proxies)  # type: ignore[method-assign]
 
     # Initialize Flask extensions here
     db.init_app(app)

@@ -24,8 +24,12 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "mypy>=1.13",
     "pytest>=8",
     "ruff>=0.12",
+    "types-jwcrypto>=1.6.1.20260928",
+    "types-ldap3>=2.9.13.20260827",
+    "types-requests>=2.33.0.20261006",
 ]
 
 [tool.uv]
@@ -44,3 +48,21 @@ extend-exclude = ["app/static"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app"]
+# Function bodies are checked even where the function has no annotations
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+# Neither ships type information
+module = ["flask_talisman", "flask_wtf.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Flask-SQLAlchemy creates db.Model at runtime, which mypy can't follow as a base class
+module = ["app.models.*"]
+disable_error_code = ["name-defined"]

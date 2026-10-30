@@ -84,7 +84,7 @@ function OverviewPage() {
               <KpiCard key={kpi.key} kpi={kpi} range={range} />
             ))}
           </div>
-          <div className="flex flex-wrap items-start gap-4">
+          <div className="flex flex-wrap gap-4">
             <Issuance overview={overview.data} range={range} />
             <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
               <Health overview={overview.data} />
@@ -215,7 +215,7 @@ function Issuance({ overview, range }: { overview: Overview; range: Range }) {
   const highest = Math.max(1, ...buckets.map((bucket) => bucket.counts.reduce((sum, count) => sum + count, 0)))
   const first = buckets[0]
   return (
-    <Card className="flex-[2_1_520px]">
+    <Card className="flex flex-[2_1_520px] flex-col">
       <CardHeader
         title="Issuance by provisioner"
         description={`${plural(total, "certificate")} ${LAST[range]}`}
@@ -235,7 +235,8 @@ function Issuance({ overview, range }: { overview: Overview; range: Range }) {
       <div
         role="img"
         aria-label={`Certificates issued ${LAST[range]}, by provisioner: ${series.join(", ") || "none"}`}
-        className="flex h-[200px] items-end gap-[3px] px-4 pt-5 pb-2"
+        // As tall as the cards beside it, 200px when alone on its row
+        className="flex min-h-[200px] flex-1 items-end gap-[3px] px-4 pt-5 pb-2"
       >
         {buckets.map((bucket) => {
           const sum = bucket.counts.reduce((all, count) => all + count, 0)

@@ -1,4 +1,5 @@
-"""ACME accounts, orders, authorizations, challenges and certificates, read from step-ca's tables."""
+"""ACME accounts, orders, authorizations, challenges and certificates. The lists read the app's copy of step-ca's
+tables (services.acme_inventory), filtered and paged in SQL; accounts are few and read in full."""
 
 from dataclasses import asdict
 
@@ -16,6 +17,7 @@ from app.api.schemas import (
     IdPath,
 )
 from app.services import acme
+from app.services.acme_inventory import ListQuery
 
 bp = blueprint("api_acme", "ACME")
 
@@ -44,20 +46,31 @@ def identifiers(order):
     return [identifier["value"] for identifier in order["identifiers"]]
 
 
-def listing(query: AcmeListQuery, model, rows, text, filename, columns):
-    """One page of rows (dicts) that contain the query's text and have its status, or all of them as CSV."""
-    rows = [row for row in rows if contains(query.q, *text(row)) and (not query.status or row.get("status") == query.status)]
+def list_query(query: AcmeListQuery):
+    """What to read from the copy: this page, or every matching row for a CSV export."""
+    return ListQuery(q=query.q, status=query.status, page=query.page, per_page=None if query.format == "csv" else query.per_page)
+
+
+def listing(query: AcmeListQuery, model, kind, rows, total, filename, columns):
+    """One page of rows (dicts), or all of them as CSV."""
     if query.format == "csv":
         return csv_response(filename, columns, rows)
-    items, total = paginate(rows, query)
-    return page(model, items, total, query)
+    return page(model, rows, total, query, pending=acme.pending(kind))
 
 
 @bp.get("/acme/accounts", responses={200: AcmeAccountPage})
 def accounts(query: AcmeListQuery):
     rows = [asdict(account) for account in acme.accounts()]
+    rows = [
+        row
+        for row in rows
+        if contains(query.q, row["id"], *row["contact"], row["provisioner_name"]) and (not query.status or row["status"] == query.status)
+    ]
     columns = [(name, attribute(name)) for name in ("id", "status", "contact", "provisioner_name", "created_at", "deactivated_at")]
-    return listing(query, AcmeAccountPage, rows, lambda row: [row["id"], *row["contact"], row["provisioner_name"]], "acme-accounts.csv", columns)
+    if query.format == "csv":
+        return csv_response("acme-accounts.csv", columns, rows)
+    items, total = paginate(rows, query)
+    return page(AcmeAccountPage, items, total, query)
 
 
 @bp.get("/acme/accounts/<id>", responses={200: AcmeAccountDetail, 404: Error})
@@ -65,13 +78,13 @@ def account(path: IdPath):
     found = acme.account(path.id)
     if found is None:
         return error(f"ACME account {path.id} not found.", 404)
-    account, orders = found
-    return dump(AcmeAccountDetail, {"account": account, "orders": [order_item(row) for row in orders]})
+    return dump(AcmeAccountDetail, {"account": found.account, "orders": [order_item(row) for row in found.orders], "order_total": found.order_total})
 
 
 @bp.get("/acme/orders", responses={200: AcmeOrderPage})
 def orders(query: AcmeListQuery):
-    rows = [order_item(row) for row in acme.orders()]
+    found, total = acme.orders(list_query(query))
+    rows = [order_item(row) for row in found]
     columns = [
         ("id", attribute("id")),
         ("account_id", attribute("account_id")),
@@ -82,7 +95,7 @@ def orders(query: AcmeListQuery):
         ("certificate_serial", attribute("certificate_serial")),
         ("error", attribute("error")),
     ]
-    return listing(query, AcmeOrderPage, rows, lambda row: [row["id"], row["account_id"], *identifiers(row)], "acme-orders.csv", columns)
+    return listing(query, AcmeOrderPage, "orders", rows, total, "acme-orders.csv", columns)
 
 
 @bp.get("/acme/orders/<id>", responses={200: AcmeOrderDetail, 404: Error})
@@ -107,7 +120,8 @@ def order(path: IdPath):
 
 @bp.get("/acme/authorizations", responses={200: AcmeAuthorizationPage})
 def authorizations(query: AcmeListQuery):
-    rows = [{**asdict(authorization), "order_id": order_id} for authorization, order_id in acme.authorizations()]
+    found, total = acme.authorizations(list_query(query))
+    rows = [{**asdict(authorization), "order_id": order_id} for authorization, order_id in found]
     columns = [
         ("id", attribute("id")),
         ("identifier", lambda row: row["identifier"]["value"]),
@@ -118,18 +132,19 @@ def authorizations(query: AcmeListQuery):
         ("order_id", attribute("order_id")),
         ("error", attribute("error")),
     ]
-    return listing(query, AcmeAuthorizationPage, rows, lambda row: [row["id"], row["identifier"]["value"], row["order_id"]], "acme-authorizations.csv", columns)
+    return listing(query, AcmeAuthorizationPage, "authorizations", rows, total, "acme-authorizations.csv", columns)
 
 
 @bp.get("/acme/challenges", responses={200: AcmeChallengePage})
 def challenges(query: AcmeListQuery):
-    rows = [{**asdict(challenge), "order_id": order_id} for challenge, order_id in acme.challenges()]
+    found, total = acme.challenges(list_query(query))
+    rows = [{**asdict(challenge), "order_id": order_id} for challenge, order_id in found]
     columns = [(name, attribute(name)) for name in ("id", "type", "value", "status", "validated_at", "created_at", "order_id", "error")]
-    return listing(query, AcmeChallengePage, rows, lambda row: [row["id"], row["type"], row["value"], row["order_id"]], "acme-challenges.csv", columns)
+    return listing(query, AcmeChallengePage, "challenges", rows, total, "acme-challenges.csv", columns)
 
 
 @bp.get("/acme/certificates", responses={200: AcmeCertificatePage})
 def certificates(query: AcmeListQuery):
-    rows = [certificate_item(cert) for cert in acme.certificates()]
+    rows, total = acme.certificates(list_query(query))
     columns = [(name, attribute(name)) for name in ("id", "serial", "subject", "dns_names", "not_before", "not_after", "order_id", "account_id", "created_at")]
-    return listing(query, AcmeCertificatePage, rows, lambda row: [row["id"], row["serial"], row["subject"], *row["dns_names"], row["order_id"]], "acme-certificates.csv", columns)
+    return listing(query, AcmeCertificatePage, "certificates", rows, total, "acme-certificates.csv", columns)

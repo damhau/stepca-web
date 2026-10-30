@@ -48,8 +48,9 @@ The frontend now follows a design handed off as mockups (Overview, Certificates,
 - **New certificate** in three steps: a key made in the browser with WebCrypto (only the CSR is sent) or an uploaded CSR; then a PEM bundle, the key, or a Kubernetes TLS Secret.
 - **A settings page per provisioner** whose changes are saved together, with the ACME directory URL and a cert-manager ClusterIssuer.
 - **A command palette** (⌘K) for search, actions and pages.
+- **ACME lists that don't slow down as renewals pile up:** step-ca never deletes ACME objects, so the ACME pages and the overview now read a copy of its ACME tables in the app's database, kept current like the certificate inventory. With 10,000 issuances, a list answers in about 25 ms instead of reading and parsing every row on each load.
 
-Not built, because step-ca's open-source API has nothing behind them: SSH, policies, webhooks, API tokens, OCSP, EAB keys, pausing a provisioner, renewal from the UI, PKCS#12. **BUG-25** was found on the way and fixed. The app now has 246 unit tests, 12 frontend unit tests and 28 end-to-end tests, 9 of them in a browser.
+Not built, because step-ca's open-source API has nothing behind them: SSH, policies, webhooks, API tokens, OCSP, EAB keys, pausing a provisioner, renewal from the UI, PKCS#12. **BUG-25** was found on the way and fixed. The app now has 254 unit tests, 12 frontend unit tests and 28 end-to-end tests, 9 of them in a browser.
 
 **Verdict now:** fit for production as an internal admin console, behind a TLS reverse proxy with `ldaps://` or StartTLS, including for CAs with tens of thousands of certificates (§8).
 

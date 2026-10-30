@@ -1,12 +1,19 @@
-"""ACME objects, and the drill-down from an account to its orders, authorizations, challenges and certificate."""
+"""ACME objects, and the drill-down from an account to its orders, authorizations, challenges and certificate.
+
+The lists read the app's copy of step-ca's ACME tables (acme_inventory); one account, one order and its
+authorizations, challenges and certificate are read from step-ca's tables, as they are now."""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from app.services import acme_inventory, inventory
+from app.services.acme_inventory import ListQuery
 from app.stepca import store
 from app.stepca.records import AcmeAccount, AcmeAuthorization, AcmeCertificate, AcmeChallenge, AcmeOrder
 
 OLDEST = datetime.min.replace(tzinfo=UTC)
+# The orders an account's page shows; the orders list has every one
+ACCOUNT_ORDERS = 50
 
 
 def newest_first(records):
@@ -33,9 +40,12 @@ class OrderRow:
     certificate_serial: str | None
 
 
-def _certificate_serials():
-    """ACME certificate id -> decimal serial, to link to the certificate page."""
-    return {cert.id: cert.serial for cert in store.acme_certificates()}
+@dataclass(frozen=True)
+class AccountView:
+    account: AcmeAccount
+    # The latest ACCOUNT_ORDERS, and how many it has
+    orders: list[OrderRow]
+    order_total: int
 
 
 def accounts():
@@ -43,18 +53,19 @@ def accounts():
 
 
 def account(account_id):
-    """(the account, its orders with their certificate's serial), or None."""
     found = store.acme_account(account_id)
     if found is None:
         return None
-    serials = _certificate_serials()
-    orders = [OrderRow(o, serials.get(o.certificate_id)) for o in newest_first(store.acme_orders()) if o.account_id == account_id]
-    return found, orders
+    inventory.refresh()
+    rows, total = acme_inventory.orders(ListQuery(per_page=ACCOUNT_ORDERS), account_id=account_id)
+    return AccountView(found, [OrderRow(order, serial) for order, serial in rows], total)
 
 
-def orders():
-    serials = _certificate_serials()
-    return [OrderRow(order, serials.get(order.certificate_id)) for order in newest_first(store.acme_orders())]
+def orders(query: ListQuery):
+    """([order rows], total)"""
+    inventory.refresh()
+    rows, total = acme_inventory.orders(query)
+    return [OrderRow(order, serial) for order, serial in rows], total
 
 
 def order(order_id):
@@ -78,21 +89,26 @@ def order(order_id):
     )
 
 
-def authorizations():
-    """[(authorization, id of its order or None)]"""
-    order_of = {aid: o.id for o in store.acme_orders() for aid in o.authorization_ids}
-    return [(a, order_of.get(a.id)) for a in newest_first(store.acme_authorizations())]
+def authorizations(query: ListQuery):
+    """([(authorization, id of its order or None)], total)"""
+    inventory.refresh()
+    return acme_inventory.authorizations(query)
 
 
-def challenges():
-    """[(challenge, id of its order or None)]"""
-    orders_by_authz = {aid: o.id for o in store.acme_orders() for aid in o.authorization_ids}
-    order_of = {cid: orders_by_authz.get(a.id) for a in store.acme_authorizations() for cid in a.challenge_ids}
-    return [(c, order_of.get(c.id)) for c in newest_first(store.acme_challenges())]
+def challenges(query: ListQuery):
+    """([(challenge, id of its order or None)], total)"""
+    inventory.refresh()
+    return acme_inventory.challenges(query)
 
 
-def certificates():
-    return newest_first(store.acme_certificates())
+def certificates(query: ListQuery):
+    """([certificate items], total)"""
+    inventory.refresh()
+    return acme_inventory.certificates(query)
+
+
+def pending(kind):
+    return acme_inventory.pending(kind)
 
 
 def order_id_for_serial(serial):

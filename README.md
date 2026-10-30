@@ -27,7 +27,7 @@ https://smallstep.com/docs/step-ca
   - A panel beside the list for each certificate: names, serial, provisioner, key, validity, issuer, ACME order, revocation, extensions; its events (issued, ACME order, revoked); its PEM; PEM, chain and DER downloads.
   - **New certificate:** a key pair made in the browser (ECDSA P-256 or P-384, Ed25519, RSA 2048: only its CSR is sent) or an uploaded CSR, signed by a JWK provisioner with its password, for a chosen validity. Then download a PEM bundle, the key, or a Kubernetes TLS Secret; the equivalent step CLI command is shown.
   - Select several certificates to download them as one PEM bundle or revoke them together; revoke with an RFC 5280 reason.
-- **ACME** (read-only): accounts, orders, certificates, authorizations and challenges, and the drill-down from an account to its orders, from an order to its authorizations, challenges and certificate.
+- **ACME** (read-only): accounts, orders, certificates, authorizations and challenges, and the drill-down from an account to its orders, from an order to its authorizations, challenges and certificate. They stay fast however many orders renewals leave in step-ca's database (step-ca never deletes them).
 - **Provisioners**: list, add (JWK, ACME) and delete; a settings page for each (lifetimes, renewal, ACME challenges and options) that saves its changes together. ACME provisioners show their directory URL and a cert-manager ClusterIssuer with the CA's root; JWK provisioners a step CLI command. Their latest certificates and changes.
 - **Admins**: list, add, change type and delete (when the app's CA identity is a super admin).
 - **Authority**: health, version, root and intermediate certificates with their expiry, the CRL; the app's settings in effect (admins).
@@ -73,6 +73,8 @@ step-ca's database is only read, by `app/stepca/store.py`. Changes go through st
 
 The certificate lists read an **inventory** in the app's own database (`app/services/inventory.py`): step-ca's certificates and revocations, parsed once. Neither ever changes once step-ca has written it, so keeping it current only means adding the new rows; each read checks for them at most every `INVENTORY_REFRESH_SECONDS` (5). It is built in the background at startup.
 
+The ACME lists read a copy of step-ca's ACME orders, authorizations, challenges and certificates in the same database (`app/services/acme_inventory.py`), filtered, sorted and paged in SQL. step-ca keeps every ACME object forever, and each renewal adds an order, its authorizations, three challenges each and a certificate, so reading its tables in full would get slower with every renewal. ACME objects change until they are final, so each refresh also reads again the few that still can: orders and authorizations until they are valid or invalid, challenges until they are or their authorization is. While the copy is first built, the lists say how much is left.
+
 ### Pages and API
 
 The frontend's pages are `/` (`?range=24h|7d`), `/certificates` (`?tab=expiring|revoked|expired`; `cert=<serial>` opens a certificate's panel), `/acme/orders[/<id>]`, `/acme/accounts[/<id>]`, `/acme/authorizations`, `/acme/challenges`, `/acme/certificates`, `/provisioners[/<name>]`, `/ca` (`?tab=configuration`), `/admins`, `/audit`, `/search?q=` and `/service`. `/certificates/<serial>`, `/acme` and `/settings` lead to them, and so do the old pages' URLs (`/x509/cert/<serial>`, `/step/provisioners`, ...).
@@ -83,7 +85,7 @@ Everything the frontend shows comes from the JSON API under `/api/v1`, documente
 - `GET /api/v1/certificates` – filtered (`status`, `days`, `q`, and `provisioner` and `key`, each repeatable), sorted (`sort`, `order`) and paged (`page`, `per_page`); `format=csv` returns every matching row as a file. The ACME lists and the audit log take the same `q`, `page`, `per_page` and `format`
 - `GET /api/v1/certificates/counts` (per tab), `/facets` (the provisioners and key types to filter on), `/bundle?serial=…` (several certificates as one PEM file)
 - `GET /api/v1/certificates/<serial>`, `/<serial>/events`, `/<serial>/download?format=pem|chain|der`; `POST /api/v1/certificates` (sign a CSR; returns the certificate and its chain), `/<serial>/revoke` (operator)
-- `GET /api/v1/acme/{accounts,orders,authorizations,challenges,certificates}`, `/acme/accounts/<id>`, `/acme/orders/<id>`
+- `GET /api/v1/acme/{accounts,orders,authorizations,challenges,certificates}`, `/acme/accounts/<id>` (with its latest 50 orders and `order_total`; `/acme/orders?q=<account id>` has every one), `/acme/orders/<id>`
 - `GET/POST/PUT/DELETE /api/v1/provisioners[/<name>]`, `GET/POST/PATCH/DELETE /api/v1/admins[/<id>]` (changes: admin)
 - `GET /api/v1/ca`, `/ca/roots.pem`, `/ca/intermediates.pem`, `/ca/crl?format=der|pem`
 - `GET /api/v1/overview?range=24h|7d|30d`, `/readiness`, `/dashboard`, `/search?q=`, `/settings` and `/audit` (admin), `POST /api/v1/service` (admin, if enabled)
@@ -166,7 +168,7 @@ Every API route needs a session except `/api/v1/session`; writes need the sessio
   ALTER DEFAULT PRIVILEGES FOR ROLE "step-ca" IN SCHEMA public GRANT SELECT ON TABLES TO stepca_web;
   ```
 
-- The app's own data (the audit log, the certificate inventory, and certificates signed from the UI with their CSR) lives in a SQLite file, `stepca-web.db`, in the data directory (`DATA_DIR`, `/data` in the image). Override it with `APP_DATABASE_URI`.
+- The app's own data (the audit log, the certificate inventory and its copy of the ACME tables, and certificates signed from the UI with their CSR) lives in a SQLite file, `stepca-web.db`, in the data directory (`DATA_DIR`, `/data` in the image). Override it with `APP_DATABASE_URI`.
 - Connection parameters are set with environment variables or `settings.json` (in the data directory). Environment variables win.
 - Example config:
 
@@ -382,7 +384,8 @@ These changes need action:
 
 ## Upgrading to the redesigned UI
 
-- **API:** `GET /api/v1/certificates/provisioners` is replaced by `/certificates/facets`; `provisioner` on `/certificates` can be repeated, and matches any of them. `POST /api/v1/certificates` also returns the certificate (`pem`) and its chain (`chain_pem`).
+- **API:** `GET /api/v1/certificates/provisioners` is replaced by `/certificates/facets`; `provisioner` on `/certificates` can be repeated, and matches any of them. `POST /api/v1/certificates` also returns the certificate (`pem`) and its chain (`chain_pem`). `GET /api/v1/acme/accounts/<id>` returns the account's latest 50 orders and their total (`order_total`), not every order.
+- **First start:** the app copies step-ca's ACME tables into its own database, in the background (about a second per thousand orders); until it is done, the ACME lists say how many objects are left to read.
 - **URLs:** the certificate list's `?status=` is now `?tab=` (old links still work); `/certificates/<serial>` opens the list with that certificate's panel; `/settings` is now the Configuration tab of `/ca`.
 - **Settings:** `CA_DISPLAY_NAME` and `CA_ENVIRONMENT` name the CA in the top bar (both optional).
 

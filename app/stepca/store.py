@@ -6,6 +6,7 @@ that knows those tables and field names; it returns records.py dataclasses."""
 import json
 import logging
 from datetime import datetime
+from typing import Any
 
 from cryptography import x509
 
@@ -163,8 +164,8 @@ def acme_account(account_id):
     return _account(data) if data else None
 
 
-def acme_orders():
-    return _records(tables.AcmeOrder, _order)
+def acme_orders(ids=None):
+    return _records(tables.AcmeOrder, _order, ids)
 
 
 def acme_order(order_id):
@@ -192,6 +193,24 @@ def acme_certificate_id_by_serial(serial):
 
 def acme_certificate_count():
     return db.session.query(tables.AcmeCert).count()
+
+
+# The ACME tables' keys and sizes, for the app's copy (services.acme_inventory): the keys are the objects' ids
+ACME_TABLES: dict[str, Any] = {
+    "orders": tables.AcmeOrder,
+    "authorizations": tables.AcmeAuthz,
+    "challenges": tables.AcmeChallenge,
+    "certificates": tables.AcmeCert,
+}
+
+
+def acme_ids(kind):
+    """The ids of every ACME object of this kind, from the table keys alone."""
+    return {bytes(nkey).decode(errors="backslashreplace") for (nkey,) in db.session.query(ACME_TABLES[kind].nkey)}
+
+
+def acme_count(kind):
+    return db.session.query(ACME_TABLES[kind]).count()
 
 
 # --- X.509 certificates -------------------------------------------------------------------------------

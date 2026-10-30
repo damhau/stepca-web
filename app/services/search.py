@@ -1,8 +1,8 @@
-"""One search over certificates (the inventory), ACME accounts and orders, provisioners and admins (step-ca's database)."""
+"""One search over certificates and ACME orders (the inventory), ACME accounts, provisioners and admins (step-ca's database)."""
 
 from dataclasses import dataclass, field
 
-from app.services import inventory
+from app.services import acme_inventory, inventory
 from app.services import provisioners as provisioner_service
 from app.stepca import store
 
@@ -47,7 +47,11 @@ def search(query):
         results.truncated.add("certificates")
 
     _limited(results, "acme_accounts", [a for a in store.acme_accounts() if _matches(needle, a.id, *a.contact)])
-    _limited(results, "acme_orders", [o for o in store.acme_orders() if _matches(needle, o.id, *(i.value for i in o.identifiers))])
+    # By id, account id or name (inventory.certificates above brought the copy up to date)
+    orders, total = acme_inventory.orders(acme_inventory.ListQuery(q=needle, per_page=LIMIT))
+    results.acme_orders = [order for order, _ in orders]
+    if total > LIMIT:
+        results.truncated.add("acme_orders")
 
     _limited(results, "provisioners", [p for p in store.provisioners() if _matches(needle, p.name)])
     _limited(results, "admins", [(admin, name) for admin, name in provisioner_service.search_admins() if _matches(needle, admin.subject)])

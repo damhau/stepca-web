@@ -4,7 +4,15 @@ import { $api } from "@/api/client"
 import type { AcmeCertificateItem } from "@/api/types"
 import { columnHelper, DataTable } from "@/components/data-table"
 import { ExportButton, SearchBox, Toolbar } from "@/components/list-tools"
-import { AcmeLink, acmeQuery, acmeSearch, AcmeHeader, CertificateLink, type AcmeSearch } from "@/features/acme"
+import {
+  AcmeLink,
+  acmeQuery,
+  acmeSearch,
+  AcmeHeader,
+  CertificateLink,
+  type AcmeSearch,
+  StillReading,
+} from "@/features/acme"
 import { fromNow } from "@/lib/format"
 
 export const Route = createFileRoute("/_app/acme/certificates")({
@@ -63,6 +71,7 @@ function AcmeCertificates() {
           onChange={(q) => update({ q: q || undefined })}
           placeholder="Search by name, serial or id"
         />
+        <StillReading pending={list.data?.pending} noun="certificate" />
       </Toolbar>
       <DataTable
         label="ACME certificates"

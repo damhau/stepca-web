@@ -414,23 +414,33 @@ class AcmeAccountPage(PageInfo):
 
 class AcmeOrderPage(PageInfo):
     items: list[AcmeOrderItem]
+    # Rows step-ca has that the app's copy doesn't have yet (while it is being built)
+    pending: int
 
 
 class AcmeAuthorizationPage(PageInfo):
     items: list[AcmeAuthorizationItem]
+    # Rows step-ca has that the app's copy doesn't have yet (while it is being built)
+    pending: int
 
 
 class AcmeChallengePage(PageInfo):
     items: list[AcmeChallengeItem]
+    # Rows step-ca has that the app's copy doesn't have yet (while it is being built)
+    pending: int
 
 
 class AcmeCertificatePage(PageInfo):
     items: list[AcmeCertificateItem]
+    # Rows step-ca has that the app's copy doesn't have yet (while it is being built)
+    pending: int
 
 
 class AcmeAccountDetail(Model):
     account: AcmeAccountItem
+    # The latest orders (the orders list, filtered by the account's id, has every one)
     orders: list[AcmeOrderItem]
+    order_total: int
 
 
 class AcmeAuthorizationView(Model):

@@ -1,4 +1,5 @@
-"""The certificate inventory: step-ca's certificates and revocations, parsed once into the app's database.
+"""The certificate inventory: step-ca's certificates and revocations, parsed once into the app's database
+(and, through acme_inventory, its ACME objects).
 
 Neither ever changes once step-ca has written it, so keeping the inventory current only means adding the
 rows that are new in step-ca's tables. Every read checks for them, at most every INVENTORY_REFRESH_SECONDS:
@@ -57,7 +58,7 @@ def now():
     return datetime.now(UTC)
 
 
-def _naive_utc(value):
+def naive_utc(value):
     return value.astimezone(UTC).replace(tzinfo=None) if value else None
 
 
@@ -86,8 +87,8 @@ def _certificate_row(cert: Certificate):
         "subject": cert.subject,
         "common_name": _common_name(cert.subject),
         "issuer": cert.issuer,
-        "not_before": _naive_utc(cert.not_before),
-        "not_after": _naive_utc(cert.not_after),
+        "not_before": naive_utc(cert.not_before),
+        "not_after": naive_utc(cert.not_after),
         "lifetime_seconds": int((cert.not_after - cert.not_before).total_seconds()) if cert.not_before and cert.not_after else None,
         "key": _key(cert),
         "dns_names": list(cert.dns_names),
@@ -104,14 +105,14 @@ def _revocation_row(revocation: Revocation):
         "serial": revocation.serial,
         "reason_code": revocation.reason_code,
         "reason": revocation.reason,
-        "revoked_at": _naive_utc(revocation.revoked_at),
+        "revoked_at": naive_utc(revocation.revoked_at),
         "provisioner_id": revocation.provisioner_id,
         "mtls": revocation.mtls,
         "acme": revocation.acme,
     }
 
 
-def _insert_new(model, rows):
+def insert_new(model, rows):
     """Insert rows, skipping those another worker inserted in the meantime."""
     if not rows:
         return
@@ -126,7 +127,7 @@ def _insert_new(model, rows):
         db.session.execute(insert(model), rows)
 
 
-def _chunks(items, size):
+def chunks(items, size):
     items = sorted(items)
     for start in range(0, len(items), size):
         yield items[start : start + size]
@@ -140,11 +141,11 @@ def _sync(model, step_count, step_keys, read, to_row, full):
     wanted = step_keys()
     cached = set(db.session.scalars(select(model.serial)))
     gone = cached - wanted
-    for batch in _chunks(gone, BATCH):
+    for batch in chunks(gone, BATCH):
         db.session.execute(delete(model).where(model.serial.in_(batch)))
     new = wanted - cached
-    for batch in _chunks(new, BATCH):
-        _insert_new(model, [to_row(record) for record in read(batch)])
+    for batch in chunks(new, BATCH):
+        insert_new(model, [to_row(record) for record in read(batch)])
         db.session.commit()
     db.session.commit()
     if new or gone:
@@ -165,9 +166,12 @@ def refresh(force=False):
     if not state.lock.acquire(blocking=False):
         return 0
     try:
+        from app.services import acme_inventory
+
         full = force or started - state.full_check_at > FULL_CHECK_SECONDS
         added = _sync(InventoryCertificate, store.certificate_count(), store.certificate_serials, store.certificates, _certificate_row, full)
         added += _sync(InventoryRevocation, store.revocation_count(), store.revoked_serials, store.revocations, _revocation_row, full)
+        added += acme_inventory.sync(force)
         state.checked_at = started
         if full:
             state.full_check_at = started
@@ -270,7 +274,7 @@ SORT_COLUMNS = {
 }
 
 
-def _like(text):
+def like_pattern(text):
     escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
 
@@ -288,12 +292,12 @@ def _filtered(query: CertificateQuery, when):
         InventoryRevocation, InventoryRevocation.serial == InventoryCertificate.serial
     )
     cert, revoked = InventoryCertificate, InventoryRevocation.serial.is_not(None)
-    naive_now = _naive_utc(when)
+    naive_now = naive_utc(when)
     valid = and_(~revoked, cert.not_before <= naive_now, cert.not_after >= naive_now)
     conditions = {
         "valid": valid,
         "expiring": and_(
-            valid, cert.not_after < _naive_utc(when + timedelta(days=query.days)), cert.lifetime_seconds > SHORT_LIVED_DAYS * 86400
+            valid, cert.not_after < naive_utc(when + timedelta(days=query.days)), cert.lifetime_seconds > SHORT_LIVED_DAYS * 86400
         ),
         "expired": and_(~revoked, cert.not_after < naive_now),
         "not_yet_valid": and_(~revoked, cert.not_before > naive_now),
@@ -303,9 +307,9 @@ def _filtered(query: CertificateQuery, when):
         statement = statement.where(conditions[query.status])
     needle = query.q.strip().lower()
     if needle:
-        matches = [cert.search.like(_like(needle), escape="\\")]
+        matches = [cert.search.like(like_pattern(needle), escape="\\")]
         if hex_needle := hex_serial(needle):
-            matches.append(cert.serial_hex.like(_like(hex_needle), escape="\\"))
+            matches.append(cert.serial_hex.like(like_pattern(hex_needle), escape="\\"))
         statement = statement.where(or_(*matches))
     if query.provisioners:
         statement = statement.where(cert.provisioner_name.in_(query.provisioners))
@@ -392,7 +396,7 @@ def facets():
 
 
 def _revoked_by(moment):
-    return and_(InventoryRevocation.serial.is_not(None), InventoryRevocation.revoked_at <= _naive_utc(moment))
+    return and_(InventoryRevocation.serial.is_not(None), InventoryRevocation.revoked_at <= naive_utc(moment))
 
 
 def _joined():
@@ -403,21 +407,21 @@ def _joined():
 
 def valid_at(moment):
     """Certificates that were valid at that moment (issued, not yet expired, not revoked)."""
-    naive = _naive_utc(moment)
+    naive = naive_utc(moment)
     cert = InventoryCertificate
     return db.session.scalar(_joined().where(cert.not_before <= naive, cert.not_after > naive, ~_revoked_by(moment))) or 0
 
 
 def expiring_at(moment, days=7):
     """Long-lived certificates valid at that moment that ended within `days` of it."""
-    naive = _naive_utc(moment)
+    naive = naive_utc(moment)
     cert = InventoryCertificate
     return (
         db.session.scalar(
             _joined().where(
                 cert.not_before <= naive,
                 cert.not_after > naive,
-                cert.not_after < _naive_utc(moment + timedelta(days=days)),
+                cert.not_after < naive_utc(moment + timedelta(days=days)),
                 cert.lifetime_seconds > SHORT_LIVED_DAYS * 86400,
                 ~_revoked_by(moment),
             )
@@ -428,13 +432,13 @@ def expiring_at(moment, days=7):
 
 def issued_between(start, end):
     cert = InventoryCertificate
-    return db.session.scalar(select(func.count()).where(cert.not_before >= _naive_utc(start), cert.not_before < _naive_utc(end))) or 0
+    return db.session.scalar(select(func.count()).where(cert.not_before >= naive_utc(start), cert.not_before < naive_utc(end))) or 0
 
 
 def revoked_between(start, end):
     revocation = InventoryRevocation
     return (
-        db.session.scalar(select(func.count()).where(revocation.revoked_at >= _naive_utc(start), revocation.revoked_at < _naive_utc(end)))
+        db.session.scalar(select(func.count()).where(revocation.revoked_at >= naive_utc(start), revocation.revoked_at < naive_utc(end)))
         or 0
     )
 
@@ -444,7 +448,7 @@ def issued_by_provisioner(start, end):
     name = func.coalesce(InventoryCertificate.provisioner_name, "Unknown")
     cert = InventoryCertificate
     rows = db.session.execute(
-        select(name, func.count()).where(cert.not_before >= _naive_utc(start), cert.not_before < _naive_utc(end)).group_by(name)
+        select(name, func.count()).where(cert.not_before >= naive_utc(start), cert.not_before < naive_utc(end)).group_by(name)
     ).all()
     return {provisioner: total for provisioner, total in rows}
 

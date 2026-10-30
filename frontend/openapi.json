@@ -6,6 +6,10 @@
           "account": {
             "$ref": "#/components/schemas/AcmeAccountItem"
           },
+          "order_total": {
+            "title": "Order Total",
+            "type": "integer"
+          },
           "orders": {
             "items": {
               "$ref": "#/components/schemas/AcmeOrderItem"
@@ -16,7 +20,8 @@
         },
         "required": [
           "account",
-          "orders"
+          "orders",
+          "order_total"
         ],
         "title": "AcmeAccountDetail",
         "type": "object"
@@ -231,6 +236,10 @@
             "title": "Page",
             "type": "integer"
           },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
           "per_page": {
             "title": "Per Page",
             "type": "integer"
@@ -244,7 +253,8 @@
           "total",
           "page",
           "per_page",
-          "items"
+          "items",
+          "pending"
         ],
         "title": "AcmeAuthorizationPage",
         "type": "object"
@@ -388,6 +398,10 @@
             "title": "Page",
             "type": "integer"
           },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
           "per_page": {
             "title": "Per Page",
             "type": "integer"
@@ -401,7 +415,8 @@
           "total",
           "page",
           "per_page",
-          "items"
+          "items",
+          "pending"
         ],
         "title": "AcmeCertificatePage",
         "type": "object"
@@ -502,6 +517,10 @@
             "title": "Page",
             "type": "integer"
           },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
           "per_page": {
             "title": "Per Page",
             "type": "integer"
@@ -515,7 +534,8 @@
           "total",
           "page",
           "per_page",
-          "items"
+          "items",
+          "pending"
         ],
         "title": "AcmeChallengePage",
         "type": "object"
@@ -761,6 +781,10 @@
             "title": "Page",
             "type": "integer"
           },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
           "per_page": {
             "title": "Per Page",
             "type": "integer"
@@ -774,7 +798,8 @@
           "total",
           "page",
           "per_page",
-          "items"
+          "items",
+          "pending"
         ],
         "title": "AcmeOrderPage",
         "type": "object"

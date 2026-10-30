@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router"
 import type { AcmeIdentifier } from "@/api/types"
+import { plural } from "@/lib/format"
 import { listSearch, oneOf, type ListSearch } from "@/lib/search-params"
 import { cn } from "@/lib/utils"
 
@@ -61,6 +62,12 @@ export function AcmeHeader({ description, actions }: { description: string; acti
       </nav>
     </>
   )
+}
+
+/** While the app's copy of step-ca's ACME tables is first built, the lists say how much is left. */
+export function StillReading({ pending, noun }: { pending?: number; noun: string }) {
+  if (!pending) return null
+  return <span className="text-[13px] text-muted-foreground">Still reading {plural(pending, noun)} from step-ca…</span>
 }
 
 export function Identifiers({ values }: { values: AcmeIdentifier[] }) {

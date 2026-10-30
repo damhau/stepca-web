@@ -3,6 +3,7 @@
 import pytest
 
 from app.services import acme
+from app.services.acme_inventory import ListQuery
 
 
 @pytest.fixture
@@ -45,5 +46,6 @@ def test_a_row_that_does_not_parse_is_skipped(step_db, issued, caplog):
 
     db.session.add(tables.AcmeOrder(nkey=b"broken", nvalue=b"{not json"))
     db.session.commit()
-    assert [row.order.id for row in acme.orders()] == [issued["order"]]
+    rows, total = acme.orders(ListQuery())
+    assert [row.order.id for row in rows] == [issued["order"]] and total == 1
     assert "Cannot parse a row of acme_orders" in caplog.text

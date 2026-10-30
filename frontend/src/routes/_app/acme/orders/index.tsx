@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { $api } from "@/api/client"
 import { DataTable } from "@/components/data-table"
 import { ChoiceFilter, ExportButton, SearchBox, Toolbar } from "@/components/list-tools"
-import { acmeQuery, acmeSearch, AcmeHeader, type AcmeSearch } from "@/features/acme"
+import { acmeQuery, acmeSearch, AcmeHeader, type AcmeSearch, StillReading } from "@/features/acme"
 import { orderColumns } from "@/features/acme-orders-table"
 
 const STATUSES = ["pending", "ready", "processing", "valid", "invalid"] as const
@@ -37,6 +37,7 @@ function Orders() {
           options={STATUSES}
           onChange={(status) => update({ status })}
         />
+        <StillReading pending={list.data?.pending} noun="order" />
       </Toolbar>
       <DataTable
         label="ACME orders"

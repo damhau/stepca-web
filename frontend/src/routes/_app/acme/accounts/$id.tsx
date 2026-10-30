@@ -5,7 +5,7 @@ import { DataTable } from "@/components/data-table"
 import { AcmeStatus, ErrorState, Loading, PageHeader } from "@/components/kit"
 import { Fields, Section } from "@/components/page"
 import { orderColumns } from "@/features/acme-orders-table"
-import { formatDateTime, plural } from "@/lib/format"
+import { formatDateTime, formatNumber, plural } from "@/lib/format"
 
 export const Route = createFileRoute("/_app/acme/accounts/$id")({ component: Account })
 
@@ -30,7 +30,7 @@ function Account() {
         <>
           <PageHeader
             title={data.account.contact.map((contact) => contact.replace(/^mailto:/, "")).join(", ") || "ACME account"}
-            description={`${plural(data.orders.length, "order")}, through provisioner ${data.account.provisioner_name ?? "unknown"}.`}
+            description={`${plural(data.order_total, "order")}, through provisioner ${data.account.provisioner_name ?? "unknown"}.`}
           />
           <Section title="Account">
             <Fields
@@ -52,6 +52,14 @@ function Account() {
             isPending={isPending}
             empty="This account has placed no order."
           />
+          {data.order_total > data.orders.length && (
+            <p className="-mt-2 text-[13px] text-muted-foreground">
+              The latest {data.orders.length}.{" "}
+              <Link to="/acme/orders" search={{ q: data.account.id }}>
+                See all {formatNumber(data.order_total)} in Orders
+              </Link>
+            </p>
+          )}
         </>
       )}
     </>

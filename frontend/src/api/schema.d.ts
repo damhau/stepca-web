@@ -558,6 +558,8 @@ export interface components {
         /** AcmeAccountDetail */
         AcmeAccountDetail: {
             account: components["schemas"]["AcmeAccountItem"];
+            /** Order Total */
+            order_total: number;
             /** Orders */
             orders: components["schemas"]["AcmeOrderItem"][];
         };
@@ -617,6 +619,8 @@ export interface components {
             items: components["schemas"]["AcmeAuthorizationItem"][];
             /** Page */
             page: number;
+            /** Pending */
+            pending: number;
             /** Per Page */
             per_page: number;
             /** Total */
@@ -657,6 +661,8 @@ export interface components {
             items: components["schemas"]["AcmeCertificateItem"][];
             /** Page */
             page: number;
+            /** Pending */
+            pending: number;
             /** Per Page */
             per_page: number;
             /** Total */
@@ -689,6 +695,8 @@ export interface components {
             items: components["schemas"]["AcmeChallengeItem"][];
             /** Page */
             page: number;
+            /** Pending */
+            pending: number;
             /** Per Page */
             per_page: number;
             /** Total */
@@ -762,6 +770,8 @@ export interface components {
             items: components["schemas"]["AcmeOrderItem"][];
             /** Page */
             page: number;
+            /** Pending */
+            pending: number;
             /** Per Page */
             per_page: number;
             /** Total */

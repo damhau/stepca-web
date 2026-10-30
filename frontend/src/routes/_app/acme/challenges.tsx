@@ -5,7 +5,7 @@ import type { AcmeChallengeItem } from "@/api/types"
 import { columnHelper, DataTable } from "@/components/data-table"
 import { AcmeStatus } from "@/components/kit"
 import { ChoiceFilter, ExportButton, SearchBox, Toolbar } from "@/components/list-tools"
-import { AcmeLink, acmeQuery, acmeSearch, AcmeHeader, type AcmeSearch } from "@/features/acme"
+import { AcmeLink, acmeQuery, acmeSearch, AcmeHeader, type AcmeSearch, StillReading } from "@/features/acme"
 import { formatDateTime } from "@/lib/format"
 
 const STATUSES = ["pending", "processing", "valid", "invalid"] as const
@@ -80,6 +80,7 @@ function Challenges() {
           options={STATUSES}
           onChange={(status) => update({ status })}
         />
+        <StillReading pending={list.data?.pending} noun="challenge" />
       </Toolbar>
       <DataTable
         label="ACME challenges"

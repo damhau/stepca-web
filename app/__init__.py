@@ -9,7 +9,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from app.api.schemas import Error, ValidationProblem
 from app.extensions import CONTENT_SECURITY_POLICY, csrf, db, limiter
 from app.models.audit import AuditEvent  # noqa: F401  registers the model for create_all
-from app.models.inventory import InventoryCertificate  # noqa: F401  registers the models for create_all
+from app.models.inventory import InventoryCertificate  # noqa: F401  registers the models (ACME ones too) for create_all
 from app.models.x509 import GeneratedCert  # noqa: F401  registers the model for create_all
 from app.services.inventory import InventoryState
 from app.settings import Settings, load_settings
@@ -35,7 +35,7 @@ def warm_up_inventory(app):
     with app.app_context():
         try:
             added = inventory.refresh(force=True)
-            log.info("Certificate inventory ready: %d certificates and revocations added", added)
+            log.info("Inventory ready: %d certificates, revocations and ACME objects added", added)
         except SQLAlchemyError as e:
             log.warning("Cannot build the certificate inventory yet (it is built on the next page): %s", e)
 

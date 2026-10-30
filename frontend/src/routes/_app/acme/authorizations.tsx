@@ -5,7 +5,7 @@ import type { AcmeAuthorizationItem } from "@/api/types"
 import { columnHelper, DataTable } from "@/components/data-table"
 import { AcmeStatus } from "@/components/kit"
 import { ChoiceFilter, ExportButton, SearchBox, Toolbar } from "@/components/list-tools"
-import { AcmeLink, acmeQuery, acmeSearch, AcmeHeader, type AcmeSearch } from "@/features/acme"
+import { AcmeLink, acmeQuery, acmeSearch, AcmeHeader, type AcmeSearch, StillReading } from "@/features/acme"
 import { formatDateTime, plural } from "@/lib/format"
 
 const STATUSES = ["pending", "valid", "invalid", "deactivated", "expired", "revoked"] as const
@@ -75,6 +75,7 @@ function Authorizations() {
           options={STATUSES}
           onChange={(status) => update({ status })}
         />
+        <StillReading pending={list.data?.pending} noun="authorization" />
       </Toolbar>
       <DataTable
         label="ACME authorizations"

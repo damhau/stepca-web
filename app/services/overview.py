@@ -11,8 +11,7 @@ from app.auth.roles import current_role, role_at_least
 from app.extensions import db
 from app.libs.auth.ldap_backend import ldap_transport
 from app.models.audit import AuditEvent
-from app.services import acme, ca, inventory, provisioners
-from app.stepca import store
+from app.services import acme, acme_inventory, ca, inventory, provisioners
 
 RANGES = {"24h": (timedelta(hours=24), 24), "7d": (timedelta(days=7), 7), "30d": (timedelta(days=30), 30)}
 # Points of each KPI's sparkline, from the start of the range to now
@@ -98,10 +97,6 @@ def issuance(span, buckets, when):
     }
 
 
-def _failed_orders(since):
-    return [order for order in store.acme_orders() if order.status == "invalid" and order.created_at and order.created_at >= since]
-
-
 def callout(when):
     """What needs attention first: the long-lived certificate that ends soonest within 7 days (with its failed ACME
     renewals, if any), or else the ACME orders that failed in the last day. None when nothing does."""
@@ -109,16 +104,9 @@ def callout(when):
     if soonest:
         cert = soonest[0]
         names = set(cert.dns_names) | ({cert.common_name} if cert.common_name else set())
-        failed = [
-            order
-            for order in store.acme_orders()
-            if order.status == "invalid"
-            and order.created_at
-            and cert.not_before
-            and order.created_at > cert.not_before
-            and names & {identifier.value for identifier in order.identifiers}
-        ]
-        latest = max(failed, key=lambda order: order.created_at or when, default=None)
+        # Its renewals that failed, newest first
+        failed = acme_inventory.failed_orders(cert.not_before, names) if cert.not_before else []
+        latest = failed[0] if failed else None
         return {
             "kind": "expiring",
             "serial": cert.serial,
@@ -127,9 +115,9 @@ def callout(when):
             "failed_renewals": len(failed),
             "error": latest.error if latest else None,
         }
-    failed = _failed_orders(when - timedelta(days=1))
+    failed = acme_inventory.failed_orders(when - timedelta(days=1))
     if failed:
-        latest = max(failed, key=lambda order: order.created_at or when)
+        latest = failed[0]
         return {
             "kind": "acme_failures",
             "serial": None,

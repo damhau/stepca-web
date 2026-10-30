@@ -49,15 +49,17 @@ function Login() {
   )
 
   return (
-    <main className="grid min-h-svh place-items-center px-4 py-12">
+    // Above the middle: centred, it sat low on a tall screen
+    <main className="grid min-h-svh content-start justify-items-center px-4 pt-[max(3rem,20svh)] pb-12">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center gap-3">
-          <span className="grid size-9 place-items-center rounded-[9px] bg-inverse">
-            <ShieldCheck className="size-4 text-inverse-foreground" strokeWidth={2.5} aria-hidden />
+        {/* Centred over the card: left-aligned, it made the whole block look off-centre */}
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <span className="grid size-10 place-items-center rounded-[10px] bg-inverse">
+            <ShieldCheck className="size-5 text-inverse-foreground" strokeWidth={2.5} aria-hidden />
           </span>
           <div>
-            <h1 className="text-lg font-semibold tracking-[-0.02em]">Sign in</h1>
-            <p className="text-[13px] text-muted-foreground">to manage the certificate authority</p>
+            <h1 className="text-xl font-semibold tracking-[-0.02em]">Sign in</h1>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">to manage the certificate authority</p>
           </div>
         </div>
         <form onSubmit={submit} className="flex flex-col gap-4 rounded-2xl border bg-card p-6" noValidate>

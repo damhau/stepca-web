@@ -1,17 +1,15 @@
-"""The overview: certificate figures over a time range, what needs attention, recent activity, and how ready the
-deployment is for production. Also the history of one certificate."""
+"""The overview: certificate figures over a time range, what needs attention and recent activity. Also the
+history of one certificate."""
 
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 
-from flask import current_app
 from sqlalchemy import select
 
 from app.auth.roles import current_role, role_at_least
 from app.extensions import db
-from app.libs.auth.ldap_backend import ldap_transport
 from app.models.audit import AuditEvent
-from app.services import acme, acme_inventory, ca, inventory, provisioners
+from app.services import acme, acme_inventory, inventory, provisioners
 
 RANGES = {"24h": (timedelta(hours=24), 24), "7d": (timedelta(days=7), 7), "30d": (timedelta(days=30), 30)}
 # Points of each KPI's sparkline, from the start of the range to now
@@ -189,88 +187,6 @@ def overview(range_key):
         "activity": activity(),
         "pending": inventory.pending(),
     }
-
-
-def readiness():
-    """Checks of the deployment against the recommended setup. done is None when it can't be told (CA unreachable)."""
-    config = current_app.config
-    client = ca.client()
-    checks = []
-
-    try:
-        identity = provisioners.identity_type()
-    except ca.CA_ERRORS:
-        identity = None
-    checks.append(
-        {
-            "key": "identity",
-            "label": "Dedicated ADMIN identity for this app",
-            "done": None if identity is None else identity == "ADMIN",
-            "detail": f"The app acts on the CA as {client.subject}, a {identity}." if identity else "The CA could not be asked.",
-        }
-    )
-    key_in_memory = client.admin_key_source().startswith("encrypted")
-    checks.append(
-        {
-            "key": "key",
-            "label": "Provisioner key kept off the disk",
-            "done": key_in_memory,
-            "detail": "Decrypted in memory from CA_ADMIN_PASSWORD_FILE." if key_in_memory else "jwk_key.json holds the decrypted key.",
-        }
-    )
-    checks.append(
-        {
-            "key": "https",
-            "label": "Served over HTTPS",
-            "done": bool(config["SESSION_COOKIE_SECURE"]),
-            "detail": "Secure session cookie and HSTS." if config["SESSION_COOKIE_SECURE"] else "Set SESSION_COOKIE_SECURE=true behind a TLS proxy.",
-        }
-    )
-    if config["AUTH_BACKEND"] == "ldap":
-        cleartext = ldap_transport(config) == "cleartext"
-        checks.append(
-            {
-                "key": "ldap",
-                "label": "Directory passwords sent over TLS",
-                "done": not cleartext,
-                "detail": "Use ldaps:// or LDAP_START_TLS=true." if cleartext else "LDAPS or StartTLS, server certificate verified.",
-            }
-        )
-    else:
-        checks.append(
-            {
-                "key": "roles",
-                "label": "New users don't get the admin role",
-                "done": config["DEFAULT_ROLE"] != "admin",
-                "detail": f"DEFAULT_ROLE is {config['DEFAULT_ROLE']}.",
-            }
-        )
-    try:
-        crl = client.crl()
-        checks.append(
-            {
-                "key": "crl",
-                "label": "Revocation list published",
-                "done": crl is not None,
-                "detail": "step-ca publishes a CRL." if crl is not None else 'Set "crl": {"enabled": true} in ca.json.',
-            }
-        )
-    except ca.CA_ERRORS:
-        checks.append({"key": "crl", "label": "Revocation list published", "done": None, "detail": "The CA could not be asked."})
-    try:
-        intermediates = client.intermediates()
-        days = min(((cert.not_valid_after_utc - now()).days for cert in intermediates), default=None)
-        checks.append(
-            {
-                "key": "intermediate",
-                "label": "Intermediate valid for 90 days or more",
-                "done": days is not None and days >= 90,
-                "detail": f"{days} days left." if days is not None else "The CA returned no intermediate.",
-            }
-        )
-    except ca.CA_ERRORS:
-        checks.append({"key": "intermediate", "label": "Intermediate valid for 90 days or more", "done": None, "detail": "The CA could not be asked."})
-    return {"checks": checks}
 
 
 def certificate_events(serial):

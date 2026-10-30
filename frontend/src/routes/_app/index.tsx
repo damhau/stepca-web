@@ -1,6 +1,6 @@
 import { keepPreviousData } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { Check, CircleHelp, Loader2, Plus } from "lucide-react"
+import { Loader2, Plus } from "lucide-react"
 import { $api } from "@/api/client"
 import type { components } from "@/api/schema"
 import { useCan } from "@/api/session"
@@ -88,7 +88,7 @@ function OverviewPage() {
             <Issuance overview={overview.data} range={range} />
             <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
               <Health overview={overview.data} />
-              <Readiness />
+              <ExpiringSoon />
             </div>
           </div>
           <Activity overview={overview.data} />
@@ -355,64 +355,66 @@ function Health({ overview }: { overview: Overview }) {
   )
 }
 
-function Readiness() {
-  const readiness = $api.useQuery("get", "/api/v1/readiness", {}, { staleTime: 60_000 })
-  const checks = readiness.data?.checks ?? []
-  const done = checks.filter((check) => check.done).length
+const SOON = 5
+
+/** The long-lived certificates that end first: what to renew next. The banner shows one, the figure a count. */
+function ExpiringSoon() {
+  const list = $api.useQuery(
+    "get",
+    "/api/v1/certificates",
+    { params: { query: { status: "expiring", sort: "not_after", order: "asc", per_page: SOON } } },
+    { staleTime: 60_000 },
+  )
+  const total = list.data?.total ?? 0
   return (
-    <Card className="flex flex-col gap-3 px-4 py-3.5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Production readiness</h2>
-        {readiness.data && <span className="text-[13px] text-muted-foreground">{`${done} of ${checks.length}`}</span>}
-      </div>
-      {readiness.isPending ? (
-        <Loading lines={4} className="p-0" />
-      ) : readiness.error ? (
-        <ErrorState error={readiness.error} />
+    <Card>
+      <CardHeader
+        title="Expiring soon"
+        description="Within 30 days"
+        actions={
+          total > 0 && (
+            <Link to="/certificates" search={{ tab: "expiring" }} className="text-[13px] font-medium">
+              See all {formatNumber(total)}
+            </Link>
+          )
+        }
+      />
+      {list.isPending ? (
+        <Loading lines={4} />
+      ) : list.error ? (
+        <div className="p-4">
+          <ErrorState error={list.error} onRetry={() => list.refetch()} />
+        </div>
+      ) : total === 0 ? (
+        <p className="px-4 py-5 text-muted-foreground">
+          Nothing ends in the next 30 days. Short-lived certificates renew themselves and aren't counted.
+        </p>
       ) : (
-        <>
-          <div aria-hidden className="h-1.5 rounded-full bg-border-subtle">
-            <div
-              className="h-full rounded-full bg-brand"
-              style={{ width: `${checks.length ? (done / checks.length) * 100 : 0}%` }}
-            />
-          </div>
-          <ul className="flex flex-col gap-0.5">
-            {checks.map((check) => (
-              <li key={check.key}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <p
-                      tabIndex={0}
-                      className={cn(
-                        "flex min-h-8 items-center gap-2.5",
-                        check.done ? "text-muted-foreground line-through" : "text-foreground",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "grid size-4 shrink-0 place-items-center rounded-[4px] border",
-                          check.done ? "border-inverse bg-inverse text-inverse-foreground" : "border-separator bg-card",
-                        )}
-                      >
-                        {check.done ? (
-                          <Check className="size-3" strokeWidth={3} aria-hidden />
-                        ) : check.done === null ? (
-                          <CircleHelp className="size-3 text-muted-foreground" aria-hidden />
-                        ) : null}
-                      </span>
-                      <span className="sr-only">
-                        {check.done ? "Done: " : check.done === null ? "Unknown: " : "To do: "}
-                      </span>
-                      {check.label}
-                    </p>
-                  </TooltipTrigger>
-                  <TooltipContent side="left">{check.detail}</TooltipContent>
-                </Tooltip>
-              </li>
-            ))}
-          </ul>
-        </>
+        <ul className="py-1.5">
+          {list.data.items.map((cert) => (
+            <li key={cert.serial} className="flex items-center gap-3 px-4 py-2">
+              <Link
+                to="/certificates"
+                search={{ cert: cert.serial }}
+                className="min-w-0 flex-1 truncate font-mono text-[13px] font-medium text-foreground hover:underline"
+                title={cert.subject}
+              >
+                {cert.common_name ?? cert.subject}
+              </Link>
+              <span className="hidden max-w-28 truncate text-[13px] text-muted-foreground sm:inline">
+                {cert.provisioner_name}
+              </span>
+              <span
+                className={cn(
+                  "shrink-0 text-right text-[13px] whitespace-nowrap tabular-nums",
+                  cert.days_left !== null && cert.days_left < 7 ? "text-danger-fg" : "text-warning-fg",
+                )}
+              >
+                {fromNow(cert.not_after)}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </Card>
   )

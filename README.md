@@ -21,7 +21,7 @@ https://smallstep.com/docs/step-ca
 
 ## Features
 
-- **Overview**: active, issued, expiring and revoked certificates over 24 hours, 7 or 30 days, with their trend; issuance by provisioner; the certificate that needs attention first (the soonest to expire, with its failed ACME renewals); the authority's health; production readiness checks; recent activity.
+- **Overview**: active, issued, expiring and revoked certificates over 24 hours, 7 or 30 days, with their trend; issuance by provisioner; the certificate that needs attention first (the soonest to expire, with its failed ACME renewals); the authority's health; the certificates that expire next; recent activity.
 - **X.509 certificates**
   - All, expiring soon, revoked and expired certificates as tabs with counts; searched by name, SAN or serial, filtered by provisioner and key type, sorted and paged by the server. Certificates issued for 30 days or less (step-ca's default is 24 hours) are short-lived and never counted as expiring: they are meant to renew themselves.
   - A panel beside the list for each certificate: names, serial, provisioner, key, validity, issuer, ACME order, revocation, extensions; its events (issued, ACME order, revoked); its PEM; PEM, chain and DER downloads.
@@ -88,7 +88,7 @@ Everything the frontend shows comes from the JSON API under `/api/v1`, documente
 - `GET /api/v1/acme/{accounts,orders,authorizations,challenges,certificates}`, `/acme/accounts/<id>` (with its latest 50 orders and `order_total`; `/acme/orders?q=<account id>` has every one), `/acme/orders/<id>`
 - `GET/POST/PUT/DELETE /api/v1/provisioners[/<name>]`, `GET/POST/PATCH/DELETE /api/v1/admins[/<id>]` (changes: admin)
 - `GET /api/v1/ca`, `/ca/roots.pem`, `/ca/intermediates.pem`, `/ca/crl?format=der|pem`
-- `GET /api/v1/overview?range=24h|7d|30d`, `/readiness`, `/dashboard`, `/search?q=`, `/settings` and `/audit` (admin), `POST /api/v1/service` (admin, if enabled)
+- `GET /api/v1/overview?range=24h|7d|30d`, `/dashboard`, `/search?q=`, `/settings` and `/audit` (admin), `POST /api/v1/service` (admin, if enabled)
 
 Every API route needs a session except `/api/v1/session`; writes need the session's CSRF token in an `X-CSRFToken` header, and a role (see [Roles](#roles)). Errors are `{"error": "..."}`. Scripts can use it the same way: `GET /api/v1/session` for a token, `POST` it with the credentials, then send the new token with each write.
 

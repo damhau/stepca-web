@@ -432,23 +432,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/readiness": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The deployment checked against the recommended setup */
-        get: operations["api_certificates_get_readiness_readiness_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/reference": {
         parameters: {
             query?: never;
@@ -1307,22 +1290,6 @@ export interface components {
              */
             disable_renewal: boolean;
             durations?: components["schemas"]["Durations"];
-        };
-        /** Readiness */
-        Readiness: {
-            /** Checks */
-            checks: components["schemas"]["ReadinessCheck"][];
-        };
-        /** ReadinessCheck */
-        ReadinessCheck: {
-            /** Detail */
-            detail: string;
-            /** Done */
-            done: boolean | null;
-            /** Key */
-            key: string;
-            /** Label */
-            label: string;
         };
         /**
          * Reference
@@ -2722,35 +2689,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    api_certificates_get_readiness_readiness_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Readiness"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationProblem"][];
                 };
             };
         };

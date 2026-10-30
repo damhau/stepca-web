@@ -18,7 +18,6 @@ from app.api.schemas import (
     Facets,
     Overview,
     OverviewQuery,
-    Readiness,
     Reference,
     RevokeBody,
     SearchQuery,
@@ -151,11 +150,6 @@ def sign_certificate(body: SignBody):
 @bp.get("/overview", responses={200: Overview}, summary="Figures over a time range, what needs attention, recent activity")
 def get_overview(query: OverviewQuery):
     return dump(Overview, overview.overview(query.range))
-
-
-@bp.get("/readiness", responses={200: Readiness}, summary="The deployment checked against the recommended setup")
-def get_readiness():
-    return dump(Readiness, overview.readiness())
 
 
 @bp.post("/csr/preview", responses={200: CsrDescription, 422: Error}, summary="What a CSR asks for")

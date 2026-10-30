@@ -2431,57 +2431,6 @@
         "title": "ProvisionerUpdate",
         "type": "object"
       },
-      "Readiness": {
-        "properties": {
-          "checks": {
-            "items": {
-              "$ref": "#/components/schemas/ReadinessCheck"
-            },
-            "title": "Checks",
-            "type": "array"
-          }
-        },
-        "required": [
-          "checks"
-        ],
-        "title": "Readiness",
-        "type": "object"
-      },
-      "ReadinessCheck": {
-        "properties": {
-          "detail": {
-            "title": "Detail",
-            "type": "string"
-          },
-          "done": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Done"
-          },
-          "key": {
-            "title": "Key",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "key",
-          "label",
-          "done",
-          "detail"
-        ],
-        "title": "ReadinessCheck",
-        "type": "object"
-      },
       "Reference": {
         "description": "The fixed choices the forms offer.",
         "properties": {
@@ -5105,40 +5054,6 @@
         },
         "tags": [
           "Provisioners and admins"
-        ]
-      }
-    },
-    "/api/v1/readiness": {
-      "get": {
-        "operationId": "api_certificates_get_readiness_readiness_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Readiness"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ValidationProblem"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          }
-        },
-        "summary": "The deployment checked against the recommended setup",
-        "tags": [
-          "Certificates"
         ]
       }
     },

@@ -543,18 +543,6 @@ class TestRedesign:
         activity = api.get("/api/v1/overview").get_json()["activity"]
         assert {"actor": "admin", "action": "revoked", "subject": "db.test"}.items() <= next(a for a in activity if a["action"] == "revoked").items()
 
-    def test_readiness(self, api, ca_client):
-        ca_client.crl.return_value = None
-        ca_client.intermediates.return_value = []
-        checks = {check["key"]: check for check in api.get("/api/v1/readiness").get_json()["checks"]}
-        assert checks["identity"]["done"] is False  # the test identity is a SUPER_ADMIN
-        assert checks["key"]["done"] is True
-        assert checks["https"]["done"] is False
-        assert checks["crl"]["done"] is False
-        ca_client.crl.side_effect = requests.ConnectionError("down")
-        checks = {check["key"]: check for check in api.get("/api/v1/readiness").get_json()["checks"]}
-        assert checks["crl"]["done"] is None
-
     def test_provisioner_extras(self, api, ca_client, step_db):
         step_db.add_cert(4, "acme.test", provisioner={"id": "prov-acme", "name": "acme", "type": "ACME"})
         ca_client.list_provisioners.return_value = {"provisioners": [ACME_FROM_API]}

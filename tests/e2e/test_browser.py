@@ -93,7 +93,7 @@ def test_a_wrong_password_is_explained(page):
 
 def test_every_page_renders_without_errors(page):
     sign_in(page)
-    expect(page.get_by_text("Production readiness")).to_be_visible()
+    expect(page.get_by_role("heading", name="Expiring soon")).to_be_visible()
     for path, heading in PAGES:
         page.goto(path)
         expect(page.get_by_role("heading", name=heading, exact=True)).to_be_visible()

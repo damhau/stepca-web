@@ -283,18 +283,6 @@ class Overview(Model):
     pending: int
 
 
-class ReadinessCheck(Model):
-    key: str
-    label: str
-    # None: it couldn't be told (the CA didn't answer)
-    done: bool | None
-    detail: str
-
-
-class Readiness(Model):
-    checks: list[ReadinessCheck]
-
-
 class NameCount(Model):
     name: str
     count: int

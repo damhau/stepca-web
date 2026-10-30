@@ -254,7 +254,9 @@ class CertificateQuery:
     # For status "expiring": expires within this many days (short-lived certificates left out)
     days: int = EXPIRING_DAYS
     q: str = ""
-    provisioner: str | None = None
+    # Any of these provisioners, any of these key types ("RSA 2048", "secp256r1", ...)
+    provisioners: tuple[str, ...] = ()
+    keys: tuple[str, ...] = ()
     sort: SortKey = "not_before"
     order: Literal["asc", "desc"] = "desc"
 
@@ -305,8 +307,10 @@ def _filtered(query: CertificateQuery, when):
         if hex_needle := hex_serial(needle):
             matches.append(cert.serial_hex.like(_like(hex_needle), escape="\\"))
         statement = statement.where(or_(*matches))
-    if query.provisioner:
-        statement = statement.where(cert.provisioner_name == query.provisioner)
+    if query.provisioners:
+        statement = statement.where(cert.provisioner_name.in_(query.provisioners))
+    if query.keys:
+        statement = statement.where(cert.key.in_(query.keys))
     return statement
 
 
@@ -363,7 +367,114 @@ def counts(expiring_days=EXPIRING_DAYS):
     )
 
 
-def provisioner_names():
-    """The provisioners that issued certificates, for the list's filter."""
+def status_counts():
+    """How many certificates each tab of the list holds."""
     refresh()
-    return list(db.session.scalars(select(InventoryCertificate.provisioner_name).where(InventoryCertificate.provisioner_name.is_not(None)).distinct().order_by(InventoryCertificate.provisioner_name)))
+    when = now()
+
+    def count(status):
+        return db.session.scalar(select(func.count()).select_from(_filtered(CertificateQuery(status=status), when).subquery())) or 0
+
+    return {status: count(status) for status in ("all", "valid", "expiring", "expired", "revoked")}
+
+
+def facets():
+    """The values the list can be filtered on: the provisioners that issued certificates, and the key types."""
+    refresh()
+
+    def distinct(column):
+        return list(db.session.scalars(select(column).where(column.is_not(None), column != "").distinct().order_by(column)))
+
+    return {"provisioners": distinct(InventoryCertificate.provisioner_name), "keys": distinct(InventoryCertificate.key)}
+
+
+# --- Over time: what the overview charts -------------------------------------------------------------
+
+
+def _revoked_by(moment):
+    return and_(InventoryRevocation.serial.is_not(None), InventoryRevocation.revoked_at <= _naive_utc(moment))
+
+
+def _joined():
+    return select(func.count()).select_from(InventoryCertificate).outerjoin(
+        InventoryRevocation, InventoryRevocation.serial == InventoryCertificate.serial
+    )
+
+
+def valid_at(moment):
+    """Certificates that were valid at that moment (issued, not yet expired, not revoked)."""
+    naive = _naive_utc(moment)
+    cert = InventoryCertificate
+    return db.session.scalar(_joined().where(cert.not_before <= naive, cert.not_after > naive, ~_revoked_by(moment))) or 0
+
+
+def expiring_at(moment, days=7):
+    """Long-lived certificates valid at that moment that ended within `days` of it."""
+    naive = _naive_utc(moment)
+    cert = InventoryCertificate
+    return (
+        db.session.scalar(
+            _joined().where(
+                cert.not_before <= naive,
+                cert.not_after > naive,
+                cert.not_after < _naive_utc(moment + timedelta(days=days)),
+                cert.lifetime_seconds > SHORT_LIVED_DAYS * 86400,
+                ~_revoked_by(moment),
+            )
+        )
+        or 0
+    )
+
+
+def issued_between(start, end):
+    cert = InventoryCertificate
+    return db.session.scalar(select(func.count()).where(cert.not_before >= _naive_utc(start), cert.not_before < _naive_utc(end))) or 0
+
+
+def revoked_between(start, end):
+    revocation = InventoryRevocation
+    return (
+        db.session.scalar(select(func.count()).where(revocation.revoked_at >= _naive_utc(start), revocation.revoked_at < _naive_utc(end)))
+        or 0
+    )
+
+
+def issued_by_provisioner(start, end):
+    """{provisioner name (or "Unknown"): certificates issued between start and end}"""
+    name = func.coalesce(InventoryCertificate.provisioner_name, "Unknown")
+    cert = InventoryCertificate
+    rows = db.session.execute(
+        select(name, func.count()).where(cert.not_before >= _naive_utc(start), cert.not_before < _naive_utc(end)).group_by(name)
+    ).all()
+    return {provisioner: total for provisioner, total in rows}
+
+
+def recently_issued(limit):
+    refresh()
+    when = now()
+    statement = (
+        select(InventoryCertificate, InventoryRevocation)
+        .outerjoin(InventoryRevocation, InventoryRevocation.serial == InventoryCertificate.serial)
+        .where(InventoryCertificate.not_before.is_not(None))
+        .order_by(InventoryCertificate.not_before.desc())
+        .limit(limit)
+    )
+    return [_item(cert, revocation, when) for cert, revocation in db.session.execute(statement)]
+
+
+def recently_revoked(limit):
+    """[(revocation row, the certificate's item or None)], newest first."""
+    when = now()
+    statement = (
+        select(InventoryRevocation, InventoryCertificate)
+        .outerjoin(InventoryCertificate, InventoryCertificate.serial == InventoryRevocation.serial)
+        .where(InventoryRevocation.revoked_at.is_not(None))
+        .order_by(InventoryRevocation.revoked_at.desc())
+        .limit(limit)
+    )
+    return [(revocation, _item(cert, revocation, when) if cert else None) for revocation, cert in db.session.execute(statement)]
+
+
+def aware(value):
+    """A naive UTC datetime from the inventory, as an aware one."""
+    return _aware(value)

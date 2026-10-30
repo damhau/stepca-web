@@ -97,10 +97,11 @@ def test_security_headers(app):
     "old, new",
     [
         ("/x509/cert/42", "/certificates/42"),
-        ("/x509/active", "/certificates?status=valid"),
+        ("/x509/active", "/certificates"),
+        ("/x509/revoked", "/certificates?tab=revoked"),
         ("/acme/order/abc", "/acme/orders/abc"),
         ("/step/provisioners", "/provisioners"),
-        ("/system/config", "/settings"),
+        ("/system/config", "/ca?tab=configuration"),
         ("/auth/login", "/login"),
     ],
 )

@@ -345,6 +345,7 @@ def provisioners(include_deleted=False):
                 name=data["name"],
                 type=PROVISIONER_TYPES.get(data.get("type"), str(data.get("type"))),
                 deleted=_deleted(data),
+                created_at=go_time(data.get("createdAt")),
             )
         except KeyError as e:
             log.warning("Cannot read provisioner %s: %s", key, e)

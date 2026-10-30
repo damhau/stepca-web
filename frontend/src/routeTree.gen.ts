@@ -18,6 +18,7 @@ import { Route as AppCaRouteImport } from './routes/_app/ca'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppServiceRouteImport } from './routes/_app/service'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppAcmeIndexRouteImport } from './routes/_app/acme/index'
 import { Route as AppAcmeAuthorizationsRouteImport } from './routes/_app/acme/authorizations'
 import { Route as AppAcmeCertificatesRouteImport } from './routes/_app/acme/certificates'
 import { Route as AppAcmeChallengesRouteImport } from './routes/_app/acme/challenges'
@@ -72,6 +73,11 @@ const AppServiceRoute = AppServiceRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAcmeIndexRoute = AppAcmeIndexRouteImport.update({
+  id: '/acme/',
+  path: '/acme/',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAcmeAuthorizationsRoute = AppAcmeAuthorizationsRouteImport.update({
@@ -144,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/acme/challenges': typeof AppAcmeChallengesRoute
   '/certificates/$serial': typeof AppCertificatesSerialRoute
   '/provisioners/$name': typeof AppProvisionersNameRoute
+  '/acme/': typeof AppAcmeIndexRoute
   '/certificates/': typeof AppCertificatesIndexRoute
   '/provisioners/': typeof AppProvisionersIndexRoute
   '/acme/accounts/$id': typeof AppAcmeAccountsIdRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/acme/challenges': typeof AppAcmeChallengesRoute
   '/certificates/$serial': typeof AppCertificatesSerialRoute
   '/provisioners/$name': typeof AppProvisionersNameRoute
+  '/acme': typeof AppAcmeIndexRoute
   '/certificates': typeof AppCertificatesIndexRoute
   '/provisioners': typeof AppProvisionersIndexRoute
   '/acme/accounts/$id': typeof AppAcmeAccountsIdRoute
@@ -188,6 +196,7 @@ export interface FileRoutesById {
   '/_app/acme/challenges': typeof AppAcmeChallengesRoute
   '/_app/certificates/$serial': typeof AppCertificatesSerialRoute
   '/_app/provisioners/$name': typeof AppProvisionersNameRoute
+  '/_app/acme/': typeof AppAcmeIndexRoute
   '/_app/certificates/': typeof AppCertificatesIndexRoute
   '/_app/provisioners/': typeof AppProvisionersIndexRoute
   '/_app/acme/accounts/$id': typeof AppAcmeAccountsIdRoute
@@ -211,6 +220,7 @@ export interface FileRouteTypes {
     | '/acme/challenges'
     | '/certificates/$serial'
     | '/provisioners/$name'
+    | '/acme/'
     | '/certificates/'
     | '/provisioners/'
     | '/acme/accounts/$id'
@@ -232,6 +242,7 @@ export interface FileRouteTypes {
     | '/acme/challenges'
     | '/certificates/$serial'
     | '/provisioners/$name'
+    | '/acme'
     | '/certificates'
     | '/provisioners'
     | '/acme/accounts/$id'
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
     | '/_app/acme/challenges'
     | '/_app/certificates/$serial'
     | '/_app/provisioners/$name'
+    | '/_app/acme/'
     | '/_app/certificates/'
     | '/_app/provisioners/'
     | '/_app/acme/accounts/$id'
@@ -330,6 +342,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/acme/': {
+      id: '/_app/acme/'
+      path: '/acme'
+      fullPath: '/acme/'
+      preLoaderRoute: typeof AppAcmeIndexRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/acme/authorizations': {
@@ -425,6 +444,7 @@ interface AppRouteChildren {
   AppAcmeChallengesRoute: typeof AppAcmeChallengesRoute
   AppCertificatesSerialRoute: typeof AppCertificatesSerialRoute
   AppProvisionersNameRoute: typeof AppProvisionersNameRoute
+  AppAcmeIndexRoute: typeof AppAcmeIndexRoute
   AppCertificatesIndexRoute: typeof AppCertificatesIndexRoute
   AppProvisionersIndexRoute: typeof AppProvisionersIndexRoute
   AppAcmeAccountsIdRoute: typeof AppAcmeAccountsIdRoute
@@ -446,6 +466,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAcmeChallengesRoute: AppAcmeChallengesRoute,
   AppCertificatesSerialRoute: AppCertificatesSerialRoute,
   AppProvisionersNameRoute: AppProvisionersNameRoute,
+  AppAcmeIndexRoute: AppAcmeIndexRoute,
   AppCertificatesIndexRoute: AppCertificatesIndexRoute,
   AppProvisionersIndexRoute: AppProvisionersIndexRoute,
   AppAcmeAccountsIdRoute: AppAcmeAccountsIdRoute,

@@ -3,10 +3,9 @@ import { createFileRoute } from "@tanstack/react-router"
 import { $api } from "@/api/client"
 import type { AcmeCertificateItem } from "@/api/types"
 import { columnHelper, DataTable } from "@/components/data-table"
-import { ExportLink, FilterInput, Toolbar } from "@/components/list-toolbar"
-import { PageHeader } from "@/components/page"
-import { AcmeLink, acmeQuery, acmeSearch, CertificateLink, type AcmeSearch } from "@/features/acme"
-import { formatDateTime } from "@/lib/format"
+import { ExportButton, SearchBox, Toolbar } from "@/components/list-tools"
+import { AcmeLink, acmeQuery, acmeSearch, AcmeHeader, CertificateLink, type AcmeSearch } from "@/features/acme"
+import { fromNow } from "@/lib/format"
 
 export const Route = createFileRoute("/_app/acme/certificates")({
   validateSearch: acmeSearch([]),
@@ -16,21 +15,25 @@ export const Route = createFileRoute("/_app/acme/certificates")({
 const helper = columnHelper<AcmeCertificateItem>()
 const columns = helper.columns([
   helper.accessor("subject", {
-    header: "Certificate",
+    header: "Name",
     cell: ({ row }) => (
-      <div className="flex flex-col gap-0.5">
-        <span className="font-medium">{row.original.dns_names[0] ?? row.original.subject ?? "—"}</span>
-        <span className="max-w-80 truncate text-xs text-muted-foreground">
-          {row.original.dns_names.slice(1).join(", ")}
-        </span>
-      </div>
+      <CertificateLink serial={row.original.serial} name={row.original.dns_names[0] ?? row.original.subject} />
     ),
   }),
-  helper.accessor("not_after", { header: "Valid to", cell: ({ getValue }) => formatDateTime(getValue()) }),
-  helper.accessor("serial", { header: "Serial", cell: ({ getValue }) => <CertificateLink serial={getValue()} /> }),
+  helper.accessor("dns_names", {
+    header: "Other names",
+    meta: { className: "max-w-72 truncate font-mono text-xs text-muted-foreground" },
+    cell: ({ getValue }) => getValue().slice(1).join(", ") || "—",
+  }),
+  helper.accessor("not_after", {
+    header: "Expires",
+    meta: { className: "whitespace-nowrap" },
+    cell: ({ getValue }) => fromNow(getValue()),
+  }),
   helper.accessor("order_id", { header: "Order", cell: ({ getValue }) => <AcmeLink kind="order" id={getValue()} /> }),
   helper.accessor("account_id", {
     header: "Account",
+    meta: { className: "pr-4" },
     cell: ({ getValue }) => <AcmeLink kind="account" id={getValue()} />,
   }),
 ])
@@ -49,16 +52,16 @@ function AcmeCertificates() {
     navigate({ search: (previous) => ({ ...previous, page: undefined, ...changes }), replace: true })
   return (
     <>
-      <PageHeader
-        title="ACME certificates"
+      <AcmeHeader
         description="Certificates issued to ACME orders, newest first."
-        actions={<ExportLink path="/api/v1/acme/certificates" query={query} />}
+        actions={<ExportButton path="/api/v1/acme/certificates" query={query} />}
       />
       <Toolbar>
-        <FilterInput
+        <SearchBox
+          id="acme-search"
           value={search.q ?? ""}
           onChange={(q) => update({ q: q || undefined })}
-          placeholder="Filter by name, serial or id"
+          placeholder="Search by name, serial or id"
         />
       </Toolbar>
       <DataTable
@@ -75,7 +78,6 @@ function AcmeCertificates() {
           page: query.page,
           perPage: query.per_page,
           onPage: (page) => navigate({ search: (previous) => ({ ...previous, page }) }),
-          onPerPage: (per_page) => update({ per_page }),
         }}
       />
     </>

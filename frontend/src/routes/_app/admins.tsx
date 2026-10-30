@@ -1,14 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { Info, MoreHorizontal, Plus, Trash2, UserCog } from "lucide-react"
+import { MoreHorizontal, Plus, Trash2, UserCog } from "lucide-react"
 import { useState } from "react"
 import { $api, errorMessage } from "@/api/client"
 import { useCan } from "@/api/session"
 import type { AdminItem } from "@/api/types"
 import { Identifier } from "@/components/copy-button"
 import { columnHelper, DataTable } from "@/components/data-table"
-import { PageHeader } from "@/components/page"
-import { Pill } from "@/components/status"
+import { Callout, PageHeader, Pill } from "@/components/kit"
 import { toast } from "@/components/toaster"
 import {
   AlertDialog,
@@ -71,10 +70,14 @@ function Admins() {
     helper.accessor("type", {
       header: "Type",
       cell: ({ getValue }) => (
-        <Pill tone={getValue() === "SUPER_ADMIN" ? "pending" : "neutral"}>{TYPE_LABELS[getValue()] ?? getValue()}</Pill>
+        <Pill tone={getValue() === "SUPER_ADMIN" ? "brand" : "neutral"}>{TYPE_LABELS[getValue()] ?? getValue()}</Pill>
       ),
     }),
-    helper.accessor("created_at", { header: "Added", cell: ({ getValue }) => formatDateTime(getValue()) }),
+    helper.accessor("created_at", {
+      header: "Added",
+      meta: { className: "whitespace-nowrap text-muted-foreground" },
+      cell: ({ getValue }) => formatDateTime(getValue()),
+    }),
     helper.accessor("id", {
       header: "Id",
       meta: { className: "max-w-48" },
@@ -116,21 +119,18 @@ function Admins() {
         description="Who may change step-ca's configuration through its Admin API: provisioners, admins, policies."
         actions={
           manage && (
-            <Button size="sm" onClick={() => setCreating(true)}>
-              <Plus /> Add an admin
+            <Button onClick={() => setCreating(true)}>
+              <Plus strokeWidth={2.2} /> Add admin
             </Button>
           )
         }
       />
       {can("admin") && list.data && !list.data.manageable && (
-        <p className="mb-4 flex gap-2 rounded-lg border bg-accent/60 px-4 py-3 text-sm">
-          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>
-            This app's identity on the CA is {list.data.identity_type ? `an ${list.data.identity_type}` : "unknown"},
-            not a SUPER_ADMIN, so admins are read-only here. Manage them with{" "}
-            <code className="font-mono">step ca admin</code>.
-          </span>
-        </p>
+        <Callout tone="brand">
+          This app's identity on the CA is {list.data.identity_type ? `an ${list.data.identity_type}` : "unknown"}, not
+          a SUPER_ADMIN, so admins are read-only here. Manage them with <span className="font-mono">step ca admin</span>
+          .
+        </Callout>
       )}
       <DataTable
         label="Admins"
@@ -238,7 +238,7 @@ function CreateAdmin({
             <TypeSelect id="admin-type" value={type} onChange={setType} />
           </div>
           {create.error && (
-            <p role="alert" className="text-sm text-revoked">
+            <p role="alert" className="text-[13px] text-danger-fg">
               {errorMessage(create.error)}
             </p>
           )}
@@ -292,7 +292,7 @@ function ChangeType({
         </DialogHeader>
         <TypeSelect id="change-type" value={type} onChange={setType} />
         {update.error && (
-          <p role="alert" className="text-sm text-revoked">
+          <p role="alert" className="text-[13px] text-danger-fg">
             {errorMessage(update.error)}
           </p>
         )}
@@ -335,7 +335,7 @@ function DeleteAdmin({
           <AlertDialogDescription>They can no longer change step-ca's configuration.</AlertDialogDescription>
         </AlertDialogHeader>
         {remove.error && (
-          <p role="alert" className="text-sm text-revoked">
+          <p role="alert" className="text-[13px] text-danger-fg">
             {errorMessage(remove.error)}
           </p>
         )}

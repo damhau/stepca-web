@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
-import { $api, errorMessage } from "@/api/client"
+import { $api, errorMessage, fetchClient } from "@/api/client"
 import { toast } from "@/components/toaster"
 import {
   AlertDialog,
@@ -14,41 +14,81 @@ import {
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { plural } from "@/lib/format"
 
-type Target = { serial: string; name: string }
+export type RevokeTarget = { serial: string; name: string }
 
-/** Revokes a certificate passively: step-ca stops vouching for it (CRL, renewals), it can't be undone. */
-export function RevokeDialog({ target, onClose }: { target: Target | null; onClose: () => void }) {
+/** Revokes certificates passively: step-ca stops vouching for them (CRL, renewals). It can't be undone. */
+export function RevokeDialog({
+  targets,
+  onClose,
+  onDone,
+}: {
+  targets: RevokeTarget[]
+  onClose: () => void
+  onDone?: () => void
+}) {
   const queryClient = useQueryClient()
   const reference = $api.useQuery("get", "/api/v1/reference", {}, { staleTime: Infinity })
   const [reason, setReason] = useState("0")
-  const revoke = $api.useMutation("post", "/api/v1/certificates/{serial}/revoke", {
-    onSuccess: () => {
-      toast.success(`Certificate ${target?.name} revoked.`)
-      queryClient.invalidateQueries()
-      onClose()
-    },
-  })
+  const [busy, setBusy] = useState(false)
+  const [failures, setFailures] = useState<string[]>([])
+  const one = targets.length === 1 ? targets[0] : undefined
+
+  async function revoke() {
+    setBusy(true)
+    const failed: string[] = []
+    for (const target of targets) {
+      const { error } = await fetchClient.POST("/api/v1/certificates/{serial}/revoke", {
+        params: { path: { serial: target.serial } },
+        body: { reason_code: Number(reason) },
+      })
+      if (error) failed.push(`${target.name}: ${errorMessage(error)}`)
+    }
+    setBusy(false)
+    await queryClient.invalidateQueries()
+    const revoked = targets.length - failed.length
+    if (revoked)
+      toast.success(one && !failed.length ? `${one.name} revoked.` : `${plural(revoked, "certificate")} revoked.`)
+    if (failed.length) {
+      setFailures(failed)
+      return
+    }
+    onDone?.()
+    close()
+  }
+
+  function close() {
+    setFailures([])
+    setReason("0")
+    onClose()
+  }
+
   return (
-    <AlertDialog
-      open={target !== null}
-      onOpenChange={(open) => {
-        if (!open) {
-          onClose()
-          revoke.reset()
-          setReason("0")
-        }
-      }}
-    >
+    <AlertDialog open={targets.length > 0} onOpenChange={(open) => !open && !busy && close()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Revoke {target?.name}?</AlertDialogTitle>
+          <AlertDialogTitle>
+            {one ? `Revoke ${one.name}?` : `Revoke ${plural(targets.length, "certificate")}?`}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            step-ca will list it on its revocation list and refuse to renew it. This can't be undone.
+            step-ca lists {one ? "it" : "them"} on its revocation list and refuses to renew {one ? "it" : "them"}. This
+            can't be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="revoke-reason">Reason</Label>
+        {!one && targets.length > 0 && (
+          <ul className="max-h-32 overflow-y-auto rounded-lg border bg-sidebar px-3 py-2 font-mono text-xs">
+            {targets.map((target) => (
+              <li key={target.serial} className="truncate">
+                {target.name}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="revoke-reason" className="text-[13px]">
+            Reason
+          </Label>
           <Select value={reason} onValueChange={setReason}>
             <SelectTrigger id="revoke-reason" className="w-full">
               <SelectValue />
@@ -62,23 +102,20 @@ export function RevokeDialog({ target, onClose }: { target: Target | null; onClo
             </SelectContent>
           </Select>
         </div>
-        {revoke.error && (
-          <p role="alert" className="text-sm text-revoked">
-            {errorMessage(revoke.error)}
-          </p>
+        {failures.length > 0 && (
+          <ul role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-[13px] text-danger-fg">
+            {failures.map((failure) => (
+              <li key={failure}>{failure}</li>
+            ))}
+          </ul>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <Button
-            variant="destructive"
-            disabled={revoke.isPending || !target}
-            onClick={() =>
-              target &&
-              revoke.mutate({ params: { path: { serial: target.serial } }, body: { reason_code: Number(reason) } })
-            }
-          >
-            {revoke.isPending ? "Revoking…" : "Revoke certificate"}
-          </Button>
+          <AlertDialogCancel disabled={busy}>{failures.length ? "Close" : "Cancel"}</AlertDialogCancel>
+          {!failures.length && (
+            <Button variant="danger" disabled={busy || !targets.length} onClick={revoke}>
+              {busy ? "Revoking…" : one ? "Revoke certificate" : `Revoke ${plural(targets.length, "certificate")}`}
+            </Button>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

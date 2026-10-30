@@ -8,14 +8,13 @@ import {
   type RowData,
   type TableFeatures,
 } from "@tanstack/react-table"
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react"
+import { ArrowDown, ArrowUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { ErrorState } from "./page"
+import { ErrorState } from "./kit"
 
 declare module "@tanstack/react-table" {
   // The type parameters must repeat the library's for the declarations to merge
@@ -44,17 +43,14 @@ export type Columns<T extends RowData> = Array<ColumnDef<Features, T, any>> // e
 
 export type SortOrder = "asc" | "desc"
 
-export const PAGE_SIZES = [25, 50, 100, 200]
-
-type Paging = {
-  total: number
-  page: number
-  perPage: number
-  onPage: (page: number) => void
-  onPerPage: (perPage: number) => void
-}
-
+type Paging = { total: number; page: number; perPage: number; onPage: (page: number) => void }
 type Sorting = { sort: string; order: SortOrder; onSort: (sort: string, order: SortOrder) => void }
+type Selection = {
+  selected: ReadonlySet<string>
+  onToggle: (id: string) => void
+  onToggleAll: (ids: string[], on: boolean) => void
+  label: (row: never) => string
+}
 
 type Props<T extends RowData> = {
   columns: Columns<T>
@@ -64,9 +60,13 @@ type Props<T extends RowData> = {
   error?: unknown
   onRetry?: () => void
   empty: React.ReactNode
+  label: string
   paging?: Paging
   sorting?: Sorting
-  label: string
+  selection?: Omit<Selection, "label"> & { label: (row: T) => string }
+  /** The row shown in the detail sheet */
+  activeId?: string | null
+  className?: string
 }
 
 const NO_ROWS: never[] = []
@@ -79,133 +79,165 @@ export function DataTable<T extends RowData>({
   error,
   onRetry,
   empty,
+  label,
   paging,
   sorting,
-  label,
+  selection,
+  activeId,
+  className,
 }: Props<T>) {
   const table = useTable({ features, columns, data: rows ?? NO_ROWS, getRowId: rowId })
   if (error && !rows) return <ErrorState error={error} onRetry={onRetry} />
+  const ids = (rows ?? []).map(rowId)
+  const allSelected = !!selection && ids.length > 0 && ids.every((id) => selection.selected.has(id))
+  const someSelected = !!selection && ids.some((id) => selection.selected.has(id))
+  const span = columns.length + (selection ? 1 : 0)
   return (
-    <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto rounded-lg border bg-card">
-        <Table aria-label={label} aria-busy={isPending}>
-          <TableHeader>
+    <section aria-label={label} className={cn("min-w-0 overflow-hidden rounded-xl border bg-card", className)}>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse" aria-busy={isPending}>
+          <thead>
             {table.getHeaderGroups().map((group) => (
-              <TableRow key={group.id} className="hover:bg-transparent">
-                {group.headers.map((header) => {
+              <tr key={group.id} className="bg-sidebar text-left text-xs text-muted-foreground">
+                {selection && (
+                  <th scope="col" className="w-5 px-3 py-2.5 font-medium">
+                    <Checkbox
+                      aria-label="Select every row of this page"
+                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                      onCheckedChange={(checked) => selection.onToggleAll(ids, checked === true)}
+                    />
+                  </th>
+                )}
+                {group.headers.map((header, index) => {
                   const meta = header.column.columnDef.meta
                   const sortKey = meta?.sortKey
                   const active = sorting && sortKey === sorting.sort
                   return (
-                    <TableHead
+                    <th
                       key={header.id}
-                      className={cn("h-10 text-xs font-medium text-muted-foreground", meta?.className)}
+                      scope="col"
+                      className={cn(
+                        "px-2 py-2.5 whitespace-nowrap",
+                        !selection && index === 0 && "pl-4",
+                        meta?.className,
+                        // A column's padding and width apply to its header, not its cells' type and colour
+                        "font-sans text-xs font-medium text-muted-foreground",
+                      )}
                       aria-sort={active ? (sorting.order === "asc" ? "ascending" : "descending") : undefined}
                     >
                       {header.isPlaceholder ? null : sorting && sortKey ? (
                         <button
                           type="button"
-                          className="-ml-1 inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground"
-                          onClick={() => sorting.onSort(sortKey, active && sorting.order === "desc" ? "asc" : "desc")}
+                          className="inline-flex items-center gap-1 hover:text-foreground"
+                          onClick={() => sorting.onSort(sortKey, active && sorting.order === "asc" ? "desc" : "asc")}
                         >
                           <FlexRender header={header} />
-                          {active ? (
-                            sorting.order === "asc" ? (
-                              <ArrowUp className="size-3.5" />
+                          {active &&
+                            (sorting.order === "asc" ? (
+                              <ArrowUp className="size-3" />
                             ) : (
-                              <ArrowDown className="size-3.5" />
-                            )
-                          ) : (
-                            <ArrowUpDown className="size-3.5 opacity-40" />
-                          )}
+                              <ArrowDown className="size-3" />
+                            ))}
                         </button>
                       ) : (
                         <FlexRender header={header} />
                       )}
-                    </TableHead>
+                    </th>
                   )
                 })}
-              </TableRow>
+              </tr>
             ))}
-          </TableHeader>
-          <TableBody>
+          </thead>
+          <tbody>
             {isPending && !rows ? (
               Array.from({ length: 6 }, (_, index) => (
-                <TableRow key={index} className="hover:bg-transparent">
-                  {columns.map((_column, cell) => (
-                    <TableCell key={cell}>
-                      <Skeleton className="h-4 w-full max-w-40" />
-                    </TableCell>
+                <tr key={index} className="border-t border-border-subtle">
+                  {Array.from({ length: span }, (_, cell) => (
+                    <td key={cell} className="px-2 py-3 first:pl-4">
+                      <Skeleton className="h-4 w-full max-w-36" />
+                    </td>
                   ))}
-                </TableRow>
+                </tr>
               ))
             ) : table.getRowModel().rows.length === 0 ? (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={columns.length} className="py-10 text-center text-sm text-muted-foreground">
+              <tr className="border-t border-border-subtle">
+                <td colSpan={span} className="px-4 py-12 text-center text-muted-foreground">
                   {empty}
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getAllCells().map((cell) => (
-                    <TableCell key={cell.id} className={cn("align-middle", cell.column.columnDef.meta?.className)}>
-                      <FlexRender cell={cell} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const id = row.id
+                const checked = selection?.selected.has(id) ?? false
+                return (
+                  <tr
+                    key={id}
+                    className={cn(
+                      "border-t border-border-subtle",
+                      activeId === id ? "bg-brand-soft" : checked ? "bg-sidebar" : "hover:bg-sidebar/60",
+                    )}
+                  >
+                    {selection && (
+                      <td className="px-3">
+                        <Checkbox
+                          aria-label={selection.label(row.original)}
+                          checked={checked}
+                          onCheckedChange={() => selection.onToggle(id)}
+                        />
+                      </td>
+                    )}
+                    {row.getAllCells().map((cell, index) => (
+                      <td
+                        key={cell.id}
+                        className={cn(
+                          "px-2 py-1.5 align-middle",
+                          !selection && index === 0 && "pl-4",
+                          cell.column.columnDef.meta?.className,
+                        )}
+                      >
+                        <FlexRender cell={cell} />
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })
             )}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
       {paging && paging.total > 0 && <Pagination {...paging} />}
-    </div>
+    </section>
   )
 }
 
-function Pagination({ total, page, perPage, onPage, onPerPage }: Paging) {
+function Pagination({ total, page, perPage, onPage }: Paging) {
   const pages = Math.max(Math.ceil(total / perPage), 1)
   const first = (page - 1) * perPage + 1
   const last = Math.min(page * perPage, total)
   return (
-    <nav className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground" aria-label="Pages">
-      <p>
+    <nav
+      aria-label="Pages"
+      className="flex items-center justify-between gap-3 border-t border-border-subtle px-3 py-2.5 text-[13px] text-muted-foreground"
+    >
+      <span>
         {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)}
-      </p>
-      <div className="flex items-center gap-2">
-        <Select value={String(perPage)} onValueChange={(value) => onPerPage(Number(value))}>
-          <SelectTrigger size="sm" className="w-auto" aria-label="Rows per page">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PAGE_SIZES.map((size) => (
-              <SelectItem key={size} value={String(size)}>
-                {size} per page
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      </span>
+      <div className="flex gap-1.5">
         <Button
           variant="outline"
-          size="icon-sm"
+          className="h-[30px] rounded-md px-2.5 text-[13px] font-normal"
           disabled={page <= 1}
           onClick={() => onPage(page - 1)}
-          aria-label="Previous page"
         >
-          <ChevronLeft />
+          Previous
         </Button>
-        <span className="tabular-nums">
-          {formatNumber(page)} / {formatNumber(pages)}
-        </span>
         <Button
           variant="outline"
-          size="icon-sm"
+          className="h-[30px] rounded-md px-2.5 text-[13px] font-normal"
           disabled={page >= pages}
           onClick={() => onPage(page + 1)}
-          aria-label="Next page"
         >
-          <ChevronRight />
+          Next
         </Button>
       </div>
     </nav>

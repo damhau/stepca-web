@@ -4,7 +4,8 @@ import { useState } from "react"
 import { $api, errorMessage } from "@/api/client"
 import { useSession } from "@/api/session"
 import { AdminOnly } from "@/components/admin-only"
-import { PageHeader, Section } from "@/components/page"
+import { PageHeader } from "@/components/kit"
+import { Section } from "@/components/page"
 import {
   AlertDialog,
   AlertDialogAction,

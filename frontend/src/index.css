@@ -3,94 +3,124 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/*
- * Security paper and registry ink: a cool, quiet surface where the only strong colours are the
- * certificate statuses (valid, expiring, expired, revoked) and the accent of the controls.
- */
+/* Design tokens (docs: DESIGN.md of the "Modern SaaS" handoff). Borders, not shadows; shadows only on overlays. */
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.972 0.004 230);
-  --foreground: oklch(0.255 0.03 245);
-  --card: oklch(1 0 0);
+  --background: #f7f7f8;
+  --foreground: #09090b;
+  --fg-2: #3f3f46;
+  --muted-foreground: #66666e;
+  --sidebar: #fafafa;
+  --card: #ffffff;
   --card-foreground: var(--foreground);
-  --popover: oklch(1 0 0);
+  --popover: #ffffff;
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.405 0.13 268);
-  --primary-foreground: oklch(0.985 0.005 268);
-  --secondary: oklch(0.935 0.008 240);
+  --border: #e4e4e7;
+  --border-subtle: #f0f0f2;
+  --input: #e4e4e7;
+  --ring: #2f6feb;
+  /* Primary buttons are black */
+  --primary: #09090b;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f2;
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.945 0.006 235);
-  --muted-foreground: oklch(0.5 0.025 240);
-  --accent: oklch(0.94 0.018 268);
-  --accent-foreground: oklch(0.32 0.11 268);
-  --destructive: oklch(0.5 0.19 22);
-  --destructive-foreground: oklch(0.985 0.005 22);
-  --border: oklch(0.9 0.009 235);
-  --input: oklch(0.87 0.01 235);
-  --ring: oklch(0.55 0.14 268);
-  --sidebar: oklch(0.95 0.007 235);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-border: var(--border);
-  --sidebar-accent: oklch(0.91 0.02 262);
-  --sidebar-accent-foreground: oklch(0.3 0.1 268);
+  --muted: #f4f4f5;
+  --accent: #f4f4f5;
+  --accent-foreground: var(--foreground);
+  --nav-active: #ededf0;
+  --separator: #d4d4d8;
+  /* Links, selected states, focus, chart series */
+  --brand: #2f6feb;
+  --brand-hover: #1d4fb8;
+  --brand-soft: #f5f8ff;
+  --brand-tile: #eef3fe;
+  --chart-1: #1e3a8a;
+  --chart-2: #2f6feb;
+  --chart-3: #a5c1f7;
 
-  --valid: oklch(0.52 0.12 158);
-  --valid-soft: oklch(0.95 0.035 158);
-  --expiring: oklch(0.62 0.14 68);
-  --expiring-soft: oklch(0.955 0.05 80);
-  --expired: oklch(0.56 0.02 245);
-  --expired-soft: oklch(0.94 0.006 245);
-  --revoked: oklch(0.5 0.19 22);
-  --revoked-soft: oklch(0.95 0.03 22);
-  --track: oklch(0.92 0.007 235);
+  --success: #15803d;
+  --success-bg: #dcfce7;
+  --success-fg: #166534;
+  --warning: #d97706;
+  --warning-fg: #b45309;
+  --warning-strong: #78350f;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-badge-bg: #fef3c7;
+  --warning-badge-fg: #92400e;
+  --danger: #dc2626;
+  --danger-fg: #b91c1c;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+  --danger-subtle: #fee2e2;
+  --neutral-dot: #a1a1aa;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --inverse: #09090b;
+  --inverse-2: #27272a;
+  --inverse-foreground: #ffffff;
 }
 
 .dark {
-  --background: oklch(0.19 0.015 240);
-  --foreground: oklch(0.92 0.01 235);
-  --card: oklch(0.225 0.017 240);
-  --card-foreground: var(--foreground);
-  --popover: oklch(0.24 0.018 240);
-  --popover-foreground: var(--foreground);
-  --primary: oklch(0.72 0.11 270);
-  --primary-foreground: oklch(0.2 0.04 268);
-  --secondary: oklch(0.28 0.018 240);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(0.265 0.016 240);
-  --muted-foreground: oklch(0.68 0.02 240);
-  --accent: oklch(0.3 0.04 265);
-  --accent-foreground: oklch(0.88 0.05 268);
-  --destructive: oklch(0.65 0.18 22);
-  --destructive-foreground: oklch(0.18 0.03 22);
-  --border: oklch(0.31 0.017 240);
-  --input: oklch(0.36 0.018 240);
-  --ring: oklch(0.65 0.12 270);
-  --sidebar: oklch(0.205 0.016 240);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-border: var(--border);
-  --sidebar-accent: oklch(0.29 0.035 262);
-  --sidebar-accent-foreground: oklch(0.9 0.04 268);
+  --background: #0c0c0e;
+  --foreground: #fafafa;
+  --fg-2: #d4d4d8;
+  --muted-foreground: #a1a1aa;
+  --sidebar: #111113;
+  --card: #161619;
+  --popover: #1b1b1f;
+  --border: #2a2a2f;
+  --border-subtle: #212126;
+  --input: #2f2f35;
+  --ring: #5b8def;
+  --primary: #fafafa;
+  --primary-foreground: #09090b;
+  --secondary: #26262b;
+  --muted: #1f1f23;
+  --accent: #232328;
+  --nav-active: #26262b;
+  --separator: #3f3f46;
+  --brand: #6b9cf5;
+  --brand-hover: #93b7f8;
+  --brand-soft: #16213a;
+  --brand-tile: #1a2747;
+  --chart-1: #93b7f8;
+  --chart-2: #5b8def;
+  --chart-3: #2c4f97;
 
-  --valid: oklch(0.72 0.13 158);
-  --valid-soft: oklch(0.3 0.05 158);
-  --expiring: oklch(0.78 0.13 75);
-  --expiring-soft: oklch(0.32 0.06 75);
-  --expired: oklch(0.66 0.02 245);
-  --expired-soft: oklch(0.29 0.012 245);
-  --revoked: oklch(0.68 0.17 22);
-  --revoked-soft: oklch(0.31 0.06 22);
-  --track: oklch(0.3 0.014 240);
+  --success: #4ade80;
+  --success-bg: #12301d;
+  --success-fg: #86efac;
+  --warning: #f59e0b;
+  --warning-fg: #fbbf24;
+  --warning-strong: #fde68a;
+  --warning-bg: #2a1f0a;
+  --warning-border: #5c4210;
+  --warning-badge-bg: #3b2a0b;
+  --warning-badge-fg: #fcd34d;
+  --danger: #f87171;
+  --danger-fg: #fca5a5;
+  --danger-bg: #2c1212;
+  --danger-border: #5f1d1d;
+  --danger-subtle: #3a1515;
+  --neutral-dot: #71717a;
+  --destructive: #dc2626;
+  --inverse: #fafafa;
+  --inverse-2: #e4e4e7;
+  --inverse-foreground: #09090b;
 }
 
 @theme inline {
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --radius-sm: calc(var(--radius) - 3px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-fg-2: var(--fg-2);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -106,22 +136,38 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-valid: var(--valid);
-  --color-valid-soft: var(--valid-soft);
-  --color-expiring: var(--expiring);
-  --color-expiring-soft: var(--expiring-soft);
-  --color-expired: var(--expired);
-  --color-expired-soft: var(--expired-soft);
-  --color-revoked: var(--revoked);
-  --color-revoked-soft: var(--revoked-soft);
-  --color-track: var(--track);
+  --color-nav-active: var(--nav-active);
+  --color-separator: var(--separator);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-tile: var(--brand-tile);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-success-fg: var(--success-fg);
+  --color-warning: var(--warning);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-warning-badge-bg: var(--warning-badge-bg);
+  --color-warning-badge-fg: var(--warning-badge-fg);
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-border: var(--danger-border);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-neutral-dot: var(--neutral-dot);
+  --color-inverse: var(--inverse);
+  --color-inverse-2: var(--inverse-2);
+  --color-inverse-foreground: var(--inverse-foreground);
 }
 
 @layer base {
@@ -135,12 +181,10 @@
     color-scheme: dark;
   }
   body {
-    @apply bg-background font-sans text-foreground antialiased;
-    font-feature-settings: "ss02";
+    @apply bg-background font-sans text-sm text-foreground antialiased;
   }
-  /* Serials, fingerprints and ids line up digit for digit */
-  .font-mono {
-    font-feature-settings: "zero";
+  a {
+    @apply text-brand hover:text-brand-hover;
   }
   @media (prefers-reduced-motion: reduce) {
     *,

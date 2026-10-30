@@ -1,7 +1,7 @@
-import { Link } from "@tanstack/react-router"
+import { Link, useRouterState } from "@tanstack/react-router"
 import type { AcmeIdentifier } from "@/api/types"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { listSearch, oneOf, type ListSearch } from "@/lib/search-params"
+import { cn } from "@/lib/utils"
 
 export type AcmeSearch = ListSearch & { status?: string }
 
@@ -13,39 +13,60 @@ export function acmeSearch(statuses: readonly string[]) {
 }
 
 export function acmeQuery(search: AcmeSearch) {
-  return { page: search.page ?? 1, per_page: search.per_page ?? 50, q: search.q, status: search.status }
+  return { page: search.page ?? 1, per_page: 50, q: search.q, status: search.status }
 }
 
-export function StatusFilter({
-  value,
-  statuses,
-  onChange,
-}: {
-  value?: string
-  statuses: readonly string[]
-  onChange: (value?: string) => void
-}) {
+const TABS = [
+  { to: "/acme/orders", label: "Orders" },
+  { to: "/acme/accounts", label: "Accounts" },
+  { to: "/acme/authorizations", label: "Authorizations" },
+  { to: "/acme/challenges", label: "Challenges" },
+  { to: "/acme/certificates", label: "Certificates" },
+] as const
+
+/** The ACME pages, as tabs under one heading. */
+export function AcmeHeader({ description, actions }: { description: string; actions?: React.ReactNode }) {
+  const path = useRouterState({ select: (state) => state.location.pathname })
   return (
-    <Select value={value ?? "*"} onValueChange={(next) => onChange(next === "*" ? undefined : next)}>
-      <SelectTrigger className="w-auto min-w-36" aria-label="Status">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="*">Any status</SelectItem>
-        {statuses.map((status) => (
-          <SelectItem key={status} value={status} className="capitalize">
-            {status}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">ACME</h1>
+          <p className="mt-1 text-muted-foreground">{description}</p>
+        </div>
+        {actions && <div className="flex gap-2">{actions}</div>}
+      </div>
+      <nav
+        aria-label="ACME objects"
+        className="flex [scrollbar-width:none] gap-5 overflow-x-auto shadow-[inset_0_-1px_0_var(--border)]"
+      >
+        {TABS.map((tab) => {
+          const current = path === tab.to
+          return (
+            <Link
+              key={tab.to}
+              to={tab.to}
+              aria-current={current ? "page" : undefined}
+              className={cn(
+                "inline-flex min-h-10 shrink-0 items-center border-b-2 px-0.5 font-medium whitespace-nowrap no-underline",
+                current
+                  ? "border-foreground text-foreground hover:text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {tab.label}
+            </Link>
+          )
+        })}
+      </nav>
+    </>
   )
 }
 
 export function Identifiers({ values }: { values: AcmeIdentifier[] }) {
   if (values.length === 0) return <span className="text-muted-foreground">—</span>
   return (
-    <span className="break-words">
+    <span className="font-mono text-[13px] break-words">
       {values
         .map((identifier) =>
           identifier.type === "dns" ? identifier.value : `${identifier.value} (${identifier.type})`,
@@ -59,31 +80,26 @@ export function Identifiers({ values }: { values: AcmeIdentifier[] }) {
 export function AcmeLink({ kind, id }: { kind: "account" | "order"; id: string | null }) {
   if (!id) return <span className="text-muted-foreground">—</span>
   const label = (
-    <code className="font-mono text-[0.8125rem]" title={id}>
+    <code className="font-mono text-[13px]" title={id}>
       {id.length > 14 ? `${id.slice(0, 12)}…` : id}
     </code>
   )
   return kind === "account" ? (
-    <Link to="/acme/accounts/$id" params={{ id }} className="underline-offset-4 hover:underline">
+    <Link to="/acme/accounts/$id" params={{ id }}>
       {label}
     </Link>
   ) : (
-    <Link to="/acme/orders/$id" params={{ id }} className="underline-offset-4 hover:underline">
+    <Link to="/acme/orders/$id" params={{ id }}>
       {label}
     </Link>
   )
 }
 
-export function CertificateLink({ serial }: { serial: string | null }) {
+export function CertificateLink({ serial, name }: { serial: string | null; name?: string | null }) {
   if (!serial) return <span className="text-muted-foreground">—</span>
   return (
-    <Link
-      to="/certificates/$serial"
-      params={{ serial }}
-      className="font-mono text-[0.8125rem] underline-offset-4 hover:underline"
-      title={serial}
-    >
-      {serial.length > 14 ? `${serial.slice(0, 12)}…` : serial}
+    <Link to="/certificates" search={{ cert: serial }} className="font-mono text-[13px]" title={serial}>
+      {name ?? (serial.length > 14 ? `${serial.slice(0, 12)}…` : serial)}
     </Link>
   )
 }

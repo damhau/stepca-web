@@ -76,7 +76,7 @@ def test_ca_root_was_pinned():
 
 
 def make_csr(name, path):
-    assert step("certificate", "create", name, f"/tmp/{path}.csr", f"/tmp/{path}.key", "--csr", "--no-password", "--insecure").returncode == 0
+    assert step("certificate", "create", name, f"/tmp/{path}.csr", f"/tmp/{path}.key", "--csr", "--no-password", "--insecure", "--force").returncode == 0
     return compose_exec("step-ca", "cat", f"/tmp/{path}.csr").stdout
 
 

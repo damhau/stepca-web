@@ -104,7 +104,8 @@ def record_signed(serial, common_name, provisioner_name, csr_pem):
 
 
 def sign(csr_pem, provisioner_name, password, valid_for=None):
-    """Sign a CSR with a JWK provisioner, keep its CSR and audit it. The decimal serial, or SignError."""
+    """Sign a CSR with a JWK provisioner, keep its CSR and audit it. Returns {serial (decimal), pem, chain_pem};
+    raises SignError."""
     try:
         if valid_for:
             try:
@@ -121,7 +122,15 @@ def sign(csr_pem, provisioner_name, password, valid_for=None):
     record_signed(serial, common_name, provisioner_name, csr_pem)
     audit("sign", serial, detail=f"cn={common_name} provisioner={provisioner_name}")
     inventory.refresh(force=True)
-    return serial
+    pem = certificate.public_bytes(serialization.Encoding.PEM).decode()
+    try:
+        found = ca.client().intermediates()
+        issuers = [i for i in found if i.subject == certificate.issuer] or found
+    except ca.CA_ERRORS:
+        # Signed all the same: the chain is then only the certificate
+        issuers = []
+    chain = pem + "".join(i.public_bytes(serialization.Encoding.PEM).decode() for i in issuers)
+    return {"serial": serial, "pem": pem, "chain_pem": chain}
 
 
 def revoke(serial, reason_code):

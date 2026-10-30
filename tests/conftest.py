@@ -143,13 +143,14 @@ def step_db(app):
             db.session.add(RevokedX509Cert(nkey=str(serial).encode(), nvalue=json.dumps(info).encode()))
             db.session.commit()
 
-        def add_provisioner(self, prov_id, name, prov_type=1, deleted=False):
+        def add_provisioner(self, prov_id, name, prov_type=1, deleted=False, created_at="0001-01-01T00:00:00Z"):
             details = base64.b64encode(json.dumps({"Data": {}}).encode()).decode()
             value = {
                 "id": prov_id,
                 "name": name,
                 "type": prov_type,
                 "details": details,
+                "createdAt": created_at,
                 "deletedAt": "2026-01-01T00:00:00Z" if deleted else "0001-01-01T00:00:00Z",
             }
             db.session.add(StepProvisioner(nkey=prov_id.encode(), nvalue=json.dumps(value).encode()))

@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { $api } from "@/api/client"
-import { ErrorState, LoadingBlock, PageHeader, Section } from "@/components/page"
-import { AcmeStatusPill, CertificateStatusPill } from "@/components/status"
+import { AcmeStatus, Card, CardHeader, CertificateStatus, ErrorState, Loading, PageHeader } from "@/components/kit"
 import { Identifiers } from "@/features/acme"
+import { expiryLabel } from "@/features/certificates/expiry"
 import { formatDate, plural } from "@/lib/format"
 import { text } from "@/lib/search-params"
 
@@ -13,12 +13,18 @@ export const Route = createFileRoute("/_app/search")({
 
 function More({ shown }: { shown: boolean }) {
   return shown ? (
-    <p className="border-t px-4 py-2 text-xs text-muted-foreground">Only the first 50 are shown: refine the search.</p>
+    <p className="border-t border-border-subtle px-4 py-2 text-xs text-muted-foreground">
+      Only the first 50 are shown: refine the search.
+    </p>
   ) : null
 }
 
 function Row({ children }: { children: React.ReactNode }) {
-  return <li className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-2.5 text-sm">{children}</li>
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-border-subtle px-4 py-2.5 first:border-0">
+      {children}
+    </li>
+  )
 }
 
 function SearchPage() {
@@ -39,7 +45,7 @@ function SearchPage() {
     return (
       <>
         {header}
-        <p className="text-sm text-muted-foreground">Type at least two characters in the search box.</p>
+        <p className="text-muted-foreground">Type at least two characters: press ⌘K or /.</p>
       </>
     )
   if (error)
@@ -53,7 +59,7 @@ function SearchPage() {
     return (
       <>
         {header}
-        <LoadingBlock />
+        <Loading />
       </>
     )
   const count =
@@ -67,110 +73,111 @@ function SearchPage() {
     <>
       {header}
       {count === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground">
           Nothing matches. Serials work in decimal or hex, with or without colons; names match anywhere in the subject
           or DNS names.
         </p>
       ) : (
-        <div className="flex flex-col gap-6">
+        <>
           {data.certificates.length > 0 && (
-            <Section title={plural(data.certificates.length, "certificate")}>
-              <ul className="divide-y">
+            <Card>
+              <CardHeader title={plural(data.certificates.length, "certificate")} />
+              <ul>
                 {data.certificates.map((cert) => (
                   <Row key={cert.serial}>
                     <Link
-                      to="/certificates/$serial"
-                      params={{ serial: cert.serial }}
-                      className="min-w-0 truncate font-medium underline-offset-4 hover:underline"
+                      to="/certificates"
+                      search={{ cert: cert.serial }}
+                      className="min-w-0 truncate font-mono text-[13px] font-medium text-foreground hover:underline"
                     >
                       {cert.common_name ?? cert.subject}
                     </Link>
-                    <span className="flex items-center gap-3 text-muted-foreground">
-                      until {formatDate(cert.not_after)}
-                      <CertificateStatusPill status={cert.status} expiring={cert.expiring} />
+                    <span className="flex items-center gap-4 text-[13px] text-muted-foreground">
+                      {expiryLabel(cert)}
+                      <CertificateStatus status={cert.status} expiring={cert.expiring} />
                     </span>
                   </Row>
                 ))}
               </ul>
               <More shown={truncated.has("certificates")} />
-            </Section>
+            </Card>
           )}
           {data.acme_accounts.length > 0 && (
-            <Section title={plural(data.acme_accounts.length, "ACME account")}>
-              <ul className="divide-y">
+            <Card>
+              <CardHeader title={plural(data.acme_accounts.length, "ACME account")} />
+              <ul>
                 {data.acme_accounts.map((account) => (
                   <Row key={account.id}>
                     <Link
                       to="/acme/accounts/$id"
                       params={{ id: account.id }}
-                      className="font-medium underline-offset-4 hover:underline"
+                      className="font-medium text-foreground hover:underline"
                     >
                       {account.contact.map((c) => c.replace(/^mailto:/, "")).join(", ") || account.id}
                     </Link>
-                    <AcmeStatusPill status={account.status} />
+                    <AcmeStatus status={account.status} />
                   </Row>
                 ))}
               </ul>
               <More shown={truncated.has("acme_accounts")} />
-            </Section>
+            </Card>
           )}
           {data.acme_orders.length > 0 && (
-            <Section title={plural(data.acme_orders.length, "ACME order")}>
-              <ul className="divide-y">
+            <Card>
+              <CardHeader title={plural(data.acme_orders.length, "ACME order")} />
+              <ul>
                 {data.acme_orders.map((order) => (
                   <Row key={order.id}>
-                    <Link
-                      to="/acme/orders/$id"
-                      params={{ id: order.id }}
-                      className="font-medium underline-offset-4 hover:underline"
-                    >
+                    <Link to="/acme/orders/$id" params={{ id: order.id }} className="text-foreground hover:underline">
                       <Identifiers values={order.identifiers} />
                     </Link>
-                    <span className="flex items-center gap-3 text-muted-foreground">
+                    <span className="flex items-center gap-4 text-[13px] text-muted-foreground">
                       {formatDate(order.created_at)}
-                      <AcmeStatusPill status={order.status} />
+                      <AcmeStatus status={order.status} />
                     </span>
                   </Row>
                 ))}
               </ul>
               <More shown={truncated.has("acme_orders")} />
-            </Section>
+            </Card>
           )}
           {data.provisioners.length > 0 && (
-            <Section title={plural(data.provisioners.length, "provisioner")}>
-              <ul className="divide-y">
+            <Card>
+              <CardHeader title={plural(data.provisioners.length, "provisioner")} />
+              <ul>
                 {data.provisioners.map((provisioner) => (
                   <Row key={provisioner.id}>
                     <Link
                       to="/provisioners/$name"
                       params={{ name: provisioner.name }}
-                      className="font-medium underline-offset-4 hover:underline"
+                      className="font-mono text-[13px] font-medium text-foreground hover:underline"
                     >
                       {provisioner.name}
                     </Link>
-                    <span className="text-muted-foreground">{provisioner.type}</span>
+                    <span className="text-[13px] text-muted-foreground">{provisioner.type}</span>
                   </Row>
                 ))}
               </ul>
-            </Section>
+            </Card>
           )}
           {data.admins.length > 0 && (
-            <Section title={plural(data.admins.length, "admin")}>
-              <ul className="divide-y">
+            <Card>
+              <CardHeader title={plural(data.admins.length, "admin")} />
+              <ul>
                 {data.admins.map((admin) => (
                   <Row key={admin.id}>
-                    <Link to="/admins" className="font-medium underline-offset-4 hover:underline">
+                    <Link to="/admins" className="font-mono text-[13px] font-medium text-foreground hover:underline">
                       {admin.subject}
                     </Link>
-                    <span className="text-muted-foreground">
+                    <span className="text-[13px] text-muted-foreground">
                       {admin.type} on {admin.provisioner_name ?? "an unknown provisioner"}
                     </span>
                   </Row>
                 ))}
               </ul>
-            </Section>
+            </Card>
           )}
-        </div>
+        </>
       )}
     </>
   )

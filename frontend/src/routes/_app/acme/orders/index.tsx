@@ -2,9 +2,8 @@ import { keepPreviousData } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { $api } from "@/api/client"
 import { DataTable } from "@/components/data-table"
-import { ExportLink, FilterInput, Toolbar } from "@/components/list-toolbar"
-import { PageHeader } from "@/components/page"
-import { acmeQuery, acmeSearch, StatusFilter, type AcmeSearch } from "@/features/acme"
+import { ChoiceFilter, ExportButton, SearchBox, Toolbar } from "@/components/list-tools"
+import { acmeQuery, acmeSearch, AcmeHeader, type AcmeSearch } from "@/features/acme"
 import { orderColumns } from "@/features/acme-orders-table"
 
 const STATUSES = ["pending", "ready", "processing", "valid", "invalid"] as const
@@ -20,18 +19,24 @@ function Orders() {
     navigate({ search: (previous) => ({ ...previous, page: undefined, ...changes }), replace: true })
   return (
     <>
-      <PageHeader
-        title="ACME orders"
-        description="Each request for a certificate over ACME, with what it was for and how it ended."
-        actions={<ExportLink path="/api/v1/acme/orders" query={query} />}
+      <AcmeHeader
+        description="Each request for a certificate over ACME: what it was for, how it was proven and how it ended."
+        actions={<ExportButton path="/api/v1/acme/orders" query={query} />}
       />
       <Toolbar>
-        <FilterInput
+        <SearchBox
+          id="acme-search"
           value={search.q ?? ""}
           onChange={(q) => update({ q: q || undefined })}
-          placeholder="Filter by name or id"
+          placeholder="Search by name or id"
         />
-        <StatusFilter value={search.status} statuses={STATUSES} onChange={(status) => update({ status })} />
+        <ChoiceFilter
+          label="Status"
+          any="Any status"
+          value={search.status}
+          options={STATUSES}
+          onChange={(status) => update({ status })}
+        />
       </Toolbar>
       <DataTable
         label="ACME orders"
@@ -47,7 +52,6 @@ function Orders() {
           page: query.page,
           perPage: query.per_page,
           onPage: (page) => navigate({ search: (previous) => ({ ...previous, page }) }),
-          onPerPage: (per_page) => update({ per_page }),
         }}
       />
     </>

@@ -125,6 +125,7 @@ class Provisioner:
     name: str
     type: str  # "JWK", "ACME", ...
     deleted: bool
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True)

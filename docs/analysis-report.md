@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Analysis** | 2026-10-13, revision `67caf4a` (`main`). After the history rewrite (SEC-1), the same code is commit `15c481f`. |
-| **Status update** | 2026-10-29, revision `1de8a1a`. Four rounds of fixes: `21c8ab6` to `9e6e23c`, `a76538f` to `e359cf3`, `5647f08` to `db57ce4`, then `83a97d0` to `1de8a1a`. |
+| **Status update** | 2026-10-29, revision `1de8a1a`. Four rounds of fixes: `21c8ab6` to `9e6e23c`, `a76538f` to `e359cf3`, `5647f08` to `db57ce4`, then `83a97d0` to `1de8a1a`. On 2026-10-30, the frontend was redesigned (see [Since `1de8a1a`](#since-1de8a1a-the-redesign)). |
 | **step-ca reference** | `smallstep/certificates` at `v0.30.2-283-g69d3c36f` (local checkout `~/code/perso/certificates`) |
 | **Method** | **Analysis:** I read all first-party code (39 Python files, 20 Jinja templates) and checked it against the step-ca source. I also linted it with ruff (F/B/S/E9 rules), compiled it under Python 3.11 and scanned the git history. I did **not** run the app against a live CA, so the UX findings came from reading the templates, routes and JavaScript. **Status update:** I re-checked every finding against the code at `1de8a1a`. The app now has 233 unit tests, 11 frontend unit tests, and 25 end-to-end tests against a real step-ca 0.30.2 (with an ACME client) and an OpenLDAP server, 6 of them in a browser. |
 
@@ -39,6 +39,18 @@ Four rounds of fixes addressed the findings:
   - a global search, CSV export, a loading indicator;
   - each certificate's lifetime drawn to scale, an expiry horizon, light and dark themes, phone layouts.
 
+### Since `1de8a1a`: the redesign
+
+The frontend now follows a design handed off as mockups (Overview, Certificates, a provisioner's settings, New certificate):
+
+- **An overview** of active, issued, expiring and revoked certificates over 24 hours, 7 or 30 days, issuance by provisioner, the certificate that needs attention first, the authority's health, production readiness checks and recent activity.
+- **Certificates** as tabs with counts, filter chips, multi-select (one PEM bundle, revoke together) and a detail panel beside the list.
+- **New certificate** in three steps: a key made in the browser with WebCrypto (only the CSR is sent) or an uploaded CSR; then a PEM bundle, the key, or a Kubernetes TLS Secret.
+- **A settings page per provisioner** whose changes are saved together, with the ACME directory URL and a cert-manager ClusterIssuer.
+- **A command palette** (⌘K) for search, actions and pages.
+
+Not built, because step-ca's open-source API has nothing behind them: SSH, policies, webhooks, API tokens, OCSP, EAB keys, pausing a provisioner, renewal from the UI, PKCS#12. **BUG-25** was found on the way and fixed. The app now has 246 unit tests, 12 frontend unit tests and 28 end-to-end tests, 9 of them in a browser.
+
 **Verdict now:** fit for production as an internal admin console, behind a TLS reverse proxy with `ldaps://` or StartTLS, including for CAs with tens of thousands of certificates (§8).
 
 ### Scorecard
@@ -58,10 +70,10 @@ Four rounds of fixes addressed the findings:
 |---|:-:|:-:|:-:|---|
 | Security (SEC-1 to SEC-12) | 12 | 0 | 0 | SEC-13 (Low), fixed |
 | step-ca integration (INT-1 to INT-10) | 8 | 2 | 0 | |
-| Correctness (BUG-1 to BUG-20) | 20 | 0 | 0 | BUG-21 to BUG-24 (Low), fixed |
+| Correctness (BUG-1 to BUG-20) | 20 | 0 | 0 | BUG-21 to BUG-25 (Low), fixed |
 | Architecture (A-1 to A-9) | 8 | 1 | 0 | |
 | Performance (PERF-1) | 1 | 0 | 0 | |
-| **Total (52)** | **49** | **3** | **0** | **5, all fixed** |
+| **Total (52)** | **49** | **3** | **0** | **6, all fixed** |
 
 Appendix B lists every finding with its status. §11 orders what is left.
 
@@ -294,7 +306,7 @@ flowchart LR
 
 ### 2.3 Correctness bugs
 
-All 20 are fixed, mostly in `89b419e`, with BUG-8 also in `f6b09ce` and BUG-16 in `763da5a`. Unit or end-to-end tests cover most of them. BUG-21 to BUG-24 were found while re-checking and testing, and are fixed too.
+All 20 are fixed, mostly in `89b419e`, with BUG-8 also in `f6b09ce` and BUG-16 in `763da5a`. Unit or end-to-end tests cover most of them. BUG-21 to BUG-25 were found while re-checking and testing, and are fixed too.
 
 | ID | Location | Defect | Effect | Status at `1de8a1a` |
 |---|---|---|---|---|
@@ -322,6 +334,7 @@ All 20 are fixed, mostly in `89b419e`, with BUG-8 also in `f6b09ce` and BUG-16 i
 | **BUG-22** (new, Low) | `app/libs/auth/ldap_backend.py` | The user search asks for `*`. OpenLDAP treats `memberOf` as operational and only returns it when asked for by name | On OpenLDAP, users never get the role of their groups, only `DEFAULT_ROLE` | ✅ `memberOf` is requested by name. Tested against OpenLDAP (`36f1d27`) |
 | **BUG-23** (new, Low) | `app/libs/stepapi.py` | Provisioner names are put in Admin API paths unescaped. step-ca checks the token audience against the decoded path | Deleting a provisioner whose name has a space or a `/` fails | ✅ Names are escaped. The end-to-end test edits and deletes "e2e edit" (`85c1a55`) |
 | **BUG-24** (new, Low) | `home/index.html`, `tables.js` | The dashboard's bar chart draws its labels below its SVG area, which clips them. `tables.js` hides its paging bar with `style.display`, which Bootstrap's `d-flex !important` overrides | The chart has no provisioner names; every list shows a paging bar, even with 3 rows | ✅ Both fixed (`4903a97`), checked in a browser |
+| **BUG-25** (new, Low) | `app/services/provisioners.py` | step-ca's `GET /admin/provisioners` answers in its older JSON (`maxTLSCertDuration`, ACME settings at the top level), not the linkedca JSON of `GET /admin/provisioners/{name}` that `summary()` read | The provisioner list showed every lifetime as the CA's default and every ACME provisioner as allowing all challenges; the signing dialog then capped validity at 24 hours | ✅ Both shapes are read, and the creation date comes from step-ca's database; a unit test uses the list's real shape |
 
 ### 2.4 Maintainability issues
 
@@ -1135,6 +1148,7 @@ The frontend's page is public and the same for everyone; it asks `/api/v1/sessio
 | BUG-22 | Low (new) | OpenLDAP users never get their groups' role | ✅ |
 | BUG-23 | Low (new) | Provisioner names unescaped in Admin API paths | ✅ |
 | BUG-24 | Low (new) | Clipped chart labels, paging bar never hidden | ✅ |
+| BUG-25 | Low (new) | Provisioner list read in the wrong JSON shape | ✅ |
 | A-1 | | Side effects at import | ✅ |
 | A-2 | | Two DB stacks | ✅ |
 | A-3 | | Two sources of truth for provisioners | ✅ One service, each source with its role |

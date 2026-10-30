@@ -51,16 +51,16 @@ function Login() {
   return (
     <main className="grid min-h-svh place-items-center px-4 py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <ShieldCheck className="size-5" aria-hidden />
+        <div className="mb-6 flex items-center gap-3">
+          <span className="grid size-9 place-items-center rounded-[9px] bg-inverse">
+            <ShieldCheck className="size-4 text-inverse-foreground" strokeWidth={2.5} aria-hidden />
           </span>
           <div>
-            <h1 className="text-lg font-semibold">Step CA</h1>
-            <p className="text-sm text-muted-foreground">Sign in to manage the certificate authority</p>
+            <h1 className="text-lg font-semibold tracking-[-0.02em]">Sign in</h1>
+            <p className="text-[13px] text-muted-foreground">to manage the certificate authority</p>
           </div>
         </div>
-        <form onSubmit={submit} className="flex flex-col gap-4 rounded-lg border bg-card p-6" noValidate>
+        <form onSubmit={submit} className="flex flex-col gap-4 rounded-2xl border bg-card p-6" noValidate>
           <div className="flex flex-col gap-2">
             <Label htmlFor="username">Username</Label>
             <Input
@@ -70,7 +70,7 @@ function Login() {
               aria-invalid={!!errors.username}
               {...form.register("username")}
             />
-            {errors.username && <p className="text-sm text-revoked">{errors.username.message}</p>}
+            {errors.username && <p className="text-[13px] text-danger-fg">{errors.username.message}</p>}
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="password">Password</Label>
@@ -81,10 +81,10 @@ function Login() {
               aria-invalid={!!errors.password}
               {...form.register("password")}
             />
-            {errors.password && <p className="text-sm text-revoked">{errors.password.message}</p>}
+            {errors.password && <p className="text-[13px] text-danger-fg">{errors.password.message}</p>}
           </div>
           {signIn.error && (
-            <p role="alert" className="rounded-md bg-revoked-soft px-3 py-2 text-sm text-revoked">
+            <p role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-[13px] text-danger-fg">
               {errorMessage(signIn.error)}
             </p>
           )}

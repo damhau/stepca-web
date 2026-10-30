@@ -1,10 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { ChevronLeft } from "lucide-react"
 import { $api } from "@/api/client"
 import { Identifier } from "@/components/copy-button"
 import { DataTable } from "@/components/data-table"
-import { ErrorState, Fields, LoadingBlock, PageHeader, Section } from "@/components/page"
-import { AcmeStatusPill } from "@/components/status"
+import { AcmeStatus, ErrorState, Loading, PageHeader } from "@/components/kit"
+import { Fields, Section } from "@/components/page"
 import { orderColumns } from "@/features/acme-orders-table"
 import { formatDateTime, plural } from "@/lib/format"
 
@@ -17,47 +16,42 @@ function Account() {
   })
   return (
     <>
-      <Link
-        to="/acme/accounts"
-        className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="size-4" aria-hidden /> ACME accounts
-      </Link>
+      <p className="-mb-1 text-[13px] text-muted-foreground">
+        <Link to="/acme/accounts" className="text-muted-foreground hover:text-foreground">
+          ACME accounts
+        </Link>{" "}
+        / {id.slice(0, 12)}…
+      </p>
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : !data ? (
-        <LoadingBlock />
+        <Loading />
       ) : (
         <>
           <PageHeader
             title={data.account.contact.map((contact) => contact.replace(/^mailto:/, "")).join(", ") || "ACME account"}
             description={`${plural(data.orders.length, "order")}, through provisioner ${data.account.provisioner_name ?? "unknown"}.`}
           />
-          <div className="flex flex-col gap-6">
-            <Section title="Account">
-              <Fields
-                rows={[
-                  ["Id", <Identifier key="id" value={data.account.id} label="account id" />],
-                  ["Status", <AcmeStatusPill key="s" status={data.account.status} />],
-                  ["Created", formatDateTime(data.account.created_at)],
-                  ...(data.account.deactivated_at
-                    ? ([["Deactivated", formatDateTime(data.account.deactivated_at)]] as [string, string][])
-                    : []),
-                ]}
-              />
-            </Section>
-            <div>
-              <h2 className="mb-3 text-sm font-semibold">Orders</h2>
-              <DataTable
-                label="Orders of this account"
-                columns={orderColumns}
-                rows={data.orders}
-                rowId={(row) => row.id}
-                isPending={isPending}
-                empty="This account has placed no order."
-              />
-            </div>
-          </div>
+          <Section title="Account">
+            <Fields
+              rows={[
+                ["Id", <Identifier key="id" value={data.account.id} label="account id" />],
+                ["Status", <AcmeStatus key="s" status={data.account.status} />],
+                ["Created", formatDateTime(data.account.created_at)],
+                ...(data.account.deactivated_at
+                  ? ([["Deactivated", formatDateTime(data.account.deactivated_at)]] as [string, string][])
+                  : []),
+              ]}
+            />
+          </Section>
+          <DataTable
+            label="Orders of this account"
+            columns={orderColumns}
+            rows={data.orders}
+            rowId={(row) => row.id}
+            isPending={isPending}
+            empty="This account has placed no order."
+          />
         </>
       )}
     </>

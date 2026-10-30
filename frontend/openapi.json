@@ -779,6 +779,54 @@
         "title": "AcmeOrderPage",
         "type": "object"
       },
+      "ActivityItem": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serial"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "at",
+          "actor",
+          "action",
+          "subject",
+          "serial"
+        ],
+        "title": "ActivityItem",
+        "type": "object"
+      },
       "AdminCreate": {
         "properties": {
           "provisioner": {
@@ -1073,6 +1121,37 @@
         "title": "AuditPage",
         "type": "object"
       },
+      "Authority": {
+        "description": "The CA the app manages, as the top bar names it.",
+        "properties": {
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "environment",
+          "url"
+        ],
+        "title": "Authority",
+        "type": "object"
+      },
       "CaCertificate": {
         "properties": {
           "days_left": {
@@ -1227,6 +1306,70 @@
         "title": "CaStatus",
         "type": "object"
       },
+      "Callout": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "failed_renewals": {
+            "title": "Failed Renewals",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "expiring",
+              "acme_failures"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "not_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not After"
+          },
+          "serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serial"
+          }
+        },
+        "required": [
+          "kind",
+          "serial",
+          "name",
+          "not_after",
+          "failed_renewals",
+          "error"
+        ],
+        "title": "Callout",
+        "type": "object"
+      },
       "CertificateDetail": {
         "properties": {
           "acme_order_id": {
@@ -1273,6 +1416,46 @@
           "pem"
         ],
         "title": "CertificateDetail",
+        "type": "object"
+      },
+      "CertificateEvent": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "kind",
+          "label"
+        ],
+        "title": "CertificateEvent",
+        "type": "object"
+      },
+      "CertificateEvents": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CertificateEvent"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CertificateEvents",
         "type": "object"
       },
       "CertificateItem": {
@@ -1764,6 +1947,123 @@
         "title": "Extension",
         "type": "object"
       },
+      "Facets": {
+        "properties": {
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keys",
+            "type": "array"
+          },
+          "provisioners": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Provisioners",
+            "type": "array"
+          }
+        },
+        "required": [
+          "provisioners",
+          "keys"
+        ],
+        "title": "Facets",
+        "type": "object"
+      },
+      "Issuance": {
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/IssuanceBucket"
+            },
+            "title": "Buckets",
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "series",
+          "total",
+          "buckets"
+        ],
+        "title": "Issuance",
+        "type": "object"
+      },
+      "IssuanceBucket": {
+        "properties": {
+          "counts": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "array"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "counts"
+        ],
+        "title": "IssuanceBucket",
+        "type": "object"
+      },
+      "Kpi": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "previous": {
+            "title": "Previous",
+            "type": "integer"
+          },
+          "series": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "value": {
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "value",
+          "previous",
+          "series"
+        ],
+        "title": "Kpi",
+        "type": "object"
+      },
       "LoginBody": {
         "properties": {
           "password": {
@@ -1804,22 +2104,6 @@
         "title": "NameCount",
         "type": "object"
       },
-      "NameList": {
-        "properties": {
-          "names": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Names",
-            "type": "array"
-          }
-        },
-        "required": [
-          "names"
-        ],
-        "title": "NameList",
-        "type": "object"
-      },
       "Option": {
         "properties": {
           "label": {
@@ -1836,6 +2120,55 @@
           "label"
         ],
         "title": "Option",
+        "type": "object"
+      },
+      "Overview": {
+        "properties": {
+          "activity": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            },
+            "title": "Activity",
+            "type": "array"
+          },
+          "callout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Callout"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issuance": {
+            "$ref": "#/components/schemas/Issuance"
+          },
+          "kpis": {
+            "items": {
+              "$ref": "#/components/schemas/Kpi"
+            },
+            "title": "Kpis",
+            "type": "array"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "range": {
+            "title": "Range",
+            "type": "string"
+          }
+        },
+        "required": [
+          "range",
+          "kpis",
+          "issuance",
+          "callout",
+          "activity",
+          "pending"
+        ],
+        "title": "Overview",
         "type": "object"
       },
       "ProvisionerCreate": {
@@ -1918,6 +2251,17 @@
             ],
             "title": "Created At"
           },
+          "directory_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Directory Url"
+          },
           "disable_renewal": {
             "title": "Disable Renewal",
             "type": "boolean"
@@ -1939,6 +2283,10 @@
           "is_app_provisioner": {
             "title": "Is App Provisioner",
             "type": "boolean"
+          },
+          "issued_30d": {
+            "title": "Issued 30D",
+            "type": "integer"
           },
           "name": {
             "title": "Name",
@@ -1964,6 +2312,8 @@
           "acme",
           "created_at",
           "is_app_provisioner",
+          "directory_url",
+          "issued_30d",
           "raw"
         ],
         "title": "ProvisionerItem",
@@ -2054,6 +2404,57 @@
           }
         },
         "title": "ProvisionerUpdate",
+        "type": "object"
+      },
+      "Readiness": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ReadinessCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "checks"
+        ],
+        "title": "Readiness",
+        "type": "object"
+      },
+      "ReadinessCheck": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "done": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "done",
+          "detail"
+        ],
+        "title": "ReadinessCheck",
         "type": "object"
       },
       "Reference": {
@@ -2320,6 +2721,9 @@
             "title": "Authenticated",
             "type": "boolean"
           },
+          "authority": {
+            "$ref": "#/components/schemas/Authority"
+          },
           "csrf_token": {
             "title": "Csrf Token",
             "type": "string"
@@ -2361,7 +2765,8 @@
           "user",
           "role",
           "csrf_token",
-          "service_control"
+          "service_control",
+          "authority"
         ],
         "title": "SessionInfo",
         "type": "object"
@@ -2474,15 +2879,59 @@
       },
       "SignResult": {
         "properties": {
+          "chain_pem": {
+            "title": "Chain Pem",
+            "type": "string"
+          },
+          "pem": {
+            "title": "Pem",
+            "type": "string"
+          },
           "serial": {
             "title": "Serial",
             "type": "string"
           }
         },
         "required": [
-          "serial"
+          "serial",
+          "pem",
+          "chain_pem"
         ],
         "title": "SignResult",
+        "type": "object"
+      },
+      "StatusCounts": {
+        "description": "How many certificates each tab of the list holds.",
+        "properties": {
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "expired": {
+            "title": "Expired",
+            "type": "integer"
+          },
+          "expiring": {
+            "title": "Expiring",
+            "type": "integer"
+          },
+          "revoked": {
+            "title": "Revoked",
+            "type": "integer"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "valid",
+          "expiring",
+          "expired",
+          "revoked"
+        ],
+        "title": "StatusCounts",
         "type": "object"
       },
       "UnmatchedRevocation": {
@@ -3763,21 +4212,31 @@
             }
           },
           {
+            "description": "Any of these provisioners",
             "in": "query",
             "name": "provisioner",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 200,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "title": "Provisioner"
+              "description": "Any of these provisioners",
+              "items": {
+                "type": "string"
+              },
+              "title": "Provisioner",
+              "type": "array"
+            }
+          },
+          {
+            "description": "Any of these key types, such as \"RSA 2048\" or \"secp256r1\"",
+            "in": "query",
+            "name": "key",
+            "required": false,
+            "schema": {
+              "description": "Any of these key types, such as \"RSA 2048\" or \"secp256r1\"",
+              "items": {
+                "type": "string"
+              },
+              "title": "Key",
+              "type": "array"
             }
           },
           {
@@ -3882,15 +4341,68 @@
         ]
       }
     },
-    "/api/v1/certificates/provisioners": {
+    "/api/v1/certificates/bundle": {
       "get": {
-        "operationId": "api_certificates_certificate_provisioners_certificates_provisioners_get",
+        "operationId": "api_certificates_certificate_bundle_certificates_bundle_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "serial",
+            "required": true,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 200,
+              "minItems": 1,
+              "title": "Serial",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Several certificates as one PEM file",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/certificates/counts": {
+      "get": {
+        "operationId": "api_certificates_certificate_counts_certificates_counts_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NameList"
+                  "$ref": "#/components/schemas/StatusCounts"
                 }
               }
             },
@@ -3910,7 +4422,41 @@
             "description": "Unprocessable Entity"
           }
         },
-        "summary": "The provisioners that issued certificates",
+        "summary": "How many certificates each tab of the list holds",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/certificates/facets": {
+      "get": {
+        "operationId": "api_certificates_certificate_facets_certificates_facets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Facets"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "The values the list can be filtered on",
         "tags": [
           "Certificates"
         ]
@@ -4040,6 +4586,62 @@
           }
         },
         "summary": "PEM, DER, or PEM with the issuing intermediate",
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/certificates/{serial}/events": {
+      "get": {
+        "operationId": "api_certificates_certificate_events_certificates__serial__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "serial",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{1,80}$",
+              "title": "Serial",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateEvents"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "What happened to a certificate",
         "tags": [
           "Certificates"
         ]
@@ -4186,6 +4788,57 @@
             "description": "Unprocessable Entity"
           }
         },
+        "tags": [
+          "Certificates"
+        ]
+      }
+    },
+    "/api/v1/overview": {
+      "get": {
+        "operationId": "api_certificates_get_overview_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "default": "30d",
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "title": "Range",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Figures over a time range, what needs attention, recent activity",
         "tags": [
           "Certificates"
         ]
@@ -4427,6 +5080,40 @@
         },
         "tags": [
           "Provisioners and admins"
+        ]
+      }
+    },
+    "/api/v1/readiness": {
+      "get": {
+        "operationId": "api_certificates_get_readiness_readiness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "The deployment checked against the recommended setup",
+        "tags": [
+          "Certificates"
         ]
       }
     },

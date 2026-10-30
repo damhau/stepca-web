@@ -31,6 +31,7 @@ class TestSession:
         assert response.status_code == 200
         assert response.get_json() | {"csrf_token": "x"} == {
             "authenticated": True, "user": "operator", "role": "operator", "csrf_token": "x", "service_control": False,
+            "authority": {"name": "ca.test", "environment": None, "url": "https://ca.test:9000"},
         }
         api.token = response.get_json()["csrf_token"]
         assert api.get("/api/v1/dashboard").status_code == 200
@@ -211,7 +212,11 @@ class TestCertificates:
         ca_client.sign.side_effect = sign
         csr = make_csr("signed.test", sans=("signed.test",))
         response = api.post("/api/v1/certificates", json={"csr_pem": csr, "provisioner": "Admin JWK", "password": "pw", "valid_for": "48h"})
-        assert response.status_code == 201 and response.get_json() == {"serial": "88"}
+        body = response.get_json()
+        assert response.status_code == 201 and body["serial"] == "88"
+        assert x509.load_pem_x509_certificate(body["pem"].encode()).serial_number == 88
+        # The certificate, then the intermediate the CA reports (the test CA's fake client has none)
+        assert body["chain_pem"].startswith(body["pem"])
         ca_client.sign.assert_called_once_with(csr, "Admin JWK", "pw", not_after="48h")
         assert api.get("/api/v1/certificates/88").status_code == 200
         assert AuditEvent.query.filter_by(action="sign").one().target == "88"
@@ -320,6 +325,18 @@ class TestProvisioners:
         assert acme["acme"] == {"challenges": ["HTTP_01"], "require_eab": False, "force_cn": True}
         ca_client.list_provisioners.return_value = None
         assert api.get("/api/v1/provisioners").status_code == 502
+
+    def test_list_in_the_admin_apis_list_format(self, api, ca_client, step_db):
+        # What step-ca 0.30 answers to GET /admin/provisioners: its older JSON, not linkedca's
+        step_db.add_provisioner("prov-demo", "demo", created_at="2026-10-02T08:00:00Z")
+        step_db.add_provisioner("prov-web", "web", prov_type=6)
+        jwk = {"type": "JWK", "name": "demo", "claims": {"defaultTLSCertDuration": "2160h0m0s", "maxTLSCertDuration": "8760h0m0s", "disableRenewal": True}}
+        acme = {"type": "ACME", "name": "web", "claims": {}, "challenges": ["dns-01", "device-attest-01"], "requireEAB": True, "forceCN": True}
+        ca_client.list_provisioners.return_value = {"provisioners": [jwk, acme]}
+        demo, web = api.get("/api/v1/provisioners").get_json()["provisioners"]
+        assert demo["durations"] == {"min": None, "default": "2160h0m0s", "max": "8760h0m0s"} and demo["disable_renewal"]
+        assert demo["created_at"].startswith("2026-10-02") and web["created_at"] is None
+        assert web["acme"] == {"challenges": ["DNS_01"], "require_eab": True, "force_cn": True}
 
     def test_create(self, api, ca_client):
         body = {"name": "web", "type": "ACME", "durations": {"default": "24h", "max": ""}, "acme": {"challenges": ["DNS_01"], "require_eab": True}}
@@ -451,3 +468,102 @@ def test_dates_are_utc(api, step_db):
     step_db.add_cert(1, not_before=datetime.datetime(2026, 1, 2, 3, 4, 5, tzinfo=datetime.UTC))
     item = api.get("/api/v1/certificates").get_json()["items"][0]
     assert datetime.datetime.fromisoformat(item["not_before"]) == datetime.datetime(2026, 1, 2, 3, 4, 5, tzinfo=datetime.UTC)
+
+
+class TestRedesign:
+    """The endpoints of the certificate list's tabs and filters, the detail sheet, and the overview."""
+
+    @pytest.fixture
+    def inventory(self, step_db):
+        now = datetime.datetime.now(datetime.UTC)
+        step_db.add_cert(1, "web.test", days_valid=100, not_before=now - datetime.timedelta(days=95))  # expiring
+        step_db.add_cert(2, "db.test", days_valid=100, not_before=now - datetime.timedelta(days=2))
+        step_db.add_cert(3, "old.test", days_valid=10, not_before=now - datetime.timedelta(days=40))  # expired
+        step_db.add_cert(4, "acme.test", provisioner={"id": "prov-acme", "name": "acme", "type": "ACME"})
+        step_db.add_cert(5, "gone.test", days_valid=100, not_before=now - datetime.timedelta(days=3))
+        step_db.add_revocation(5)
+        return step_db
+
+    def test_counts_and_facets(self, api, inventory):
+        assert api.get("/api/v1/certificates/counts").get_json() == {"all": 5, "valid": 3, "expiring": 1, "expired": 1, "revoked": 1}
+        assert api.get("/api/v1/certificates/facets").get_json() == {"provisioners": ["Admin JWK", "acme"], "keys": ["secp256r1"]}
+
+    def test_several_provisioners_and_keys(self, api, inventory):
+        assert api.get("/api/v1/certificates?provisioner=acme").get_json()["total"] == 1
+        assert api.get("/api/v1/certificates?provisioner=acme&provisioner=Admin%20JWK").get_json()["total"] == 5
+        assert api.get("/api/v1/certificates?key=RSA%202048").get_json()["total"] == 0
+        assert api.get("/api/v1/certificates?key=secp256r1&provisioner=acme").get_json()["total"] == 1
+
+    def test_bundle(self, api, inventory):
+        response = api.get("/api/v1/certificates/bundle?serial=1&serial=2&serial=1")
+        assert [c.serial_number for c in x509.load_pem_x509_certificates(response.data)] == [1, 2]
+        assert api.get("/api/v1/certificates/bundle?serial=1&serial=99").status_code == 404
+        assert api.get("/api/v1/certificates/bundle").status_code == 422
+
+    def test_events(self, api, inventory):
+        kinds = [event["kind"] for event in api.get("/api/v1/certificates/5/events").get_json()["items"]]
+        assert kinds[0] == "expires" and "revoked" in kinds and kinds[-1] == "issued"
+        assert api.get("/api/v1/certificates/99/events").status_code == 404
+
+    def test_events_of_an_acme_certificate(self, api, step_db):
+        step_db.add_cert(7, "acme.test", provisioner={"id": "prov-acme", "name": "acme", "type": "ACME"})
+        step_db.add_acme_issuance(7, "acme.test")
+        labels = [event["label"] for event in api.get("/api/v1/certificates/7/events").get_json()["items"]]
+        assert "http-01 challenge validated for acme.test" in labels and "ACME order placed" in labels
+
+    def test_overview(self, api, inventory):
+        body = api.get("/api/v1/overview?range=7d").get_json()
+        kpis = {kpi["key"]: kpi for kpi in body["kpis"]}
+        assert kpis["active"]["value"] == 3 and len(kpis["active"]["series"]) == 8
+        # Issued in the last 7 days: db, acme and gone (revoked since)
+        assert kpis["issued"]["value"] == 3 and sum(kpis["issued"]["series"]) == 3
+        assert kpis["expiring"]["value"] == 1
+        assert body["issuance"]["series"] == ["Admin JWK", "acme"] and len(body["issuance"]["buckets"]) == 7
+        assert sum(sum(bucket["counts"]) for bucket in body["issuance"]["buckets"]) == 3
+        assert body["callout"]["kind"] == "expiring" and body["callout"]["serial"] == "1"
+        assert [event["action"] for event in body["activity"]][:1] == ["issued"]
+        assert api.get("/api/v1/overview?range=1y").status_code == 422
+
+    def test_callout_names_failed_acme_renewals(self, api, step_db):
+        from app.extensions import db
+        from app.models import acme as acme_tables
+
+        now = datetime.datetime.now(datetime.UTC)
+        step_db.add_cert(1, "web.test", days_valid=100, not_before=now - datetime.timedelta(days=95))
+        order = {"id": "failed", "accountID": "a", "identifiers": [{"type": "dns", "value": "web.test"}], "status": "invalid",
+                 "createdAt": now.isoformat(), "error": {"detail": "DNS-01 record not found"}}
+        db.session.add(acme_tables.AcmeOrder(nkey=b"failed", nvalue=json.dumps(order).encode()))
+        db.session.commit()
+        callout = api.get("/api/v1/overview").get_json()["callout"]
+        assert (callout["failed_renewals"], callout["error"]) == (1, "DNS-01 record not found")
+
+    def test_activity_names_who_revoked(self, api, ca_client, inventory):
+        ca_client.revoke.side_effect = lambda *args, **kwargs: inventory.add_revocation(2)
+        api.post("/api/v1/certificates/2/revoke", json={"reason_code": 0})
+        activity = api.get("/api/v1/overview").get_json()["activity"]
+        assert {"actor": "admin", "action": "revoked", "subject": "db.test"}.items() <= next(a for a in activity if a["action"] == "revoked").items()
+
+    def test_readiness(self, api, ca_client):
+        ca_client.crl.return_value = None
+        ca_client.intermediates.return_value = []
+        checks = {check["key"]: check for check in api.get("/api/v1/readiness").get_json()["checks"]}
+        assert checks["identity"]["done"] is False  # the test identity is a SUPER_ADMIN
+        assert checks["key"]["done"] is True
+        assert checks["https"]["done"] is False
+        assert checks["crl"]["done"] is False
+        ca_client.crl.side_effect = requests.ConnectionError("down")
+        checks = {check["key"]: check for check in api.get("/api/v1/readiness").get_json()["checks"]}
+        assert checks["crl"]["done"] is None
+
+    def test_provisioner_extras(self, api, ca_client, step_db):
+        step_db.add_cert(4, "acme.test", provisioner={"id": "prov-acme", "name": "acme", "type": "ACME"})
+        ca_client.list_provisioners.return_value = {"provisioners": [ACME_FROM_API]}
+        (acme,) = api.get("/api/v1/provisioners").get_json()["provisioners"]
+        assert acme["directory_url"] == "https://ca.test:9000/acme/acme/directory" and acme["issued_30d"] == 1
+
+    def test_authority_name_and_environment(self, app):
+        from app import create_app
+
+        named = create_app(app.extensions["settings"].model_copy(update={"ca_display_name": "Corp CA", "ca_environment": "Production"}))
+        body = named.test_client().get("/api/v1/session").get_json()
+        assert body["authority"] == {"name": "Corp CA", "environment": "Production", "url": "https://ca.test:9000"}

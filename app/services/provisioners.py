@@ -8,7 +8,8 @@ added since the CA started), and the provisioner lists of pages that don't call 
 
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from urllib.parse import quote
 
 from app.libs.provisioners import ACME_CHALLENGES
 from app.services import ca
@@ -96,34 +97,69 @@ def search_admins():
     return [(admin, names.get(admin.provisioner_id)) for admin in store.admins()]
 
 
-def summary(provisioner, ids_by_name=None, app_provisioner=None):
-    """A provisioner as the Admin API returns it, with its settings the forms show."""
+# The list (GET /admin/provisioners) has step-ca's older JSON: claims as "maxTLSCertDuration" and the like, ACME
+# settings at the top. A single provisioner (GET /admin/provisioners/{name}) is linkedca's protobuf JSON.
+LIST_CHALLENGES = {value: name for name, value in ACME_CHALLENGES}
+
+
+def _durations(claims):
+    linked = (claims.get("x509") or {}).get("durations")
+    if linked is not None:
+        return linked
+    listed = {
+        "min": claims.get("minTLSCertDuration"),
+        "default": claims.get("defaultTLSCertDuration"),
+        "max": claims.get("maxTLSCertDuration"),
+    }
+    return {key: value for key, value in listed.items() if value}
+
+
+def _acme(provisioner):
+    linked = (provisioner.get("details") or {}).get("ACME")
+    if linked is not None:
+        challenges, require_eab, force_cn = linked.get("challenges", []), linked.get("requireEab"), linked.get("forceCn")
+    else:
+        challenges = [LIST_CHALLENGES.get(c, c) for c in provisioner.get("challenges") or []]
+        require_eab, force_cn = provisioner.get("requireEAB"), provisioner.get("forceCN")
+    return {
+        # Only the ones the forms offer
+        "challenges": [c for c in challenges if c in {name for name, _ in ACME_CHALLENGES}],
+        "require_eab": bool(require_eab),
+        "force_cn": bool(force_cn),
+    }
+
+
+def summary(provisioner, ids_by_name=None, app_provisioner=None, issued=None, ca_url=None, created=None):
+    """A provisioner as either Admin API call returns it, with its settings the forms show."""
     claims = provisioner.get("claims") or {}
-    x509 = claims.get("x509") or {}
-    acme = (provisioner.get("details") or {}).get("ACME")
+    name = provisioner.get("name", "")
     created_at = provisioner.get("createdAt")
     return {
-        "name": provisioner.get("name", ""),
+        "name": name,
         "type": provisioner.get("type", ""),
-        "id": provisioner.get("id") or (ids_by_name or {}).get(provisioner.get("name")),
-        "durations": x509.get("durations") or {},
+        "id": provisioner.get("id") or (ids_by_name or {}).get(name),
+        "durations": _durations(claims),
         "disable_renewal": bool(claims.get("disableRenewal")),
         "allow_renewal_after_expiry": bool(claims.get("allowRenewalAfterExpiry")),
-        "acme": None
-        if provisioner.get("type") != "ACME"
-        else {
-            # Only the ones the forms offer
-            "challenges": [c for c in (acme or {}).get("challenges", []) if c in {name for name, _ in ACME_CHALLENGES}],
-            "require_eab": bool((acme or {}).get("requireEab")),
-            "force_cn": bool((acme or {}).get("forceCn")),
-        },
-        "created_at": store.go_time(created_at) if isinstance(created_at, str) else None,
-        "is_app_provisioner": provisioner.get("name") == app_provisioner,
+        "acme": _acme(provisioner) if provisioner.get("type") == "ACME" else None,
+        "created_at": store.go_time(created_at) if isinstance(created_at, str) else (created or {}).get(name),
+        "is_app_provisioner": name == app_provisioner,
+        "directory_url": f"{ca_url.rstrip('/')}/acme/{quote(name, safe='')}/directory"
+        if ca_url and provisioner.get("type") == "ACME"
+        else None,
+        "issued_30d": (issued or {}).get(name, 0),
         "raw": provisioner,
     }
 
 
 def summaries(listed):
-    ids_by_name = {name: provisioner_id for provisioner_id, name in names_by_id().items()}
-    app_provisioner = ca.client().provisioner_name
-    return [summary(provisioner, ids_by_name, app_provisioner) for provisioner in listed]
+    from app.services import inventory
+
+    stored = store.provisioners()
+    ids_by_name = {p.name: p.id for p in stored}
+    created = {p.name: p.created_at for p in stored}
+    client = ca.client()
+    inventory.refresh()
+    when = datetime.now(UTC)
+    issued = inventory.issued_by_provisioner(when - timedelta(days=30), when)
+    return [summary(provisioner, ids_by_name, client.provisioner_name, issued, client.ca_url, created) for provisioner in listed]

@@ -48,13 +48,13 @@ export function Toaster() {
           role={item.tone === "error" ? "alert" : "status"}
           className={cn(
             "pointer-events-auto flex animate-in items-start gap-3 rounded-lg border bg-popover p-3 text-sm shadow-lg fade-in-0 slide-in-from-bottom-2",
-            item.tone === "error" ? "border-revoked/40" : "border-valid/40",
+            item.tone === "error" ? "border-danger-border" : "border-border",
           )}
         >
           {item.tone === "error" ? (
-            <CircleAlert className="mt-0.5 size-4 shrink-0 text-revoked" aria-hidden />
+            <CircleAlert className="mt-0.5 size-4 shrink-0 text-danger-fg" aria-hidden />
           ) : (
-            <CircleCheck className="mt-0.5 size-4 shrink-0 text-valid" aria-hidden />
+            <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
           )}
           <p className="min-w-0 flex-1 break-words">{item.message}</p>
           <button

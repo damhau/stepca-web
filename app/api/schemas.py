@@ -50,6 +50,15 @@ class PageInfo(Model):
 # --- Session --------------------------------------------------------------------------------------------
 
 
+class Authority(Model):
+    """The CA the app manages, as the top bar names it."""
+
+    name: str
+    # Such as "Production" (CA_ENVIRONMENT); None: no badge
+    environment: str | None
+    url: str
+
+
 class SessionInfo(Model):
     authenticated: bool
     user: str | None
@@ -57,6 +66,7 @@ class SessionInfo(Model):
     # Sent back in the X-CSRFToken header of every POST, PUT, PATCH and DELETE
     csrf_token: str
     service_control: bool
+    authority: Authority
 
 
 class LoginBody(BaseModel):
@@ -93,7 +103,8 @@ class CertificateItem(Model):
 class CertificateListQuery(ListQuery):
     status: StatusFilter = "all"
     days: int = Field(30, ge=1, le=3650, description="With status=expiring: expires within this many days. Certificates issued for 30 days or less are left out")
-    provisioner: str | None = Field(None, max_length=200)
+    provisioner: list[str] = Field(default_factory=list, description="Any of these provisioners")
+    key: list[str] = Field(default_factory=list, description='Any of these key types, such as "RSA 2048" or "secp256r1"')
     sort: SortKey = "not_before"
     order: Literal["asc", "desc"] = "desc"
 
@@ -158,6 +169,9 @@ class SignBody(BaseModel):
 
 class SignResult(Model):
     serial: str
+    # The certificate, and the certificate followed by the intermediate that issued it
+    pem: str
+    chain_pem: str
 
 
 class CsrBody(BaseModel):
@@ -184,6 +198,101 @@ class UnmatchedRevocationList(Model):
 
 class NameList(Model):
     names: list[str]
+
+
+class StatusCounts(Model):
+    """How many certificates each tab of the list holds."""
+
+    all: int
+    valid: int
+    expiring: int
+    expired: int
+    revoked: int
+
+
+class Facets(Model):
+    provisioners: list[str]
+    keys: list[str]
+
+
+class BundleQuery(BaseModel):
+    serial: list[str] = Field(min_length=1, max_length=200)
+
+
+class CertificateEvent(Model):
+    at: datetime
+    # issued, ok, info, revoked, expires, expired
+    kind: str
+    label: str
+
+
+class CertificateEvents(Model):
+    items: list[CertificateEvent]
+
+
+class OverviewQuery(BaseModel):
+    range: Literal["24h", "7d", "30d"] = "30d"
+
+
+class Kpi(Model):
+    key: str
+    label: str
+    value: int
+    # The value at the start of the range (active, expiring), or over the range before (issued, revoked)
+    previous: int
+    series: list[int]
+
+
+class IssuanceBucket(Model):
+    start: datetime
+    end: datetime
+    # In the order of Issuance.series
+    counts: list[int]
+
+
+class Issuance(Model):
+    series: list[str]
+    total: int
+    buckets: list[IssuanceBucket]
+
+
+class Callout(Model):
+    # expiring: a long-lived certificate ends within 7 days; acme_failures: ACME orders failed in the last day
+    kind: Literal["expiring", "acme_failures"]
+    serial: str | None
+    name: str
+    not_after: datetime | None
+    failed_renewals: int
+    error: str | None
+
+
+class ActivityItem(Model):
+    at: datetime
+    actor: str
+    action: str
+    subject: str | None
+    serial: str | None
+
+
+class Overview(Model):
+    range: str
+    kpis: list[Kpi]
+    issuance: Issuance
+    callout: Callout | None
+    activity: list[ActivityItem]
+    pending: int
+
+
+class ReadinessCheck(Model):
+    key: str
+    label: str
+    # None: it couldn't be told (the CA didn't answer)
+    done: bool | None
+    detail: str
+
+
+class Readiness(Model):
+    checks: list[ReadinessCheck]
 
 
 class NameCount(Model):
@@ -378,6 +487,10 @@ class ProvisionerItem(Model):
     created_at: datetime | None
     # The app's own provisioner: it must keep issuing the app's 24-hour admin certificate
     is_app_provisioner: bool
+    # ACME: where clients find it
+    directory_url: str | None
+    # Certificates it issued in the last 30 days
+    issued_30d: int
     # The provisioner as step-ca's Admin API returns it
     raw: dict[str, Any]
 

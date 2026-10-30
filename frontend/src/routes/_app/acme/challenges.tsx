@@ -3,10 +3,9 @@ import { createFileRoute } from "@tanstack/react-router"
 import { $api } from "@/api/client"
 import type { AcmeChallengeItem } from "@/api/types"
 import { columnHelper, DataTable } from "@/components/data-table"
-import { ExportLink, FilterInput, Toolbar } from "@/components/list-toolbar"
-import { PageHeader } from "@/components/page"
-import { AcmeStatusPill } from "@/components/status"
-import { AcmeLink, acmeQuery, acmeSearch, StatusFilter, type AcmeSearch } from "@/features/acme"
+import { AcmeStatus } from "@/components/kit"
+import { ChoiceFilter, ExportButton, SearchBox, Toolbar } from "@/components/list-tools"
+import { AcmeLink, acmeQuery, acmeSearch, AcmeHeader, type AcmeSearch } from "@/features/acme"
 import { formatDateTime } from "@/lib/format"
 
 const STATUSES = ["pending", "processing", "valid", "invalid"] as const
@@ -20,23 +19,33 @@ const helper = columnHelper<AcmeChallengeItem>()
 const columns = helper.columns([
   helper.accessor("type", {
     header: "Type",
-    cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+    cell: ({ getValue }) => <span className="font-mono text-[13px] font-medium">{getValue()}</span>,
   }),
-  helper.accessor("value", { header: "For" }),
+  helper.accessor("value", {
+    header: "For",
+    cell: ({ getValue }) => <span className="font-mono text-[13px]">{getValue()}</span>,
+  }),
   helper.accessor("status", {
     header: "Status",
     cell: ({ row }) => (
-      <div className="flex flex-col items-start gap-1">
-        <AcmeStatusPill status={row.original.status} />
+      <div className="flex flex-col items-start gap-0.5 py-1">
+        <AcmeStatus status={row.original.status} />
         {row.original.error && (
-          <span className="max-w-72 text-xs whitespace-normal text-revoked">{row.original.error}</span>
+          <span className="max-w-72 text-xs whitespace-normal text-danger-fg">{row.original.error}</span>
         )}
       </div>
     ),
   }),
-  helper.accessor("validated_at", { header: "Validated", cell: ({ getValue }) => formatDateTime(getValue()) }),
-  helper.accessor("created_at", { header: "Created", cell: ({ getValue }) => formatDateTime(getValue()) }),
-  helper.accessor("order_id", { header: "Order", cell: ({ getValue }) => <AcmeLink kind="order" id={getValue()} /> }),
+  helper.accessor("validated_at", {
+    header: "Validated",
+    meta: { className: "whitespace-nowrap text-muted-foreground" },
+    cell: ({ getValue }) => formatDateTime(getValue()),
+  }),
+  helper.accessor("order_id", {
+    header: "Order",
+    meta: { className: "pr-4" },
+    cell: ({ getValue }) => <AcmeLink kind="order" id={getValue()} />,
+  }),
 ])
 
 function Challenges() {
@@ -53,18 +62,24 @@ function Challenges() {
     navigate({ search: (previous) => ({ ...previous, page: undefined, ...changes }), replace: true })
   return (
     <>
-      <PageHeader
-        title="ACME challenges"
+      <AcmeHeader
         description="The ways a client offered to prove control of a name (http-01, dns-01, tls-alpn-01), and which one worked."
-        actions={<ExportLink path="/api/v1/acme/challenges" query={query} />}
+        actions={<ExportButton path="/api/v1/acme/challenges" query={query} />}
       />
       <Toolbar>
-        <FilterInput
+        <SearchBox
+          id="acme-search"
           value={search.q ?? ""}
           onChange={(q) => update({ q: q || undefined })}
-          placeholder="Filter by name, type or id"
+          placeholder="Search by name, type or id"
         />
-        <StatusFilter value={search.status} statuses={STATUSES} onChange={(status) => update({ status })} />
+        <ChoiceFilter
+          label="Status"
+          any="Any status"
+          value={search.status}
+          options={STATUSES}
+          onChange={(status) => update({ status })}
+        />
       </Toolbar>
       <DataTable
         label="ACME challenges"
@@ -80,7 +95,6 @@ function Challenges() {
           page: query.page,
           perPage: query.per_page,
           onPage: (page) => navigate({ search: (previous) => ({ ...previous, page }) }),
-          onPerPage: (per_page) => update({ per_page }),
         }}
       />
     </>

@@ -14,16 +14,16 @@ bp = Blueprint("web", __name__)
 MOVED = {
     "/auth/login": "/login",
     "/x509/all": "/certificates",
-    "/x509/active": "/certificates?status=valid",
-    "/x509/expiring": "/certificates?status=expiring",
-    "/x509/revoked": "/certificates?status=revoked",
+    "/x509/active": "/certificates",
+    "/x509/expiring": "/certificates?tab=expiring",
+    "/x509/revoked": "/certificates?tab=revoked",
     "/acme/certs": "/acme/certificates",
     "/acme/authzs": "/acme/authorizations",
     "/step/provisioners": "/provisioners",
     "/step/admins": "/admins",
     "/step/ca": "/ca",
     "/step/service": "/service",
-    "/system/config": "/settings",
+    "/system/config": "/ca?tab=configuration",
     "/system/audit": "/audit",
 }
 MOVED_PREFIXES = {"/x509/cert/": "/certificates/", "/acme/account/": "/acme/accounts/", "/acme/order/": "/acme/orders/"}

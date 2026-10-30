@@ -233,15 +233,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/certificates/provisioners": {
+    "/api/v1/certificates/bundle": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** The provisioners that issued certificates */
-        get: operations["api_certificates_certificate_provisioners_certificates_provisioners_get"];
+        /** Several certificates as one PEM file */
+        get: operations["api_certificates_certificate_bundle_certificates_bundle_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many certificates each tab of the list holds */
+        get: operations["api_certificates_certificate_counts_certificates_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The values the list can be filtered on */
+        get: operations["api_certificates_certificate_facets_certificates_facets_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -275,6 +309,23 @@ export interface paths {
         };
         /** PEM, DER, or PEM with the issuing intermediate */
         get: operations["api_certificates_download_certificate_certificates__serial__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/{serial}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What happened to a certificate */
+        get: operations["api_certificates_certificate_events_certificates__serial__events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -332,6 +383,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Figures over a time range, what needs attention, recent activity */
+        get: operations["api_certificates_get_overview_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/provisioners": {
         parameters: {
             query?: never;
@@ -359,6 +427,23 @@ export interface paths {
         put: operations["api_provisioners_update_provisioner_provisioners__name__put"];
         post?: never;
         delete: operations["api_provisioners_delete_provisioner_provisioners__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The deployment checked against the recommended setup */
+        get: operations["api_certificates_get_readiness_readiness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -682,6 +767,22 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** ActivityItem */
+        ActivityItem: {
+            /** Action */
+            action: string;
+            /** Actor */
+            actor: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Serial */
+            serial: string | null;
+            /** Subject */
+            subject: string | null;
+        };
         /** AdminCreate */
         AdminCreate: {
             /**
@@ -774,6 +875,18 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * Authority
+         * @description The CA the app manages, as the top bar names it.
+         */
+        Authority: {
+            /** Environment */
+            environment: string | null;
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+        };
         /** CaCertificate */
         CaCertificate: {
             /** Days Left */
@@ -821,6 +934,24 @@ export interface components {
             /** Version Tested */
             version_tested: boolean;
         };
+        /** Callout */
+        Callout: {
+            /** Error */
+            error: string | null;
+            /** Failed Renewals */
+            failed_renewals: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "expiring" | "acme_failures";
+            /** Name */
+            name: string;
+            /** Not After */
+            not_after: string | null;
+            /** Serial */
+            serial: string | null;
+        };
         /** CertificateDetail */
         CertificateDetail: {
             /** Acme Order Id */
@@ -831,6 +962,23 @@ export interface components {
             /** Pem */
             pem: string;
             revocation: components["schemas"]["RevocationInfo"] | null;
+        };
+        /** CertificateEvent */
+        CertificateEvent: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+        };
+        /** CertificateEvents */
+        CertificateEvents: {
+            /** Items */
+            items: components["schemas"]["CertificateEvent"][];
         };
         /** CertificateItem */
         CertificateItem: {
@@ -989,6 +1137,50 @@ export interface components {
             /** Value */
             value: string;
         };
+        /** Facets */
+        Facets: {
+            /** Keys */
+            keys: string[];
+            /** Provisioners */
+            provisioners: string[];
+        };
+        /** Issuance */
+        Issuance: {
+            /** Buckets */
+            buckets: components["schemas"]["IssuanceBucket"][];
+            /** Series */
+            series: string[];
+            /** Total */
+            total: number;
+        };
+        /** IssuanceBucket */
+        IssuanceBucket: {
+            /** Counts */
+            counts: number[];
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /** Kpi */
+        Kpi: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Previous */
+            previous: number;
+            /** Series */
+            series: number[];
+            /** Value */
+            value: number;
+        };
         /** LoginBody */
         LoginBody: {
             /** Password */
@@ -1003,17 +1195,25 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** NameList */
-        NameList: {
-            /** Names */
-            names: string[];
-        };
         /** Option */
         Option: {
             /** Label */
             label: string;
             /** Value */
             value: string;
+        };
+        /** Overview */
+        Overview: {
+            /** Activity */
+            activity: components["schemas"]["ActivityItem"][];
+            callout: components["schemas"]["Callout"] | null;
+            issuance: components["schemas"]["Issuance"];
+            /** Kpis */
+            kpis: components["schemas"]["Kpi"][];
+            /** Pending */
+            pending: number;
+            /** Range */
+            range: string;
         };
         /** ProvisionerCreate */
         ProvisionerCreate: {
@@ -1041,6 +1241,8 @@ export interface components {
             allow_renewal_after_expiry: boolean;
             /** Created At */
             created_at: string | null;
+            /** Directory Url */
+            directory_url: string | null;
             /** Disable Renewal */
             disable_renewal: boolean;
             durations: components["schemas"]["Durations"];
@@ -1048,6 +1250,8 @@ export interface components {
             id: string | null;
             /** Is App Provisioner */
             is_app_provisioner: boolean;
+            /** Issued 30D */
+            issued_30d: number;
             /** Name */
             name: string;
             /** Raw */
@@ -1093,6 +1297,22 @@ export interface components {
              */
             disable_renewal: boolean;
             durations?: components["schemas"]["Durations"];
+        };
+        /** Readiness */
+        Readiness: {
+            /** Checks */
+            checks: components["schemas"]["ReadinessCheck"][];
+        };
+        /** ReadinessCheck */
+        ReadinessCheck: {
+            /** Detail */
+            detail: string;
+            /** Done */
+            done: boolean | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
         };
         /**
          * Reference
@@ -1175,6 +1395,7 @@ export interface components {
         SessionInfo: {
             /** Authenticated */
             authenticated: boolean;
+            authority: components["schemas"]["Authority"];
             /** Csrf Token */
             csrf_token: string;
             /** Role */
@@ -1222,8 +1443,28 @@ export interface components {
         };
         /** SignResult */
         SignResult: {
+            /** Chain Pem */
+            chain_pem: string;
+            /** Pem */
+            pem: string;
             /** Serial */
             serial: string;
+        };
+        /**
+         * StatusCounts
+         * @description How many certificates each tab of the list holds.
+         */
+        StatusCounts: {
+            /** All */
+            all: number;
+            /** Expired */
+            expired: number;
+            /** Expiring */
+            expiring: number;
+            /** Revoked */
+            revoked: number;
+            /** Valid */
+            valid: number;
         };
         /** UnmatchedRevocation */
         UnmatchedRevocation: {
@@ -1852,7 +2093,10 @@ export interface operations {
                 status?: "all" | "valid" | "expiring" | "expired" | "not_yet_valid" | "revoked";
                 /** @description With status=expiring: expires within this many days. Certificates issued for 30 days or less are left out */
                 days?: number;
-                provisioner?: string | null;
+                /** @description Any of these provisioners */
+                provisioner?: string[];
+                /** @description Any of these key types, such as "RSA 2048" or "secp256r1" */
+                key?: string[];
                 sort?: "not_after" | "not_before" | "subject" | "serial" | "provisioner";
                 order?: "asc" | "desc";
             };
@@ -1915,7 +2159,45 @@ export interface operations {
             };
         };
     };
-    api_certificates_certificate_provisioners_certificates_provisioners_get: {
+    api_certificates_certificate_bundle_certificates_bundle_get: {
+        parameters: {
+            query: {
+                serial: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
+                };
+            };
+        };
+    };
+    api_certificates_certificate_counts_certificates_counts_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1930,7 +2212,36 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NameList"];
+                    "application/json": components["schemas"]["StatusCounts"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
+                };
+            };
+        };
+    };
+    api_certificates_certificate_facets_certificates_facets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Facets"];
                 };
             };
             /** @description Unprocessable Entity */
@@ -2029,6 +2340,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    api_certificates_certificate_events_certificates__serial__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serial: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateEvents"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
                 };
             };
         };
@@ -2135,6 +2486,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
+                };
+            };
+        };
+    };
+    api_certificates_get_overview_overview_get: {
+        parameters: {
+            query?: {
+                range?: "24h" | "7d" | "30d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Overview"];
                 };
             };
             /** @description Unprocessable Entity */
@@ -2330,6 +2712,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    api_certificates_get_readiness_readiness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Readiness"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
                 };
             };
         };

@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     # The app's admin identity on the CA: this subject on this provisioner
     ca_admin_provisioner_name: str = "Admin JWK"
     ca_admin_subject: str = "step"
+    # How the top bar names the CA (its URL's host by default), and an environment badge such as "Production"
+    ca_display_name: str | None = None
+    ca_environment: str | None = None
     # The provisioner's password, to decrypt its key in memory (otherwise jwk_key.json is read)
     ca_admin_password_file: Path | None = None
     ca_admin_password: SecretStr | None = None

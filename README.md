@@ -1,6 +1,6 @@
 # Step CA Admin
 
-A web-based dashboard for managing [Step CA](https://smallstep.com/docs/step-ca) – the open-source certificate authority. A React frontend over a Flask JSON API, it lets you browse ACME objects and X.509 certificates, sign and revoke certificates, and manage provisioners and admins.
+A web-based dashboard for managing [Step CA](https://smallstep.com/docs/step-ca) – the open-source certificate authority. A React frontend over a Flask JSON API, it lets you browse ACME objects and X.509 certificates, issue and revoke certificates, and manage provisioners and admins.
 
 ## What is Step CA?
 
@@ -21,16 +21,17 @@ https://smallstep.com/docs/step-ca
 
 ## Features
 
+- **Overview**: active, issued, expiring and revoked certificates over 24 hours, 7 or 30 days, with their trend; issuance by provisioner; the certificate that needs attention first (the soonest to expire, with its failed ACME renewals); the authority's health; production readiness checks; recent activity.
 - **X.509 certificates**
-  - All, valid, expiring (7, 30 or 90 days), expired and revoked certificates, filtered, sorted and paged by the server, with each certificate's lifetime drawn to scale. Certificates issued for 30 days or less (step-ca's default is 24 hours) are short-lived and never counted as expiring: they are meant to renew themselves.
-  - A page per certificate: details, extensions, revocation status and reason; PEM, chain and DER downloads.
-  - Sign a CSR (pasted or uploaded, previewed, with a chosen validity) with a JWK provisioner; revoke with an RFC 5280 reason.
+  - All, expiring soon, revoked and expired certificates as tabs with counts; searched by name, SAN or serial, filtered by provisioner and key type, sorted and paged by the server. Certificates issued for 30 days or less (step-ca's default is 24 hours) are short-lived and never counted as expiring: they are meant to renew themselves.
+  - A panel beside the list for each certificate: names, serial, provisioner, key, validity, issuer, ACME order, revocation, extensions; its events (issued, ACME order, revoked); its PEM; PEM, chain and DER downloads.
+  - **New certificate:** a key pair made in the browser (ECDSA P-256 or P-384, Ed25519, RSA 2048: only its CSR is sent) or an uploaded CSR, signed by a JWK provisioner with its password, for a chosen validity. Then download a PEM bundle, the key, or a Kubernetes TLS Secret; the equivalent step CLI command is shown.
+  - Select several certificates to download them as one PEM bundle or revoke them together; revoke with an RFC 5280 reason.
 - **ACME** (read-only): accounts, orders, certificates, authorizations and challenges, and the drill-down from an account to its orders, from an order to its authorizations, challenges and certificate.
-- **Provisioners**: list, add (JWK, ACME), edit (durations, renewal, ACME options) and delete.
+- **Provisioners**: list, add (JWK, ACME) and delete; a settings page for each (lifetimes, renewal, ACME challenges and options) that saves its changes together. ACME provisioners show their directory URL and a cert-manager ClusterIssuer with the CA's root; JWK provisioners a step CLI command. Their latest certificates and changes.
 - **Admins**: list, add, change type and delete (when the app's CA identity is a super admin).
-- **CA status**: health, version, root and intermediate certificates with their expiry, the CRL.
-- **Dashboard**: the renewals due in the next 13 weeks, the inventory by status, certificates per provisioner, ACME orders by status.
-- **Search** across certificates (serial in decimal or hex, subject, DNS name), ACME accounts and orders, provisioners and admins; **CSV export** of any list, every matching row.
+- **Authority**: health, version, root and intermediate certificates with their expiry, the CRL; the app's settings in effect (admins).
+- **Search** across certificates (serial in decimal or hex, subject, DNS name), ACME accounts and orders, provisioners and admins, from a command palette (⌘K or Ctrl+K, or `/`) that also runs actions and opens pages; **CSV export** of any list, every matching row.
 - **Roles and audit log**: viewer, operator and admin roles; every change and sign-in is recorded.
 - **Systemd service control** (optional, off by default): start, stop or restart step-ca.
 
@@ -45,7 +46,7 @@ stepca-web/
 │   ├── settings.py        # typed settings: environment, then settings.json, then defaults
 │   ├── api/               # the JSON API under /api/v1: pydantic models (schemas.py) and routes
 │   ├── web.py             # serves the built frontend, and redirects the old pages' URLs
-│   ├── services/          # what the API returns: certificates, inventory, acme, provisioners, dashboard, search, ca
+│   ├── services/          # what the API returns: certificates, inventory, acme, provisioners, overview, dashboard, search, ca
 │   ├── stepca/            # everything that knows step-ca
 │   │   ├── client.py      # its API: Admin API (x5c token), sign and revoke (JWK token), public endpoints
 │   │   ├── store.py       # its database: the key/value tables, read into records
@@ -74,28 +75,30 @@ The certificate lists read an **inventory** in the app's own database (`app/serv
 
 ### Pages and API
 
-The frontend's pages are `/`, `/certificates` (`?status=valid|expiring|expired|revoked`), `/certificates/<serial>`, `/acme/accounts[/<id>]`, `/acme/orders[/<id>]`, `/acme/authorizations`, `/acme/challenges`, `/acme/certificates`, `/ca`, `/provisioners[/<name>]`, `/admins`, `/settings`, `/audit`, `/search?q=` and `/service`. The old pages' URLs (`/x509/cert/<serial>`, `/step/provisioners`, ...) redirect to them.
+The frontend's pages are `/` (`?range=24h|7d`), `/certificates` (`?tab=expiring|revoked|expired`; `cert=<serial>` opens a certificate's panel), `/acme/orders[/<id>]`, `/acme/accounts[/<id>]`, `/acme/authorizations`, `/acme/challenges`, `/acme/certificates`, `/provisioners[/<name>]`, `/ca` (`?tab=configuration`), `/admins`, `/audit`, `/search?q=` and `/service`. `/certificates/<serial>`, `/acme` and `/settings` lead to them, and so do the old pages' URLs (`/x509/cert/<serial>`, `/step/provisioners`, ...).
 
 Everything the frontend shows comes from the JSON API under `/api/v1`, documented by `frontend/openapi.json` (regenerate it with `uv run python -m app.api.openapi`):
 
 - `GET/POST/DELETE /api/v1/session` – who is signed in and the CSRF token; sign in; sign out
-- `GET /api/v1/certificates` – filtered (`status`, `days`, `q`, `provisioner`), sorted (`sort`, `order`) and paged (`page`, `per_page`); `format=csv` returns every matching row as a file. The ACME lists and the audit log take the same `q`, `page`, `per_page` and `format`
-- `GET /api/v1/certificates/<serial>`, `/download?format=pem|chain|der`; `POST /api/v1/certificates` (sign a CSR), `/<serial>/revoke` (operator)
+- `GET /api/v1/certificates` – filtered (`status`, `days`, `q`, and `provisioner` and `key`, each repeatable), sorted (`sort`, `order`) and paged (`page`, `per_page`); `format=csv` returns every matching row as a file. The ACME lists and the audit log take the same `q`, `page`, `per_page` and `format`
+- `GET /api/v1/certificates/counts` (per tab), `/facets` (the provisioners and key types to filter on), `/bundle?serial=…` (several certificates as one PEM file)
+- `GET /api/v1/certificates/<serial>`, `/<serial>/events`, `/<serial>/download?format=pem|chain|der`; `POST /api/v1/certificates` (sign a CSR; returns the certificate and its chain), `/<serial>/revoke` (operator)
 - `GET /api/v1/acme/{accounts,orders,authorizations,challenges,certificates}`, `/acme/accounts/<id>`, `/acme/orders/<id>`
 - `GET/POST/PUT/DELETE /api/v1/provisioners[/<name>]`, `GET/POST/PATCH/DELETE /api/v1/admins[/<id>]` (changes: admin)
 - `GET /api/v1/ca`, `/ca/roots.pem`, `/ca/intermediates.pem`, `/ca/crl?format=der|pem`
-- `GET /api/v1/dashboard`, `/search?q=`, `/settings` and `/audit` (admin), `POST /api/v1/service` (admin, if enabled)
+- `GET /api/v1/overview?range=24h|7d|30d`, `/readiness`, `/dashboard`, `/search?q=`, `/settings` and `/audit` (admin), `POST /api/v1/service` (admin, if enabled)
 
 Every API route needs a session except `/api/v1/session`; writes need the session's CSRF token in an `X-CSRFToken` header, and a role (see [Roles](#roles)). Errors are `{"error": "..."}`. Scripts can use it the same way: `GET /api/v1/session` for a token, `POST` it with the credentials, then send the new token with each write.
 
 
 ## Frontend
 
-- **Built with** Vite, React, TypeScript, Tailwind CSS and [shadcn/ui](https://ui.shadcn.com) components (Radix), TanStack Router, Query and Table. The API types are generated from `frontend/openapi.json`, so the frontend stops compiling when it no longer matches the API.
+- **Built with** Vite, React, TypeScript, Tailwind CSS and [shadcn/ui](https://ui.shadcn.com) components (Radix), TanStack Router, Query and Table, cmdk for the command palette and [@peculiar/x509](https://github.com/PeculiarVentures/x509) to build CSRs from keys made with WebCrypto. The Geist fonts are bundled. The API types are generated from `frontend/openapi.json`, so the frontend stops compiling when it no longer matches the API.
 - **Served by Flask** from `frontend/dist` (`FRONTEND_DIR`), with the same strict Content-Security-Policy as the API: only the app's own scripts and styles, plus a per-response nonce for the two style elements its dialogs and selects add. No CDN.
 - **Light and dark themes** (or the system's), and layouts for phones.
 - **Lists** keep their filters, sort and page in the URL, so they can be bookmarked and shared.
-- **`/`** focuses the search box from anywhere.
+- **⌘K, Ctrl+K or `/`** opens the command palette from anywhere.
+- **The top bar names the CA** by its URL's host, or by `CA_DISPLAY_NAME`; `CA_ENVIRONMENT` (such as `Production` or `Staging`) adds a badge, green for production and amber otherwise.
 
 
 ## Requirements
@@ -139,7 +142,7 @@ Every API route needs a session except `/api/v1/session`; writes need the sessio
    - Set the environment variables listed in `.env.example` (or put the same keys in `settings.json` in the working directory).
    - Set your PostgreSQL host, user, password, database, and port, and `SECRET_KEY`.
    - Set your Step CA URL and root fingerprint.
-   - The **Settings** page shows the settings in effect (read-only, secrets hidden).
+   - The **Authority** page's Configuration tab shows the settings in effect (read-only, secrets hidden).
 
 6. **Run the app**
 
@@ -264,7 +267,7 @@ CA_ADMIN_PASSWORD_FILE=/run/secrets/ca_admin_password   # contents of stepca-web
 
 | Role | Can |
 |---|---|
-| viewer | See every list, certificate and dashboard |
+| viewer | See every list, certificate and the overview |
 | operator | Also sign CSRs and revoke certificates |
 | admin | Also manage provisioners and admins, see the configuration and the audit log, control the service |
 
@@ -291,7 +294,7 @@ LDAP_USER_SEARCH_FILTER=(sAMAccountName={username})         # (uid={username}) b
 ```
 
 - **The server certificate is always verified** for `ldaps://` and StartTLS: against `LDAP_CA_FILE`, or the system CAs. A server whose certificate doesn't verify, or doesn't name the host in `LDAP_URL`, refuses every login, and the reason is logged.
-- **`ldap://` without StartTLS sends passwords in cleartext.** It still works, but the app logs a warning at startup and the Settings page shows one.
+- **`ldap://` without StartTLS sends passwords in cleartext.** It still works, but the app logs a warning at startup and the Authority page's Configuration tab shows one.
 - Groups come from the user's `memberOf` attribute (on OpenLDAP, enable the memberof overlay) and are mapped to roles (see [Roles](#roles)). `LDAP_REQUIRED_GROUP_DN` optionally restricts login to one group.
 
 ### Local auth setup
@@ -377,6 +380,12 @@ These changes need action:
 - **Expiring certificates:** certificates issued for 30 days or less no longer count as expiring, on the dashboard or in the lists.
 - **Provisioners:** the "Issues X.509 certificates" box is gone: step-ca ignores it (it issues X.509 certificates whatever its value).
 
+## Upgrading to the redesigned UI
+
+- **API:** `GET /api/v1/certificates/provisioners` is replaced by `/certificates/facets`; `provisioner` on `/certificates` can be repeated, and matches any of them. `POST /api/v1/certificates` also returns the certificate (`pem`) and its chain (`chain_pem`).
+- **URLs:** the certificate list's `?status=` is now `?tab=` (old links still work); `/certificates/<serial>` opens the list with that certificate's panel; `/settings` is now the Configuration tab of `/ca`.
+- **Settings:** `CA_DISPLAY_NAME` and `CA_ENVIRONMENT` name the CA in the top bar (both optional).
+
 
 ## Development
 
@@ -384,7 +393,7 @@ These changes need action:
 - **Backend:** lint and type-check with `uv run ruff check .` and `uv run mypy`; unit tests with `uv run pytest`. They use in-memory SQLite with the same table layout as step-ca, and a fake CA client; each test builds its own settings (`tests/conftest.py`).
 - **Frontend:** `npm run dev` in `frontend/` serves it with hot reload on <http://localhost:5173> and forwards `/api` to the Flask app on port 5000 (`API_URL` to change it), started with `AUTH_BACKEND=local uv run python run.py`. `npm run lint`, `npm run format`, `npm run typecheck` and `npm test` (Vitest) check it.
 - **API changes:** after changing `app/api/`, run `uv run python -m app.api.openapi` and `npm run api:gen` in `frontend/`: the frontend then type-checks against the new API. CI checks that both files are current.
-- **End-to-end tests:** `tests/e2e/run.sh` starts a real step-ca on PostgreSQL and an OpenLDAP server, gets a certificate over ACME, runs the app on a read-only role, and tests the API (signing, revoking down to the CRL, provisioner editing, the ACME drill-down, CSRF, the inventory) and the frontend in headless Chromium (signing in, every page without CSP or script errors, signing and revoking through the dialogs). Needs Docker, and the browser once: `uv run playwright install --only-shell chromium`. `KEEP=1` leaves the stack running on <http://127.0.0.1:15000>; `DOCKERFILE=Dockerfile.pip` tests the pip image; `E2E_IDENTITY=super` uses the legacy `jwk_key.json` setup.
+- **End-to-end tests:** `tests/e2e/run.sh` starts a real step-ca on PostgreSQL and an OpenLDAP server, gets a certificate over ACME, runs the app on a read-only role, and tests the API (signing, revoking down to the CRL, provisioner editing, the ACME drill-down, CSRF, the inventory) and the frontend in headless Chromium (signing in, every page without CSP or script errors, issuing from an uploaded CSR and from a key made in the browser, revoking, the list's search and selection, the command palette, a provisioner's settings). Needs Docker, and the browser once: `uv run playwright install --only-shell chromium`. `KEEP=1` leaves the stack running on <http://127.0.0.1:15000>; `DOCKERFILE=Dockerfile.pip` tests the pip image; `E2E_IDENTITY=super` uses the legacy `jwk_key.json` setup.
 - After changing dependencies in `pyproject.toml`, run `uv lock` and `uv export --frozen --no-dev --no-emit-project -o requirements.txt`. CI checks both are in sync. Frontend dependencies are in `frontend/package-lock.json`; Dependabot proposes their updates weekly.
 - The Content-Security-Policy refuses inline scripts and styles: keep styles in Tailwind classes or React's `style` prop, and avoid libraries that add `<style>` elements (most toast libraries do; the app has its own toaster).
 
@@ -393,7 +402,7 @@ These changes need action:
 
 - [ ] SSH certificates (inventory and revocation)
 - [ ] Expiry notifications
-- [ ] Bulk certificate operations
+- [ ] Renewing a certificate from the UI
 
 
 ## Contact

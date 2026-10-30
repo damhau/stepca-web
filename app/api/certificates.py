@@ -5,7 +5,9 @@ from dataclasses import asdict
 
 from app.api import attribute, blueprint, csv_response, dump, error, file_response, page
 from app.api.schemas import (
+    BundleQuery,
     CertificateDetail,
+    CertificateEvents,
     CertificateListQuery,
     CertificatePage,
     CsrBody,
@@ -13,7 +15,10 @@ from app.api.schemas import (
     Dashboard,
     DownloadQuery,
     Error,
-    NameList,
+    Facets,
+    Overview,
+    OverviewQuery,
+    Readiness,
     Reference,
     RevokeBody,
     SearchQuery,
@@ -21,12 +26,13 @@ from app.api.schemas import (
     SerialPath,
     SignBody,
     SignResult,
+    StatusCounts,
     UnmatchedRevocationList,
 )
 from app.auth.roles import role_required
 from app.libs.cert_utils import describe_csr
 from app.libs.provisioners import ACME_CHALLENGES
-from app.services import ca, certificates, dashboard, inventory, provisioners
+from app.services import ca, certificates, dashboard, inventory, overview, provisioners
 from app.services import search as search_service
 from app.services.certificates import REVOCATION_REASONS
 from app.stepca.client import SignError
@@ -50,7 +56,13 @@ CSV_COLUMNS = [
 
 def _inventory_query(query: CertificateListQuery):
     return inventory.CertificateQuery(
-        status=query.status, days=query.days, q=query.q, provisioner=query.provisioner, sort=query.sort, order=query.order
+        status=query.status,
+        days=query.days,
+        q=query.q,
+        provisioners=tuple(query.provisioner),
+        keys=tuple(query.key),
+        sort=query.sort,
+        order=query.order,
     )
 
 
@@ -67,9 +79,33 @@ def certificates_matching(query: CertificateListQuery, all_pages=False):
     return inventory.certificates(_inventory_query(query), page=query.page, per_page=None if all_pages else query.per_page)
 
 
-@bp.get("/certificates/provisioners", responses={200: NameList}, summary="The provisioners that issued certificates")
-def certificate_provisioners():
-    return dump(NameList, {"names": inventory.provisioner_names()})
+@bp.get("/certificates/counts", responses={200: StatusCounts}, summary="How many certificates each tab of the list holds")
+def certificate_counts():
+    return dump(StatusCounts, inventory.status_counts())
+
+
+@bp.get("/certificates/facets", responses={200: Facets}, summary="The values the list can be filtered on")
+def certificate_facets():
+    return dump(Facets, inventory.facets())
+
+
+@bp.get("/certificates/bundle", responses={200: None, 404: Error}, summary="Several certificates as one PEM file")
+def certificate_bundle(query: BundleQuery):
+    pems = []
+    for serial in dict.fromkeys(query.serial):
+        found = certificates.download(serial, "pem", ca.client().intermediates)
+        if found is None:
+            return error(f"Certificate {serial} not found.", 404)
+        pems.append(found[0])
+    return file_response(b"".join(pems), f"certificates-{len(pems)}.pem", "application/x-pem-file")
+
+
+@bp.get("/certificates/<serial>/events", responses={200: CertificateEvents, 404: Error}, summary="What happened to a certificate")
+def certificate_events(path: SerialPath):
+    events = overview.certificate_events(path.serial)
+    if events is None:
+        return error(f"Certificate {path.serial} not found.", 404)
+    return dump(CertificateEvents, {"items": events})
 
 
 @bp.get("/certificates/<serial>", responses={200: CertificateDetail, 404: Error})
@@ -106,10 +142,20 @@ def revoke_certificate(path: SerialPath, body: RevokeBody):
 @role_required("operator")
 def sign_certificate(body: SignBody):
     try:
-        serial = certificates.sign(body.csr_pem, body.provisioner, body.password, body.valid_for)
+        signed = certificates.sign(body.csr_pem, body.provisioner, body.password, body.valid_for)
     except SignError as e:
         return error(f"The certificate was not signed: {e}.", 422)
-    return dump(SignResult, {"serial": serial}), 201
+    return dump(SignResult, signed), 201
+
+
+@bp.get("/overview", responses={200: Overview}, summary="Figures over a time range, what needs attention, recent activity")
+def get_overview(query: OverviewQuery):
+    return dump(Overview, overview.overview(query.range))
+
+
+@bp.get("/readiness", responses={200: Readiness}, summary="The deployment checked against the recommended setup")
+def get_readiness():
+    return dump(Readiness, overview.readiness())
 
 
 @bp.post("/csr/preview", responses={200: CsrDescription, 422: Error}, summary="What a CSR asks for")

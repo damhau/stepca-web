@@ -99,8 +99,8 @@ def test_text_filter_matches_subject_names_and_serials(app, certificates):
 
 def test_provisioner_filter_and_names(app, certificates):
     certificates.add_cert(9, "acme.test", provisioner={"id": "prov-acme", "name": "acme", "type": "ACME"})
-    assert serials(provisioner="acme") == ["9"]
-    assert inventory.provisioner_names() == ["Admin JWK", "acme"]
+    assert serials(provisioners=("acme",)) == ["9"]
+    assert inventory.facets() == {"provisioners": ["Admin JWK", "acme"], "keys": ["secp256r1"]}
 
 
 def test_sort_and_pages(app, certificates):

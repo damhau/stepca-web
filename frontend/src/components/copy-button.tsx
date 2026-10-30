@@ -19,7 +19,7 @@ export function CopyButton({ value, label, className }: { value: string; label: 
         setTimeout(() => setCopied(false), 1500)
       }}
     >
-      {copied ? <Check className="text-valid" /> : <Copy />}
+      {copied ? <Check className="text-success" /> : <Copy />}
     </Button>
   )
 }

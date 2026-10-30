@@ -4,20 +4,18 @@ import { $api } from "@/api/client"
 import type { AuditItem } from "@/api/types"
 import { AdminOnly } from "@/components/admin-only"
 import { columnHelper, DataTable } from "@/components/data-table"
-import { ExportLink, FilterInput, Toolbar } from "@/components/list-toolbar"
-import { PageHeader } from "@/components/page"
-import { Pill } from "@/components/status"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PageHeader, StatusDot } from "@/components/kit"
+import { ChoiceFilter, ExportButton, SearchBox, Toolbar } from "@/components/list-tools"
 import { formatDateTime } from "@/lib/format"
 import { listSearch, oneOf, text, type ListSearch } from "@/lib/search-params"
 
-type Search = ListSearch & { action?: string; result?: "ok" | "failed" }
+type Search = ListSearch & { action?: string; result?: "succeeded" | "failed" }
 
 export const Route = createFileRoute("/_app/audit")({
   validateSearch: (search: Record<string, unknown>): Search => ({
     ...listSearch(search),
     action: text(search.action, 100),
-    result: oneOf(search.result, ["ok", "failed"] as const),
+    result: oneOf(search.result, ["succeeded", "failed"] as const),
   }),
   component: () => (
     <AdminOnly>
@@ -30,30 +28,32 @@ const helper = columnHelper<AuditItem>()
 const columns = helper.columns([
   helper.accessor("created_at", {
     header: "When",
-    cell: ({ getValue }) => <span className="whitespace-nowrap">{formatDateTime(getValue())}</span>,
+    meta: { className: "whitespace-nowrap text-muted-foreground" },
+    cell: ({ getValue }) => formatDateTime(getValue()),
   }),
   helper.accessor("user", {
     header: "Who",
     cell: ({ row }) => (
-      <div className="flex flex-col">
-        <span className="font-medium">{row.original.user}</span>
-        <span className="text-xs text-muted-foreground capitalize">{row.original.role ?? "—"}</span>
-      </div>
+      <span>
+        <span className="font-medium">{row.original.user}</span>{" "}
+        <span className="text-xs text-muted-foreground capitalize">{row.original.role ?? ""}</span>
+      </span>
     ),
   }),
   helper.accessor("action", { header: "Action", cell: ({ getValue }) => getValue().replaceAll("_", " ") }),
   helper.accessor("target", {
     header: "On",
     meta: { className: "max-w-56" },
-    cell: ({ getValue }) => <code className="font-mono text-[0.8125rem] break-all">{getValue()}</code>,
+    cell: ({ getValue }) => <span className="font-mono text-[13px] break-all">{getValue()}</span>,
   }),
   helper.accessor("success", {
     header: "Result",
-    cell: ({ getValue }) => (getValue() ? <Pill tone="valid">ok</Pill> : <Pill tone="revoked">failed</Pill>),
+    cell: ({ getValue }) =>
+      getValue() ? <StatusDot tone="success">ok</StatusDot> : <StatusDot tone="danger">failed</StatusDot>,
   }),
   helper.accessor("detail", {
     header: "Detail",
-    meta: { className: "max-w-96 whitespace-normal text-sm text-muted-foreground" },
+    meta: { className: "max-w-96 pr-4 text-[13px] whitespace-normal text-muted-foreground" },
   }),
 ])
 
@@ -62,10 +62,10 @@ function Audit() {
   const navigate = Route.useNavigate()
   const query = {
     page: search.page ?? 1,
-    per_page: search.per_page ?? 50,
+    per_page: 50,
     q: search.q,
     action: search.action,
-    success: search.result === undefined ? undefined : search.result === "ok",
+    success: search.result === undefined ? undefined : search.result === "succeeded",
   }
   const list = $api.useQuery("get", "/api/v1/audit", { params: { query } }, { placeholderData: keepPreviousData })
   const update = (changes: Partial<Search>) =>
@@ -75,43 +75,29 @@ function Audit() {
       <PageHeader
         title="Audit log"
         description="Every sign-in and change made through this app, newest first."
-        actions={<ExportLink path="/api/v1/audit" query={query} />}
+        actions={<ExportButton path="/api/v1/audit" query={query} />}
       />
       <Toolbar>
-        <FilterInput
+        <SearchBox
+          id="audit-search"
           value={search.q ?? ""}
           onChange={(q) => update({ q: q || undefined })}
-          placeholder="Filter by user, target or detail"
+          placeholder="Search by user, target or detail"
         />
-        <Select
-          value={search.action ?? "*"}
-          onValueChange={(value) => update({ action: value === "*" ? undefined : value })}
-        >
-          <SelectTrigger className="w-auto min-w-40" aria-label="Action">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="*">Every action</SelectItem>
-            {list.data?.actions.map((action) => (
-              <SelectItem key={action} value={action}>
-                {action.replaceAll("_", " ")}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={search.result ?? "*"}
-          onValueChange={(value) => update({ result: value === "*" ? undefined : (value as Search["result"]) })}
-        >
-          <SelectTrigger className="w-auto" aria-label="Result">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="*">Any result</SelectItem>
-            <SelectItem value="ok">Succeeded</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-          </SelectContent>
-        </Select>
+        <ChoiceFilter
+          label="Action"
+          any="Every action"
+          value={search.action}
+          options={list.data?.actions ?? (search.action ? [search.action] : [])}
+          onChange={(action) => update({ action })}
+        />
+        <ChoiceFilter
+          label="Result"
+          any="Any result"
+          value={search.result}
+          options={["succeeded", "failed"]}
+          onChange={(result) => update({ result: result as Search["result"] })}
+        />
       </Toolbar>
       <DataTable
         label="Audit log"
@@ -127,7 +113,6 @@ function Audit() {
           page: query.page,
           perPage: query.per_page,
           onPage: (page) => navigate({ search: (previous) => ({ ...previous, page }) }),
-          onPerPage: (per_page) => update({ per_page }),
         }}
       />
     </>

@@ -3,10 +3,9 @@ import { createFileRoute } from "@tanstack/react-router"
 import { $api } from "@/api/client"
 import type { AcmeAccountItem } from "@/api/types"
 import { columnHelper, DataTable } from "@/components/data-table"
-import { ExportLink, FilterInput, Toolbar } from "@/components/list-toolbar"
-import { PageHeader } from "@/components/page"
-import { AcmeStatusPill } from "@/components/status"
-import { AcmeLink, acmeQuery, acmeSearch, StatusFilter, type AcmeSearch } from "@/features/acme"
+import { AcmeStatus } from "@/components/kit"
+import { ChoiceFilter, ExportButton, SearchBox, Toolbar } from "@/components/list-tools"
+import { AcmeLink, acmeQuery, acmeSearch, AcmeHeader, type AcmeSearch } from "@/features/acme"
 import { formatDateTime } from "@/lib/format"
 
 const STATUSES = ["valid", "deactivated", "revoked"] as const
@@ -18,17 +17,26 @@ export const Route = createFileRoute("/_app/acme/accounts/")({
 
 const helper = columnHelper<AcmeAccountItem>()
 const columns = helper.columns([
-  helper.accessor("id", { header: "Account", cell: ({ getValue }) => <AcmeLink kind="account" id={getValue()} /> }),
   helper.accessor("contact", {
     header: "Contact",
-    cell: ({ getValue }) =>
-      getValue()
-        .map((contact) => contact.replace(/^mailto:/, ""))
-        .join(", ") || <span className="text-muted-foreground">—</span>,
+    cell: ({ row }) => (
+      <span className="font-medium">
+        {row.original.contact.map((contact) => contact.replace(/^mailto:/, "")).join(", ") || "—"}
+      </span>
+    ),
   }),
-  helper.accessor("provisioner_name", { header: "Provisioner", cell: ({ getValue }) => getValue() ?? "—" }),
-  helper.accessor("status", { header: "Status", cell: ({ getValue }) => <AcmeStatusPill status={getValue()} /> }),
-  helper.accessor("created_at", { header: "Created", cell: ({ getValue }) => formatDateTime(getValue()) }),
+  helper.accessor("status", { header: "Status", cell: ({ getValue }) => <AcmeStatus status={getValue()} /> }),
+  helper.accessor("provisioner_name", {
+    header: "Provisioner",
+    meta: { className: "text-fg-2" },
+    cell: ({ getValue }) => getValue() ?? "—",
+  }),
+  helper.accessor("id", { header: "Account", cell: ({ getValue }) => <AcmeLink kind="account" id={getValue()} /> }),
+  helper.accessor("created_at", {
+    header: "Created",
+    meta: { className: "pr-4 whitespace-nowrap text-muted-foreground" },
+    cell: ({ getValue }) => formatDateTime(getValue()),
+  }),
 ])
 
 function Accounts() {
@@ -45,18 +53,24 @@ function Accounts() {
     navigate({ search: (previous) => ({ ...previous, page: undefined, ...changes }), replace: true })
   return (
     <>
-      <PageHeader
-        title="ACME accounts"
-        description="The ACME clients (certbot, cert-manager, Caddy…) registered with step-ca, newest first."
-        actions={<ExportLink path="/api/v1/acme/accounts" query={query} />}
+      <AcmeHeader
+        description="The ACME clients (cert-manager, certbot, Caddy…) registered with step-ca, newest first."
+        actions={<ExportButton path="/api/v1/acme/accounts" query={query} />}
       />
       <Toolbar>
-        <FilterInput
+        <SearchBox
+          id="acme-search"
           value={search.q ?? ""}
           onChange={(q) => update({ q: q || undefined })}
-          placeholder="Filter by id or contact"
+          placeholder="Search by contact or id"
         />
-        <StatusFilter value={search.status} statuses={STATUSES} onChange={(status) => update({ status })} />
+        <ChoiceFilter
+          label="Status"
+          any="Any status"
+          value={search.status}
+          options={STATUSES}
+          onChange={(status) => update({ status })}
+        />
       </Toolbar>
       <DataTable
         label="ACME accounts"
@@ -72,7 +86,6 @@ function Accounts() {
           page: query.page,
           perPage: query.per_page,
           onPage: (page) => navigate({ search: (previous) => ({ ...previous, page }) }),
-          onPerPage: (per_page) => update({ per_page }),
         }}
       />
     </>

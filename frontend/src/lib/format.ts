@@ -36,6 +36,8 @@ export function fromNow(value: string | null | undefined, now = Date.now()) {
   const size = Math.abs(distance)
   if (size < HOUR) return RELATIVE.format(Math.sign(distance || 1) * Math.max(Math.round(size / MINUTE), 1), "minute")
   if (size < 2 * DAY) return RELATIVE.format(Math.round(distance / HOUR), "hour")
+  // Years only for CA certificates and the like: an expiry within two years stays exact to the day
+  if (size >= 730 * DAY) return RELATIVE.format(Math.round(distance / (365.25 * DAY)), "year")
   return RELATIVE.format(Math.round(distance / DAY), "day")
 }
 

@@ -3,12 +3,14 @@ import { AlertTriangle, Download } from "lucide-react"
 import { $api } from "@/api/client"
 import { useCan } from "@/api/session"
 import type { CaCertificate } from "@/api/types"
-import { Identifier } from "@/components/copy-button"
+import { CopyButton } from "@/components/copy-button"
 import { ErrorState, LineTabs, Loading, PageHeader, Pill, StatusDot } from "@/components/kit"
 import { Fields, Section } from "@/components/page"
 import { Button } from "@/components/ui/button"
-import { formatDateTime, fromNow, keyLabel } from "@/lib/format"
+import { formatDate, formatDateTime, fromNow, keyLabel, lifetime } from "@/lib/format"
 import { oneOf } from "@/lib/search-params"
+import { chainOf, commonName, type ChainLink } from "@/features/ca/chain"
+import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/_app/ca")({
   validateSearch: (search: Record<string, unknown>): { tab?: "configuration" } => ({
@@ -56,32 +58,89 @@ function DownloadButton({ href, children }: { href: string; children: React.Reac
   )
 }
 
-function CaCertificates({ certificates, kind }: { certificates: CaCertificate[] | null; kind: string }) {
-  if (certificates === null) return <p className="px-4 py-3.5 text-muted-foreground">Could not be read from the CA.</p>
-  if (certificates.length === 0) return <p className="px-4 py-3.5 text-muted-foreground">The CA returned no {kind}.</p>
+function ChainOfTrust({
+  roots,
+  intermediates,
+}: {
+  roots: CaCertificate[] | null
+  intermediates: CaCertificate[] | null
+}) {
+  const chain = chainOf(roots ?? [], intermediates ?? [])
   return (
-    <ul className="divide-y divide-border-subtle">
-      {certificates.map((cert) => (
-        <li key={cert.fingerprint} className="flex flex-col gap-1.5 px-4 py-3">
-          <span className="flex flex-wrap items-center gap-2 font-medium">
-            {cert.subject}
-            {cert.pinned && <Pill tone="success">pinned</Pill>}
-          </span>
-          <span className="flex flex-wrap gap-x-4 text-[13px] text-muted-foreground">
-            <span
-              className={cert.days_left < 30 ? "text-danger-fg" : cert.days_left < 180 ? "text-warning-fg" : undefined}
-            >
-              Ends {formatDateTime(cert.not_after)} ({fromNow(cert.not_after)})
-            </span>
-            <span>{keyLabel(cert.key)}</span>
-          </span>
-          <span className="flex items-start gap-2 text-[13px] text-muted-foreground">
-            <span className="whitespace-nowrap">SHA-256</span>
-            <Identifier value={cert.fingerprint} label="fingerprint" />
-          </span>
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-3 p-4">
+      {roots === null && <p className="text-muted-foreground">The roots could not be read from the CA.</p>}
+      {intermediates === null && (
+        <p className="text-muted-foreground">The intermediates could not be read from the CA.</p>
+      )}
+      {chain.length === 0 && roots !== null && intermediates !== null && (
+        <p className="text-muted-foreground">The CA returned no root or intermediate.</p>
+      )}
+      {chain.length > 0 && (
+        <ol aria-label="Chain of trust" className="flex flex-col">
+          {chain.map((link, index) => (
+            <li key={link.cert.fingerprint} className={cn("flex flex-col", index > 0 && !link.linked && "mt-4")}>
+              {link.linked && <span aria-hidden className="ml-8 h-5 w-px bg-separator" />}
+              <ChainCertificate {...link} />
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+function ChainCertificate({ cert, role, signing }: ChainLink) {
+  const span = lifetime(cert.not_before, cert.not_after)
+  const used = span ? Math.round(span.elapsed * 100) : null
+  const level = used === null ? "ok" : used >= 95 ? "danger" : used >= 80 ? "warning" : "ok"
+  return (
+    <div className={cn("rounded-xl border bg-card px-4 py-3.5", signing && "border-foreground ring-1 ring-foreground")}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-mono text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+          {role}
+        </span>
+        <span className="flex items-center gap-2">
+          {cert.pinned && <Pill tone="success">pinned</Pill>}
+          {signing && (
+            <span className="font-mono text-[11px] font-medium tracking-[0.08em] text-brand uppercase">Signing</span>
+          )}
+        </span>
+      </div>
+      <p className="mt-1.5 text-base font-semibold tracking-[-0.01em] break-words" title={cert.subject}>
+        {commonName(cert.subject)}
+      </p>
+      <p className="mt-0.5 text-[13px] text-muted-foreground">
+        {keyLabel(cert.key)} · until {formatDate(cert.not_after)}
+      </p>
+      <p className="mt-1.5 flex items-center gap-1 font-mono text-xs text-muted-foreground">
+        SHA-256{" "}
+        <span title={cert.fingerprint}>
+          {cert.fingerprint.slice(0, 8)}…{cert.fingerprint.slice(-4)}
+        </span>
+        <CopyButton value={cert.fingerprint} label={`the ${role}'s SHA-256 fingerprint`} />
+      </p>
+      {used !== null && (
+        <div className="mt-2.5">
+          <div aria-hidden className="h-1.5 rounded-full bg-border-subtle">
+            <div
+              className={cn(
+                "h-full rounded-full",
+                level === "danger" ? "bg-danger" : level === "warning" ? "bg-warning" : "bg-foreground",
+              )}
+              style={{ width: `${Math.min(Math.max(used, 1), 100)}%` }}
+            />
+          </div>
+          <p
+            className={cn(
+              "mt-1.5 text-[13px]",
+              level === "danger" ? "text-danger-fg" : level === "warning" ? "text-warning-fg" : "text-muted-foreground",
+            )}
+          >
+            {used}% of lifetime used · ends {fromNow(cert.not_after)}
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -101,94 +160,95 @@ function Status() {
           </ul>
         </div>
       )}
-      <Section title="step-ca">
-        <Fields
-          rows={[
-            [
-              "URL",
-              <span key="u" className="font-mono text-[13px]">
-                {data.url}
-              </span>,
-            ],
-            [
-              "Health",
-              data.health === "ok" ? (
-                <StatusDot key="h" tone="success">
-                  ok
-                </StatusDot>
-              ) : (
-                <StatusDot key="h" tone="danger">
-                  {data.health ?? "unreachable"}
-                </StatusDot>
-              ),
-            ],
-            [
-              "Version",
-              <span key="v" className="flex flex-wrap items-center gap-2">
-                {data.version ?? "—"}
-                {data.version && !data.version_tested && (
-                  <>
-                    <Pill tone="warning">not tested</Pill>
-                    <span className="text-muted-foreground">
-                      This app is tested with step-ca {data.tested_versions.join(", ")}: it reads step-ca's database,
-                      whose format can change.
-                    </span>
-                  </>
-                )}
-              </span>,
-            ],
-          ]}
-        />
-      </Section>
-      <div className="grid gap-4 xl:grid-cols-2">
+      {/* Both columns as tall as the taller; on the right, step-ca and the CRL share the height equally */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Section
-          title="Root certificates"
-          actions={data.roots?.length ? <DownloadButton href="/api/v1/ca/roots.pem">roots.pem</DownloadButton> : null}
-        >
-          <CaCertificates certificates={data.roots} kind="roots" />
-        </Section>
-        <Section
-          title="Intermediate certificates"
+          title="Chain of trust"
           actions={
-            data.intermediates?.length ? (
-              <DownloadButton href="/api/v1/ca/intermediates.pem">intermediates.pem</DownloadButton>
-            ) : null
+            <>
+              {!!data.roots?.length && <DownloadButton href="/api/v1/ca/roots.pem">roots.pem</DownloadButton>}
+              {!!data.intermediates?.length && (
+                <DownloadButton href="/api/v1/ca/intermediates.pem">intermediates.pem</DownloadButton>
+              )}
+            </>
           }
         >
-          <CaCertificates certificates={data.intermediates} kind="intermediates" />
+          <ChainOfTrust roots={data.roots} intermediates={data.intermediates} />
         </Section>
+        <div className="flex min-w-0 flex-col gap-4">
+          <Section className="flex-1" title="step-ca">
+            <Fields
+              rows={[
+                [
+                  "URL",
+                  <span key="u" className="font-mono text-[13px]">
+                    {data.url}
+                  </span>,
+                ],
+                [
+                  "Health",
+                  data.health === "ok" ? (
+                    <StatusDot key="h" tone="success">
+                      ok
+                    </StatusDot>
+                  ) : (
+                    <StatusDot key="h" tone="danger">
+                      {data.health ?? "unreachable"}
+                    </StatusDot>
+                  ),
+                ],
+                [
+                  "Version",
+                  <span key="v" className="flex flex-wrap items-center gap-2">
+                    {data.version ?? "—"}
+                    {data.version && !data.version_tested && (
+                      <>
+                        <Pill tone="warning">not tested</Pill>
+                        <span className="text-muted-foreground">
+                          This app is tested with step-ca {data.tested_versions.join(", ")}: it reads step-ca's
+                          database, whose format can change.
+                        </span>
+                      </>
+                    )}
+                  </span>,
+                ],
+              ]}
+            />
+          </Section>
+          <Section
+            className="flex-1"
+            title="Certificate revocation list"
+            actions={
+              data.crl && (
+                <>
+                  <DownloadButton href="/api/v1/ca/crl">DER</DownloadButton>
+                  <DownloadButton href="/api/v1/ca/crl?format=pem">PEM</DownloadButton>
+                </>
+              )
+            }
+          >
+            {data.crl ? (
+              <Fields
+                rows={[
+                  ["Revoked certificates", data.crl.entries],
+                  ["Issued", formatDateTime(data.crl.this_update)],
+                  ["Next update", formatDateTime(data.crl.next_update)],
+                ]}
+              />
+            ) : (
+              !data.errors.some((message) => message.startsWith("crl")) && (
+                <p className="px-4 py-3.5 text-muted-foreground">
+                  step-ca doesn't publish a CRL: set{" "}
+                  <span className="font-mono text-[13px]">
+                    "crl": {"{"}"enabled": true{"}"}
+                  </span>{" "}
+                  in ca.json to turn it on.
+                </p>
+              )
+            )}
+          </Section>
+        </div>
       </div>
-      <Section
-        title="Certificate revocation list"
-        actions={
-          data.crl && (
-            <>
-              <DownloadButton href="/api/v1/ca/crl">DER</DownloadButton>
-              <DownloadButton href="/api/v1/ca/crl?format=pem">PEM</DownloadButton>
-            </>
-          )
-        }
-      >
-        {data.crl ? (
-          <Fields
-            rows={[
-              ["Revoked certificates", data.crl.entries],
-              ["Issued", formatDateTime(data.crl.this_update)],
-              ["Next update", formatDateTime(data.crl.next_update)],
-            ]}
-          />
-        ) : (
-          !data.errors.some((message) => message.startsWith("crl")) && (
-            <p className="px-4 py-3.5 text-muted-foreground">
-              step-ca doesn't publish a CRL: set{" "}
-              <span className="font-mono text-[13px]">
-                "crl": {"{"}"enabled": true{"}"}
-              </span>{" "}
-              in ca.json to turn it on.
-            </p>
-          )
-        )}
-      </Section>
     </>
   )
 }

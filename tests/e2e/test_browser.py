@@ -183,6 +183,17 @@ def test_the_list_search_selection_and_csv_export(page):
     assert lines[0].startswith("serial,serial_hex,status") and len(lines) == 2
 
 
+def test_the_chain_of_trust(page):
+    sign_in(page, "/ca")
+    chain = page.get_by_role("list", name="Chain of trust").get_by_role("listitem")
+    expect(chain).to_have_count(2)
+    expect(chain.nth(0)).to_contain_text("E2E CA Root CA")
+    # The intermediate under its root is the one step-ca signs with
+    expect(chain.nth(1)).to_contain_text("E2E CA Intermediate CA")
+    expect(chain.nth(1)).to_contain_text("Signing")
+    expect(chain.nth(1)).to_contain_text("of lifetime used")
+
+
 def test_the_command_palette_finds_a_certificate(page):
     sign_in(page)
     page.keyboard.press("Control+k")

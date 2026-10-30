@@ -11,6 +11,7 @@ describe("fromNow", () => {
     expect(fromNow(at(-30), NOW)).toBe("30 hours ago")
     expect(fromNow(at(24 * 12), NOW)).toBe("in 12 days")
     expect(fromNow(at(-24 * 400), NOW)).toBe("400 days ago")
+    expect(fromNow(at(24 * 3650), NOW)).toBe("in 10 years")
     expect(fromNow(at(-49), NOW)).toBe("2 days ago")
   })
 

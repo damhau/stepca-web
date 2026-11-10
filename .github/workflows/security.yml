@@ -12,7 +12,7 @@ jobs:
     name: Secrets in the git history (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The whole history, not only the last commit
           fetch-depth: 0
@@ -23,7 +23,7 @@ jobs:
     name: Known vulnerabilities in dependencies (pip-audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
       # requirements.txt is uv.lock exported with hashes (the CI workflow checks they match)
       - run: uvx pip-audit==2.9.0 -r requirements.txt --require-hashes --disable-pip --progress-spinner off
@@ -35,7 +35,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version-file: frontend/.nvmrc

@@ -52,7 +52,7 @@ stepca-web/
 │   │   ├── store.py       # its database: the key/value tables, read into records
 │   │   └── records.py     # typed records: certificates, revocations, provisioners, admins, ACME objects
 │   ├── auth/              # session check, roles, auth backend factory
-│   ├── libs/              # auth backends (LDAP, local), audit log, certificate parsing, provisioner edits
+│   ├── libs/              # auth backends (LDAP, local, OpenID Connect), audit log, certificate parsing, provisioner edits
 │   └── models/            # SQLAlchemy tables: step-ca's (read-only) and the app's own
 ├── frontend/              # the React app (Vite, TypeScript); `npm run build` writes frontend/dist
 │   ├── openapi.json       # the API's OpenAPI document, which src/api/schema.d.ts is generated from
@@ -281,7 +281,13 @@ To keep the behaviour from before roles existed (every LDAP user can do everythi
 
 ## Authentication
 
-Two auth backends are available, selected with the `AUTH_BACKEND` environment variable: `ldap` (default) and `local`. The factory dispatching the choice lives in `app/auth/factory.py`.
+Users sign in with a username and password (`AUTH_BACKEND=ldap`, the default, or `local`) and/or with single sign-on through OpenID Connect (see [Single sign-on](#single-sign-on-openid-connect)). The factory dispatching the password backends lives in `app/auth/factory.py`, the OpenID Connect client in `app/libs/auth/oidc.py`.
+
+| `AUTH_BACKEND` | `OIDC_ENABLED` | The login page offers |
+|---|---|---|
+| `ldap` or `local` | unset | username and password |
+| `ldap` or `local` | `true` | a single sign-on button **and** username and password (for example local users as a way in when the identity provider is down) |
+| `oidc` | (implied) | single sign-on only; the password form and `POST /api/v1/session` are turned off |
 
 ### LDAP setup
 
@@ -338,6 +344,37 @@ Use this when you want a self-contained login without an external identity provi
 
    Then log in at [http://localhost:5000](http://localhost:5000) with the username and password you configured.
 
+### Single sign-on (OpenID Connect)
+
+Works with any provider that supports the authorization code flow and publishes `/.well-known/openid-configuration`: Keycloak, Microsoft Entra ID, Okta, Authentik, Google, Dex, ... The app is a confidential client and uses PKCE.
+
+1. **Register the app at the provider** as a *confidential* web client, with this redirect URI (exactly, scheme and port included):
+
+   ```
+   https://pki.example.com/api/v1/session/oidc/callback
+   ```
+
+2. **Configure the app**
+
+   ```bash
+   AUTH_BACKEND=oidc                        # single sign-on only. Or keep ldap/local and set OIDC_ENABLED=true
+   OIDC_ISSUER=https://idp.example.com/realms/corp
+   OIDC_CLIENT_ID=stepca-web
+   OIDC_CLIENT_SECRET=...                   # or OIDC_CLIENT_SECRET_FILE=/run/secrets/oidc_client_secret
+   OIDC_REDIRECT_URI=https://pki.example.com/api/v1/session/oidc/callback   # see below
+   ROLE_ADMIN_GROUP=pki-admins              # group names as they appear in the token, not DNs
+   ROLE_OPERATOR_GROUP=pki-operators
+   ```
+
+   Optional: `OIDC_SCOPES` (`openid profile email`), `OIDC_USERNAME_CLAIM` (`preferred_username`: the name in the top bar and the audit log; `email` or `sub` also work), `OIDC_GROUPS_CLAIM` (`groups`), `OIDC_REQUIRED_GROUP` (only its members may sign in), `OIDC_CA_FILE` (CA of the provider's certificate; the system CAs if unset), `OIDC_DISPLAY_NAME` (the button's text, `Single sign-on`).
+
+- **Roles** come from the groups claim and the same `ROLE_*_GROUP` / `DEFAULT_ROLE` settings as for LDAP (see [Roles](#roles)); the match ignores case. Make the provider put the groups in the ID token (Keycloak: a *Group Membership* mapper; Entra ID: *groups* optional claim; Okta: a *groups* claim). When the ID token has neither the username nor the groups claim, the app asks the userinfo endpoint.
+- **`OIDC_REDIRECT_URI`** is built from the request when unset. Set it when the app is behind a reverse proxy that doesn't forward the scheme (and `TRUSTED_PROXIES`), or the provider will refuse a redirect URI that starts with `http://`.
+- **What is checked:** the `state` (the browser that comes back is the one that left), the PKCE verifier, and in the ID token the signature (asymmetric algorithms only, keys from the provider's JWKS), issuer, audience, expiry and the `nonce`. An answer can be used once. The provider's metadata must name the configured issuer.
+- **The browser is never told why a sign-in failed**, only that it did (or that the account has no role); the reason is in the audit log (**System > Audit log**) and the app's log. Failed callbacks count against `LOGIN_RATE_LIMIT`.
+- **Signing out** ends the app's session only, not the one at the provider: signing in again is immediate while that one lasts.
+- The provider is contacted on the first sign-in, not at startup: the app starts when it is down, and the sign-in page then says so.
+- The issuer should be an `https://` URL: the app warns at startup and in the Configuration tab otherwise.
 
 ## Service control
 

@@ -67,6 +67,13 @@ class SessionInfo(Model):
     csrf_token: str
     service_control: bool
     authority: Authority
+    # How the login page signs people in: the username and password form, and/or a single sign-on button
+    password_login: bool
+    sso_label: str | None = Field(description="Text of the single sign-on button; null when single sign-on is off")
+
+
+class OidcLoginQuery(BaseModel):
+    next: str | None = Field(default=None, max_length=2000, description="Path of this app to open after signing in")
 
 
 class LoginBody(BaseModel):

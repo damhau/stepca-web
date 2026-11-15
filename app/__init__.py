@@ -27,6 +27,13 @@ def check_ldap_config(config):
         log.warning("LDAP_URL is ldap:// without LDAP_START_TLS: user passwords cross the network in cleartext. Use ldaps:// or set LDAP_START_TLS=true")
 
 
+def check_oidc_config(config):
+    if config["OIDC_CA_FILE"] and not os.path.isfile(config["OIDC_CA_FILE"]):
+        raise RuntimeError(f"OIDC_CA_FILE {config['OIDC_CA_FILE']} does not exist")
+    if not config["OIDC_ISSUER"].lower().startswith("https://"):
+        log.warning("OIDC_ISSUER is not an https:// URL: tokens and the client secret cross the network unprotected")
+
+
 def warm_up_inventory(app):
     from sqlalchemy.exc import SQLAlchemyError
 
@@ -65,6 +72,12 @@ def create_app(settings: Settings | None = None):
     app.extensions["inventory"] = InventoryState(refresh_seconds=settings.inventory_refresh_seconds)
     if app.config["AUTH_BACKEND"] == "ldap":
         check_ldap_config(app.config)
+    if app.config["OIDC_ENABLED"]:
+        from app.libs.auth.oidc import OIDCClient
+
+        check_oidc_config(app.config)
+        # The provider is contacted on the first sign-in, not here: the app starts when it is down
+        app.extensions["oidc"] = OIDCClient(app.config)
 
     if app.config["TRUSTED_PROXIES"]:
         # Behind reverse proxies: take the client address and scheme from their X-Forwarded-* headers

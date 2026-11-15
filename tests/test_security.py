@@ -5,9 +5,16 @@ import pytest
 from app import create_app
 from tests.conftest import PASSWORD, ApiClient
 
-# Reachable without signing in: the sign-in API and the container health check. Paths outside /api/ are
-# the frontend's page and files, the same for everyone
-PUBLIC_ENDPOINTS = {"healthz", "api_session.get_session", "api_session.login", "api_session.logout"}
+# Reachable without signing in: the sign-in API (the password form and the two steps of single sign-on) and the
+# container health check. Paths outside /api/ are the frontend's page and files, the same for everyone
+PUBLIC_ENDPOINTS = {
+    "healthz",
+    "api_session.get_session",
+    "api_session.login",
+    "api_session.logout",
+    "api_session.oidc_login",
+    "api_session.oidc_callback",
+}
 WRITES = {"POST", "PUT", "PATCH", "DELETE"}
 
 

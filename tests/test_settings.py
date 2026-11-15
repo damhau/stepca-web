@@ -13,7 +13,7 @@ REQUIRED = {"SECRET_KEY": "s", "CA_URL": "https://ca.test", "DATABASE_HOST": "db
 def env(tmp_path, monkeypatch):
     """A clean environment whose data directory is tmp_path."""
     for name in list(__import__("os").environ):
-        if name.split("_")[0] in {"SECRET", "CA", "DATABASE", "LDAP", "ROLE", "DEFAULT", "AUTH", "DATA", "APP", "SQLALCHEMY", "SESSION", "LOCAL", "SERVICE", "TRUSTED", "LOGIN", "RATELIMIT", "LOG", "TESTING"}:
+        if name.split("_")[0] in {"SECRET", "CA", "DATABASE", "LDAP", "OIDC", "ROLE", "DEFAULT", "AUTH", "DATA", "APP", "SQLALCHEMY", "SESSION", "LOCAL", "SERVICE", "TRUSTED", "LOGIN", "RATELIMIT", "LOG", "TESTING"}:
             monkeypatch.delenv(name)
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
 
@@ -46,6 +46,14 @@ def test_environment_comes_before_settings_json(env, tmp_path):
     assert settings.role_admin_group == "cn=admins,dc=corp" and settings.default_role == "none"
 
 
+def test_settings_json_has_an_oidc_section(env, tmp_path):
+    (tmp_path / "settings.json").write_text(json.dumps({"oidc": {"enabled": True, "issuer": "https://idp.corp", "client_id": "c", "client_secret": "x"}}))
+    env(**REQUIRED)
+    settings = load_settings()
+    assert settings.oidc_active and settings.oidc_issuer == "https://idp.corp" and settings.oidc_client_id == "c"
+    assert settings.password_login
+
+
 def test_files_live_in_the_data_directory(env, tmp_path):
     env(**REQUIRED, LOCAL_USERS_FILE="users.json", CA_ADMIN_PASSWORD_FILE="/run/secrets/pw")
     settings = load_settings()
@@ -69,7 +77,7 @@ def test_booleans(env, value, expected):
     assert settings.ldap_start_tls is expected and settings.service_control_enabled is expected
 
 
-@pytest.mark.parametrize("name, value", [("DEFAULT_ROLE", "superuser"), ("DATABASE_PORT", "not-a-port"), ("AUTH_BACKEND", "oidc")])
+@pytest.mark.parametrize("name, value", [("DEFAULT_ROLE", "superuser"), ("DATABASE_PORT", "not-a-port"), ("AUTH_BACKEND", "saml")])
 def test_invalid_values_are_explained(env, name, value):
     env(**REQUIRED, **{name: value})
     with pytest.raises(RuntimeError, match=name):

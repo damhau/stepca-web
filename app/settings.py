@@ -100,7 +100,8 @@ class Settings(BaseSettings):
     ca_admin_password: SecretStr | None = None
 
     # Authentication
-    auth_backend: Literal["ldap", "local"] = "ldap"
+    # "oidc": single sign-on only, no password form. With "ldap" or "local", oidc_enabled adds it beside the form
+    auth_backend: Literal["ldap", "local", "oidc"] = "ldap"
     ldap_url: str = "ldap://localhost"
     ldap_start_tls: bool = False
     ldap_ca_file: Path | None = None
@@ -111,6 +112,28 @@ class Settings(BaseSettings):
     ldap_user_search_base: str | None = None
     ldap_required_group_dn: str | None = None
     local_users_file: Path = Path("local_users.json")
+
+    # Single sign-on with OpenID Connect (authorization code flow with PKCE)
+    oidc_enabled: bool = False
+    # The provider's issuer URL: its /.well-known/openid-configuration is read from it
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: SecretStr | None = None
+    # The secret as a file (a Docker secret), instead of oidc_client_secret
+    oidc_client_secret_file: Path | None = None
+    # Where the provider sends the browser back to: <this app's URL>/api/v1/session/oidc/callback
+    # (built from the request when unset; set it when the app is behind a proxy that doesn't forward the scheme)
+    oidc_redirect_uri: str | None = None
+    oidc_scopes: str = "openid profile email"
+    # The claim that names the user (the audit log's and the top bar's name), and the one that lists their groups
+    oidc_username_claim: str = "preferred_username"
+    oidc_groups_claim: str = "groups"
+    # Only members of this group may sign in; the groups are matched against role_*_group as they are in the claim
+    oidc_required_group: str | None = None
+    # CA that issued the provider's certificate (the system CAs when unset)
+    oidc_ca_file: Path | None = None
+    # The sign-in button's text
+    oidc_display_name: str = "Single sign-on"
 
     # Roles: LDAP group DNs per role; users in none of them get default_role ("none" refuses them)
     role_admin_group: str | None = None
@@ -153,6 +176,38 @@ class Settings(BaseSettings):
         if self.ldap_user_search_base is None:
             self.ldap_user_search_base = self.ldap_base_dn
         return self
+
+    @model_validator(mode="after")
+    def oidc_is_complete(self):
+        if not self.oidc_active:
+            return self
+        missing = [
+            name.upper()
+            for name, value in (("oidc_issuer", self.oidc_issuer), ("oidc_client_id", self.oidc_client_id))
+            if not value
+        ]
+        if missing:
+            raise ValueError(f"{', '.join(missing)}: required for single sign-on")
+        if not (self.oidc_client_secret or self.oidc_client_secret_file):
+            raise ValueError("OIDC_CLIENT_SECRET (or OIDC_CLIENT_SECRET_FILE): required for single sign-on")
+        if self.oidc_client_secret_file and not self.path(self.oidc_client_secret_file).is_file():
+            raise ValueError(f"OIDC_CLIENT_SECRET_FILE {self.path(self.oidc_client_secret_file)} does not exist")
+        return self
+
+    @property
+    def oidc_active(self) -> bool:
+        """Whether single sign-on is offered: auth_backend=oidc, or oidc_enabled beside ldap or local."""
+        return self.oidc_enabled or self.auth_backend == "oidc"
+
+    @property
+    def password_login(self) -> bool:
+        return self.auth_backend != "oidc"
+
+    def oidc_secret(self) -> str | None:
+        """The client secret: the file's content (without its trailing newline) when there is a file."""
+        if self.oidc_client_secret_file:
+            return self.path(self.oidc_client_secret_file).read_text().strip()
+        return self.oidc_client_secret.get_secret_value() if self.oidc_client_secret else None
 
     def path(self, value: Path | str) -> Path:
         """A file setting, resolved against the data directory when it is relative."""
@@ -203,6 +258,18 @@ class Settings(BaseSettings):
             "LDAP_USER_SEARCH_BASE": self.ldap_user_search_base,
             "LDAP_REQUIRED_GROUP_DN": self.ldap_required_group_dn,
             "LOCAL_USERS_FILE": str(self.path(self.local_users_file)),
+            "PASSWORD_LOGIN": self.password_login,
+            "OIDC_ENABLED": self.oidc_active,
+            "OIDC_ISSUER": self.oidc_issuer,
+            "OIDC_CLIENT_ID": self.oidc_client_id,
+            "OIDC_CLIENT_SECRET": self.oidc_secret() if self.oidc_active else None,
+            "OIDC_REDIRECT_URI": self.oidc_redirect_uri,
+            "OIDC_SCOPES": self.oidc_scopes,
+            "OIDC_USERNAME_CLAIM": self.oidc_username_claim,
+            "OIDC_GROUPS_CLAIM": self.oidc_groups_claim,
+            "OIDC_REQUIRED_GROUP": self.oidc_required_group,
+            "OIDC_CA_FILE": str(self.path(self.oidc_ca_file)) if self.oidc_ca_file else None,
+            "OIDC_DISPLAY_NAME": self.oidc_display_name,
             "ROLE_ADMIN_GROUP": self.role_admin_group,
             "ROLE_OPERATOR_GROUP": self.role_operator_group,
             "ROLE_VIEWER_GROUP": self.role_viewer_group,

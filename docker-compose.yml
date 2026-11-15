@@ -26,6 +26,8 @@ services:
       # - ./local_users.json:/data/local_users.json:ro
       # CA of the LDAP server's certificate, for LDAP_CA_FILE=/data/ldap-ca.crt
       # - ./ldap-ca.crt:/data/ldap-ca.crt:ro
+      # CA of the OpenID Connect provider's certificate, for OIDC_CA_FILE=/data/idp-ca.crt
+      # - ./idp-ca.crt:/data/idp-ca.crt:ro
     extra_hosts:
       # Lets the container reach a step-ca / PostgreSQL running on the host
       - "host.docker.internal:host-gateway"

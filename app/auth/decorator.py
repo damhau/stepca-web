@@ -7,6 +7,8 @@ PUBLIC_ENDPOINTS = {
     "api_session.get_session",
     "api_session.login",
     "api_session.logout",
+    "api_session.oidc_login",
+    "api_session.oidc_callback",
 }
 
 

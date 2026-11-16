@@ -32,6 +32,7 @@ class TestSession:
         assert response.get_json() | {"csrf_token": "x"} == {
             "authenticated": True, "user": "operator", "role": "operator", "csrf_token": "x", "service_control": False,
             "authority": {"name": "ca.test", "environment": None, "url": "https://ca.test:9000"},
+            "password_login": True, "sso_label": None,
         }
         api.token = response.get_json()["csrf_token"]
         assert api.get("/api/v1/dashboard").status_code == 200

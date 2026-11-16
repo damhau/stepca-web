@@ -30,7 +30,7 @@ def test_signing_out_clears_the_session(api):
     assert api.get("/api/v1/dashboard").status_code == 401
 
 
-@pytest.mark.parametrize("backend", ["oidc", "saml", "radius"])
+@pytest.mark.parametrize("backend", ["saml", "radius"])
 def test_unimplemented_backends_are_refused(backend):
     with pytest.raises(ValueError, match="ldap"):
         get_auth_backend({"AUTH_BACKEND": backend})

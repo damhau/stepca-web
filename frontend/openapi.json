@@ -2702,6 +2702,10 @@
             "title": "Csrf Token",
             "type": "string"
           },
+          "password_login": {
+            "title": "Password Login",
+            "type": "boolean"
+          },
           "role": {
             "anyOf": [
               {
@@ -2722,6 +2726,18 @@
             "title": "Service Control",
             "type": "boolean"
           },
+          "sso_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Text of the single sign-on button; null when single sign-on is off",
+            "title": "Sso Label"
+          },
           "user": {
             "anyOf": [
               {
@@ -2740,7 +2756,9 @@
           "role",
           "csrf_token",
           "service_control",
-          "authority"
+          "authority",
+          "password_login",
+          "sso_label"
         ],
         "title": "SessionInfo",
         "type": "object"
@@ -5348,6 +5366,102 @@
           }
         },
         "summary": "Sign in",
+        "tags": [
+          "Session"
+        ]
+      }
+    },
+    "/api/v1/session/oidc/callback": {
+      "get": {
+        "operationId": "api_session_oidc_callback_session_oidc_callback_get",
+        "responses": {
+          "302": {
+            "description": "Found"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Where the identity provider sends the browser back to",
+        "tags": [
+          "Session"
+        ]
+      }
+    },
+    "/api/v1/session/oidc/login": {
+      "get": {
+        "operationId": "api_session_oidc_login_session_oidc_login_get",
+        "parameters": [
+          {
+            "description": "Path of this app to open after signing in",
+            "in": "query",
+            "name": "next",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Path of this app to open after signing in",
+              "title": "Next"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Start single sign-on: redirects to the identity provider",
         "tags": [
           "Session"
         ]

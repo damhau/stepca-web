@@ -22,6 +22,8 @@ def config_warnings():
     warnings = []
     if config["AUTH_BACKEND"] == "ldap" and ldap_transport(config) == "cleartext":
         warnings.append("LDAP passwords cross the network in cleartext: use an ldaps:// LDAP_URL or set LDAP_START_TLS=true.")
+    if config["OIDC_ENABLED"] and not (config["OIDC_ISSUER"] or "").lower().startswith("https://"):
+        warnings.append("OIDC_ISSUER is not an https:// URL: tokens and the client secret cross the network unprotected.")
     return warnings
 
 
@@ -29,6 +31,7 @@ def effective_settings():
     """The configuration in effect, grouped for display. Secrets are never shown."""
     config = current_app.config
     settings = current_settings()
+    sso = config["OIDC_ENABLED"]
     return [
         (
             "Step CA database (read-only)",
@@ -58,6 +61,14 @@ def effective_settings():
                 ("LDAP URL", config["LDAP_URL"] if config["AUTH_BACKEND"] == "ldap" else "—"),
                 ("LDAP transport", LDAP_TRANSPORTS[ldap_transport(config)] if config["AUTH_BACKEND"] == "ldap" else "—"),
                 ("LDAP CA file", (config["LDAP_CA_FILE"] or "system CAs") if config["AUTH_BACKEND"] == "ldap" else "—"),
+                ("Password sign-in", "enabled" if config["PASSWORD_LOGIN"] else "disabled"),
+                ("Single sign-on", "enabled (OpenID Connect)" if sso else "disabled"),
+                ("OIDC issuer", config["OIDC_ISSUER"] if sso else "—"),
+                ("OIDC client ID", config["OIDC_CLIENT_ID"] if sso else "—"),
+                ("OIDC client secret", ("set" if config["OIDC_CLIENT_SECRET"] else "not set") if sso else "—"),
+                ("OIDC redirect URI", (config["OIDC_REDIRECT_URI"] or "from the request") if sso else "—"),
+                ("OIDC claims", f"user: {config['OIDC_USERNAME_CLAIM']}, groups: {config['OIDC_GROUPS_CLAIM']}" if sso else "—"),
+                ("OIDC required group", (config["OIDC_REQUIRED_GROUP"] or "—") if sso else "—"),
                 ("Admin group", config["ROLE_ADMIN_GROUP"] or "—"),
                 ("Operator group", config["ROLE_OPERATOR_GROUP"] or "—"),
                 ("Viewer group", config["ROLE_VIEWER_GROUP"] or "—"),

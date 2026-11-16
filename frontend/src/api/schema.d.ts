@@ -518,6 +518,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/session/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where the identity provider sends the browser back to */
+        get: operations["api_session_oidc_callback_session_oidc_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/session/oidc/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start single sign-on: redirects to the identity provider */
+        get: operations["api_session_oidc_login_session_oidc_login_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -1375,10 +1409,17 @@ export interface components {
             authority: components["schemas"]["Authority"];
             /** Csrf Token */
             csrf_token: string;
+            /** Password Login */
+            password_login: boolean;
             /** Role */
             role: ("viewer" | "operator" | "admin") | null;
             /** Service Control */
             service_control: boolean;
+            /**
+             * Sso Label
+             * @description Text of the single sign-on button; null when single sign-on is off
+             */
+            sso_label: string | null;
             /** User */
             user: string | null;
         };
@@ -2920,6 +2961,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionInfo"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
+                };
+            };
+        };
+    };
+    api_session_oidc_callback_session_oidc_callback_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Found */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
+                };
+            };
+        };
+    };
+    api_session_oidc_login_session_oidc_login_get: {
+        parameters: {
+            query?: {
+                /** @description Path of this app to open after signing in */
+                next?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Found */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Unprocessable Entity */

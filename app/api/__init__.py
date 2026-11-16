@@ -142,8 +142,8 @@ def register_error_handlers(app: Flask):
 
 def register(app):
     """Every API blueprint, and its JSON error handlers."""
-    from app.api import acme, certificates, provisioners, session, system
+    from app.api import acme, certificates, provisioners, session, ssh, system
 
-    for module in (session, certificates, acme, provisioners, system):
+    for module in (session, certificates, acme, ssh, provisioners, system):
         app.register_api(module.bp)
     register_error_handlers(app)

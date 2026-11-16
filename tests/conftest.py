@@ -6,7 +6,8 @@ from unittest import mock
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519
+from cryptography.hazmat.primitives.serialization import ssh
 from cryptography.x509.oid import NameOID
 from flask import g
 from werkzeug.security import generate_password_hash
@@ -14,6 +15,7 @@ from werkzeug.security import generate_password_hash
 from app import create_app
 from app.extensions import db
 from app.models import acme as acme_tables
+from app.models.ssh import RevokedSshCert, SshCert
 from app.models.step import StepAdmin, StepProvisioner
 from app.models.x509 import RevokedX509Cert, X509Cert, X509CertData
 from app.settings import Settings
@@ -40,6 +42,33 @@ def make_cert(serial, common_name, days_valid=30, not_before=None):
         .sign(CA_KEY, hashes.SHA256())
     )
     return cert.public_bytes(serialization.Encoding.DER)
+
+
+SSH_CA_KEY = ed25519.Ed25519PrivateKey.generate()
+FOREVER = 2**64 - 1  # what OpenSSH writes as valid_before for a certificate that never expires
+
+
+def make_ssh_cert(serial, key_id="alice@example.org", principals=("alice",), kind="user", valid_after=None, valid_before=None, key=None, options=None, extensions=None, ca_key=None):
+    """An SSH certificate signed by the test SSH CA, in OpenSSH's wire format (what step-ca's ssh_certs table holds).
+    Times are Unix timestamps; by default it was valid from an hour ago for 16 hours."""
+    now = int(datetime.datetime.now(datetime.UTC).timestamp())
+    builder = (
+        ssh.SSHCertificateBuilder()
+        .public_key(key or ed25519.Ed25519PrivateKey.generate().public_key())
+        .serial(serial)
+        .type(ssh.SSHCertificateType.HOST if kind == "host" else ssh.SSHCertificateType.USER)
+        .key_id(key_id.encode())
+        .valid_principals([principal.encode() for principal in principals])
+        .valid_after(now - 3600 if valid_after is None else valid_after)
+        .valid_before(now + 16 * 3600 if valid_before is None else valid_before)
+    )
+    for name, value in (options or {}).items():
+        builder = builder.add_critical_option(name.encode(), value.encode())
+    for name, value in (extensions or {}).items():
+        builder = builder.add_extension(name.encode(), value.encode())
+    cert = builder.sign(ca_key or SSH_CA_KEY)
+    # public_bytes() is "<key type> <base64 of the wire format>"
+    return base64.b64decode(cert.public_bytes().split()[1])
 
 
 CA_URL = "https://ca.test:9000"
@@ -137,6 +166,22 @@ def step_db(app):
                 db.session.add(X509CertData(nkey=key, nvalue=json.dumps({"provisioner": provisioner}).encode()))
             db.session.commit()
             return str(serial)
+
+        def add_ssh_cert(self, serial, key_id="alice@example.org", principals=("alice",), **kwargs):
+            """Put an SSH certificate in ssh_certs, as step-ca does; kwargs as for make_ssh_cert."""
+            db.session.add(SshCert(nkey=str(serial).encode(), nvalue=make_ssh_cert(serial, key_id, principals, **kwargs)))
+            db.session.commit()
+            return str(serial)
+
+        def add_raw_ssh_cert(self, serial, blob):
+            db.session.add(SshCert(nkey=str(serial).encode(), nvalue=blob))
+            db.session.commit()
+            return str(serial)
+
+        def add_ssh_revocation(self, serial, provisioner_id=ADMIN_JWK["id"]):
+            info = {"Serial": str(serial), "ProvisionerID": provisioner_id, "ReasonCode": 1, "Reason": "key compromise", "RevokedAt": "2026-10-28T12:00:00Z"}
+            db.session.add(RevokedSshCert(nkey=str(serial).encode(), nvalue=json.dumps(info).encode()))
+            db.session.commit()
 
         def add_revocation(self, serial, provisioner_id=ADMIN_JWK["id"]):
             info = {"Serial": str(serial), "ProvisionerID": provisioner_id, "ReasonCode": 1, "RevokedAt": "2026-10-28T12:00:00Z"}

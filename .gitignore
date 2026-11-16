@@ -189,3 +189,7 @@ ca_root.crt
 *.key
 *.pem
 tests/e2e/work/
+
+# Merge/patch leftovers
+*.orig
+*.rej

@@ -2892,6 +2892,269 @@
         "title": "SignResult",
         "type": "object"
       },
+      "SshCertificateDetail": {
+        "properties": {
+          "certificate": {
+            "$ref": "#/components/schemas/SshCertificateItem"
+          },
+          "critical_options": {
+            "items": {
+              "$ref": "#/components/schemas/SshOption"
+            },
+            "title": "Critical Options",
+            "type": "array"
+          },
+          "extensions": {
+            "items": {
+              "$ref": "#/components/schemas/SshOption"
+            },
+            "title": "Extensions",
+            "type": "array"
+          },
+          "public_line": {
+            "description": "The certificate as an id_*-cert.pub file holds it; empty when the key type is unreadable",
+            "title": "Public Line",
+            "type": "string"
+          },
+          "revocation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevocationInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "certificate",
+          "critical_options",
+          "extensions",
+          "revocation",
+          "public_line"
+        ],
+        "title": "SshCertificateDetail",
+        "type": "object"
+      },
+      "SshCertificateItem": {
+        "properties": {
+          "ca_fingerprint": {
+            "description": "SHA256 fingerprint of the key that signed the certificate",
+            "title": "Ca Fingerprint",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "fingerprint": {
+            "description": "SHA256 fingerprint of the certified key, as ssh-keygen -l prints it",
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "key_id": {
+            "title": "Key Id",
+            "type": "string"
+          },
+          "key_type": {
+            "description": "Of the certified key, such as \"ED25519\", \"RSA 3072\" or \"ECDSA nistp256\"",
+            "title": "Key Type",
+            "type": "string"
+          },
+          "kind": {
+            "description": "\"user\" or \"host\"; empty when the certificate cannot be read",
+            "title": "Kind",
+            "type": "string"
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Principals",
+            "type": "array"
+          },
+          "revocation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revocation Reason"
+          },
+          "revocation_reason_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revocation Reason Code"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "serial": {
+            "description": "Decimal, as step-ca stores it",
+            "title": "Serial",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "valid",
+              "expired",
+              "not_yet_valid",
+              "revoked",
+              "invalid"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "valid_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null: valid from the beginning",
+            "title": "Valid After"
+          },
+          "valid_before": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null: never expires",
+            "title": "Valid Before"
+          }
+        },
+        "required": [
+          "serial",
+          "kind",
+          "key_id",
+          "principals",
+          "valid_after",
+          "valid_before",
+          "key_type",
+          "fingerprint",
+          "ca_fingerprint",
+          "error",
+          "status",
+          "revoked_at",
+          "revocation_reason",
+          "revocation_reason_code"
+        ],
+        "title": "SshCertificateItem",
+        "type": "object"
+      },
+      "SshCertificatePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SshCertificateItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "per_page": {
+            "title": "Per Page",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "per_page",
+          "items"
+        ],
+        "title": "SshCertificatePage",
+        "type": "object"
+      },
+      "SshCounts": {
+        "description": "What each tab of the list holds (certificates that aren't valid yet or can't be read are only in all).",
+        "properties": {
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "expired": {
+            "title": "Expired",
+            "type": "integer"
+          },
+          "revoked": {
+            "title": "Revoked",
+            "type": "integer"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "valid",
+          "expired",
+          "revoked"
+        ],
+        "title": "SshCounts",
+        "type": "object"
+      },
+      "SshOption": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "SshOption",
+        "type": "object"
+      },
       "StatusCounts": {
         "description": "How many certificates each tab of the list holds.",
         "properties": {
@@ -5499,6 +5762,310 @@
           "CA and system"
         ]
       }
+    },
+    "/api/v1/ssh/certificates": {
+      "get": {
+        "operationId": "api_ssh_list_certificates_ssh_certificates_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1.0,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1.0,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Text the rows must contain",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Text the rows must contain",
+              "maxLength": 200,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "json",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "user",
+                "host"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "valid",
+                "expired",
+                "not_yet_valid",
+                "revoked",
+                "invalid"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "valid_after",
+              "enum": [
+                "valid_after",
+                "valid_before",
+                "key_id",
+                "serial"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SshCertificatePage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "SSH certificates, filtered, sorted and paged (format=csv: all of them, as a file)",
+        "tags": [
+          "SSH"
+        ]
+      }
+    },
+    "/api/v1/ssh/certificates/counts": {
+      "get": {
+        "operationId": "api_ssh_certificate_counts_ssh_certificates_counts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "user",
+                "host"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SshCounts"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "How many SSH certificates each tab of the list holds",
+        "tags": [
+          "SSH"
+        ]
+      }
+    },
+    "/api/v1/ssh/certificates/{serial}": {
+      "get": {
+        "operationId": "api_ssh_get_certificate_ssh_certificates__serial__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "serial",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{1,80}$",
+              "title": "Serial",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SshCertificateDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "tags": [
+          "SSH"
+        ]
+      }
+    },
+    "/api/v1/ssh/certificates/{serial}/download": {
+      "get": {
+        "operationId": "api_ssh_download_certificate_ssh_certificates__serial__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "serial",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{1,80}$",
+              "title": "Serial",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationProblem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "The certificate as an *-cert.pub file",
+        "tags": [
+          "SSH"
+        ]
+      }
     }
   },
   "tags": [
@@ -5510,6 +6077,9 @@
     },
     {
       "name": "ACME"
+    },
+    {
+      "name": "SSH"
     },
     {
       "name": "Provisioners and admins"

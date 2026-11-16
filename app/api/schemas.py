@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.libs.provisioners import duration_seconds
 from app.services.inventory import SortKey, Status, StatusFilter
+from app.services.ssh import SshKind, SshSortKey, SshStatus, SshStatusFilter
 
 Role = Literal["viewer", "operator", "admin"]
 
@@ -666,3 +667,60 @@ class ServiceResult(Model):
     success: bool
     output: str | None
     error: str | None
+
+
+# --- SSH certificates -----------------------------------------------------------------------------------
+
+
+class SshCertificateItem(Model):
+    serial: str = Field(description="Decimal, as step-ca stores it")
+    kind: str = Field(description='"user" or "host"; empty when the certificate cannot be read')
+    key_id: str
+    principals: list[str]
+    valid_after: datetime | None = Field(description="Null: valid from the beginning")
+    valid_before: datetime | None = Field(description="Null: never expires")
+    key_type: str = Field(description='Of the certified key, such as "ED25519", "RSA 3072" or "ECDSA nistp256"')
+    fingerprint: str = Field(description="SHA256 fingerprint of the certified key, as ssh-keygen -l prints it")
+    ca_fingerprint: str = Field(description="SHA256 fingerprint of the key that signed the certificate")
+    error: str | None
+    status: SshStatus
+    revoked_at: datetime | None
+    revocation_reason: str | None
+    revocation_reason_code: int | None
+
+
+class SshListQuery(ListQuery):
+    kind: SshKind = "all"
+    status: SshStatusFilter = "all"
+    sort: SshSortKey = "valid_after"
+    order: Literal["asc", "desc"] = "desc"
+
+
+class SshCertificatePage(PageInfo):
+    items: list[SshCertificateItem]
+
+
+class SshCountsQuery(BaseModel):
+    kind: SshKind = "all"
+
+
+class SshCounts(Model):
+    """What each tab of the list holds (certificates that aren't valid yet or can't be read are only in all)."""
+
+    all: int
+    valid: int
+    expired: int
+    revoked: int
+
+
+class SshOption(Model):
+    name: str
+    value: str
+
+
+class SshCertificateDetail(Model):
+    certificate: SshCertificateItem
+    critical_options: list[SshOption]
+    extensions: list[SshOption]
+    revocation: RevocationInfo | None
+    public_line: str = Field(description="The certificate as an id_*-cert.pub file holds it; empty when the key type is unreadable")

@@ -1,5 +1,17 @@
 import { useNavigate } from "@tanstack/react-router"
-import { Download, FileText, House, KeyRound, ListChecks, Network, Plus, Search, Server, UserCog } from "lucide-react"
+import {
+  Download,
+  FileText,
+  House,
+  KeyRound,
+  ListChecks,
+  Network,
+  Plus,
+  Search,
+  Server,
+  Terminal,
+  UserCog,
+} from "lucide-react"
 import { useEffect, useState } from "react"
 import { $api } from "@/api/client"
 import { roleAtLeast, useSession } from "@/api/session"
@@ -22,6 +34,7 @@ const PAGES: Page[] = [
   { to: "/provisioners", label: "Provisioners", icon: KeyRound },
   { to: "/acme/orders", label: "ACME orders", icon: Network },
   { to: "/acme/accounts", label: "ACME accounts", icon: Network },
+  { to: "/ssh", label: "SSH certificates", icon: Terminal },
   { to: "/audit", label: "Audit log", icon: ListChecks, admin: true },
   { to: "/ca", label: "Authority", icon: Server },
   { to: "/admins", label: "Admins", icon: UserCog },

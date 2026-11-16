@@ -73,12 +73,15 @@ export function ExportButton({
 export function ChoiceFilter({
   value,
   options,
+  names,
   onChange,
   label,
   any,
 }: {
   value?: string
   options: readonly string[]
+  /** How to write an option, where it isn't as it is stored */
+  names?: Readonly<Record<string, string>>
   onChange: (value?: string) => void
   label: string
   any: string
@@ -92,7 +95,7 @@ export function ChoiceFilter({
         <SelectItem value="*">{any}</SelectItem>
         {options.map((option) => (
           <SelectItem key={option} value={option}>
-            {option}
+            {names?.[option] ?? option}
           </SelectItem>
         ))}
       </SelectContent>

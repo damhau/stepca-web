@@ -9,10 +9,13 @@ from datetime import datetime
 from typing import Any
 
 from cryptography import x509
+from sqlalchemy import inspect
 
 from app.extensions import db
+from app.libs import ssh_cert
 from app.libs.cert_utils import key_description, load_certificate, parse_cert
 from app.models import acme as tables
+from app.models import ssh as ssh_tables
 from app.models import step as step_tables
 from app.models import x509 as x509_tables
 from app.stepca.records import (
@@ -27,6 +30,7 @@ from app.stepca.records import (
     Provisioner,
     ProvisionerRef,
     Revocation,
+    SshCertificate,
 )
 
 log = logging.getLogger(__name__)
@@ -341,6 +345,66 @@ def revoked_serials():
 
 def revocation_count():
     return db.session.query(x509_tables.RevokedX509Cert).count()
+
+
+# --- SSH certificates ---------------------------------------------------------------------------------
+
+
+def _ssh_certificate(serial, blob):
+    """The record of a stored SSH certificate (the wire format step-ca marshals it to), or one that says why it can't be read."""
+    try:
+        info = ssh_cert.parse(bytes(blob))
+    except ValueError as e:
+        return SshCertificate(serial, "", "", [], None, None, "", "", "", {}, {}, error=str(e))
+    return SshCertificate(
+        serial=serial,
+        kind=info.kind,
+        key_id=info.key_id,
+        principals=list(info.principals),
+        valid_after=info.valid_after,
+        valid_before=info.valid_before,
+        key_type=info.key_type,
+        fingerprint=info.fingerprint,
+        ca_fingerprint=info.ca_fingerprint,
+        critical_options=dict(info.critical_options),
+        extensions=dict(info.extensions),
+    )
+
+
+def ssh_certificates():
+    """Every SSH certificate, user and host ones. The hosts, users and host principals tables only index these."""
+    return [_ssh_certificate(_serial(row.nkey), row.nvalue) for row in db.session.query(ssh_tables.SshCert).all()]
+
+
+def ssh_certificate(serial):
+    row = db.session.get(ssh_tables.SshCert, serial.encode("ascii"))
+    return _ssh_certificate(serial, row.nvalue) if row else None
+
+
+def ssh_certificate_blob(serial):
+    """The certificate as step-ca stored it (OpenSSH wire format), or None."""
+    row = db.session.get(ssh_tables.SshCert, serial.encode("ascii"))
+    return bytes(row.nvalue) if row else None
+
+
+def ssh_revocations():
+    """The revoked SSH certificates by decimal serial. Without the table (older step-ca) nothing counts as revoked."""
+    # Only a missing table means "nothing revoked". Any other failure (connection, permissions) must raise:
+    # treating it as "nothing revoked" would show revoked certificates as valid.
+    if not inspect(db.session.connection()).has_table(ssh_tables.RevokedSshCert.__tablename__):
+        return {}
+    found = {}
+    for row in db.session.query(ssh_tables.RevokedSshCert).all():
+        serial = _serial(row.nkey)
+        try:
+            data = json.loads(bytes(row.nvalue))
+            if not isinstance(data, dict):
+                raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+            found[serial] = _revocation(serial, data)
+        except ValueError as e:
+            log.warning("Cannot parse revoked_ssh_certs %s: %s", serial, e)
+            found[serial] = Revocation(serial, None, "", None, None, False, False)
+    return found
 
 
 # --- Provisioners and admins --------------------------------------------------------------------------

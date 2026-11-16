@@ -534,6 +534,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ssh/certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SSH certificates, filtered, sorted and paged (format=csv: all of them, as a file) */
+        get: operations["api_ssh_list_certificates_ssh_certificates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/certificates/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many SSH certificates each tab of the list holds */
+        get: operations["api_ssh_certificate_counts_ssh_certificates_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/certificates/{serial}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_ssh_get_certificate_ssh_certificates__serial__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/certificates/{serial}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The certificate as an *-cert.pub file */
+        get: operations["api_ssh_download_certificate_ssh_certificates__serial__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1426,6 +1493,107 @@ export interface components {
             pem: string;
             /** Serial */
             serial: string;
+        };
+        /** SshCertificateDetail */
+        SshCertificateDetail: {
+            certificate: components["schemas"]["SshCertificateItem"];
+            /** Critical Options */
+            critical_options: components["schemas"]["SshOption"][];
+            /** Extensions */
+            extensions: components["schemas"]["SshOption"][];
+            /**
+             * Public Line
+             * @description The certificate as an id_*-cert.pub file holds it; empty when the key type is unreadable
+             */
+            public_line: string;
+            revocation: components["schemas"]["RevocationInfo"] | null;
+        };
+        /** SshCertificateItem */
+        SshCertificateItem: {
+            /**
+             * Ca Fingerprint
+             * @description SHA256 fingerprint of the key that signed the certificate
+             */
+            ca_fingerprint: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Fingerprint
+             * @description SHA256 fingerprint of the certified key, as ssh-keygen -l prints it
+             */
+            fingerprint: string;
+            /** Key Id */
+            key_id: string;
+            /**
+             * Key Type
+             * @description Of the certified key, such as "ED25519", "RSA 3072" or "ECDSA nistp256"
+             */
+            key_type: string;
+            /**
+             * Kind
+             * @description "user" or "host"; empty when the certificate cannot be read
+             */
+            kind: string;
+            /** Principals */
+            principals: string[];
+            /** Revocation Reason */
+            revocation_reason: string | null;
+            /** Revocation Reason Code */
+            revocation_reason_code: number | null;
+            /** Revoked At */
+            revoked_at: string | null;
+            /**
+             * Serial
+             * @description Decimal, as step-ca stores it
+             */
+            serial: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "valid" | "expired" | "not_yet_valid" | "revoked" | "invalid";
+            /**
+             * Valid After
+             * @description Null: valid from the beginning
+             */
+            valid_after: string | null;
+            /**
+             * Valid Before
+             * @description Null: never expires
+             */
+            valid_before: string | null;
+        };
+        /** SshCertificatePage */
+        SshCertificatePage: {
+            /** Items */
+            items: components["schemas"]["SshCertificateItem"][];
+            /** Page */
+            page: number;
+            /** Per Page */
+            per_page: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * SshCounts
+         * @description What each tab of the list holds (certificates that aren't valid yet or can't be read are only in all).
+         */
+        SshCounts: {
+            /** All */
+            all: number;
+            /** Expired */
+            expired: number;
+            /** Revoked */
+            revoked: number;
+            /** Valid */
+            valid: number;
+        };
+        /** SshOption */
+        SshOption: {
+            /** Name */
+            name: string;
+            /** Value */
+            value: string;
         };
         /**
          * StatusCounts
@@ -2949,6 +3117,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsView"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
+                };
+            };
+        };
+    };
+    api_ssh_list_certificates_ssh_certificates_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                per_page?: number;
+                /** @description Text the rows must contain */
+                q?: string;
+                format?: "json" | "csv";
+                kind?: "all" | "user" | "host";
+                status?: "all" | "valid" | "expired" | "not_yet_valid" | "revoked" | "invalid";
+                sort?: "valid_after" | "valid_before" | "key_id" | "serial";
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SshCertificatePage"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
+                };
+            };
+        };
+    };
+    api_ssh_certificate_counts_ssh_certificates_counts_get: {
+        parameters: {
+            query?: {
+                kind?: "all" | "user" | "host";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SshCounts"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
+                };
+            };
+        };
+    };
+    api_ssh_get_certificate_ssh_certificates__serial__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serial: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SshCertificateDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"][];
+                };
+            };
+        };
+    };
+    api_ssh_download_certificate_ssh_certificates__serial__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serial: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Unprocessable Entity */

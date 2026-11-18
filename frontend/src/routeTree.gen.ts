@@ -26,6 +26,7 @@ import { Route as AppCertificatesIndexRouteImport } from './routes/_app/certific
 import { Route as AppCertificatesSerialRouteImport } from './routes/_app/certificates/$serial'
 import { Route as AppProvisionersIndexRouteImport } from './routes/_app/provisioners/index'
 import { Route as AppProvisionersNameRouteImport } from './routes/_app/provisioners/$name'
+import { Route as AppSshIndexRouteImport } from './routes/_app/ssh/index'
 import { Route as AppAcmeAccountsIndexRouteImport } from './routes/_app/acme/accounts/index'
 import { Route as AppAcmeAccountsIdRouteImport } from './routes/_app/acme/accounts/$id'
 import { Route as AppAcmeOrdersIndexRouteImport } from './routes/_app/acme/orders/index'
@@ -115,6 +116,11 @@ const AppProvisionersNameRoute = AppProvisionersNameRouteImport.update({
   path: '/provisioners/$name',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSshIndexRoute = AppSshIndexRouteImport.update({
+  id: '/ssh/',
+  path: '/ssh/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAcmeAccountsIndexRoute = AppAcmeAccountsIndexRouteImport.update({
   id: '/acme/accounts/',
   path: '/acme/accounts/',
@@ -153,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/acme/': typeof AppAcmeIndexRoute
   '/certificates/': typeof AppCertificatesIndexRoute
   '/provisioners/': typeof AppProvisionersIndexRoute
+  '/ssh/': typeof AppSshIndexRoute
   '/acme/accounts/$id': typeof AppAcmeAccountsIdRoute
   '/acme/orders/$id': typeof AppAcmeOrdersIdRoute
   '/acme/accounts/': typeof AppAcmeAccountsIndexRoute
@@ -175,6 +182,7 @@ export interface FileRoutesByTo {
   '/acme': typeof AppAcmeIndexRoute
   '/certificates': typeof AppCertificatesIndexRoute
   '/provisioners': typeof AppProvisionersIndexRoute
+  '/ssh': typeof AppSshIndexRoute
   '/acme/accounts/$id': typeof AppAcmeAccountsIdRoute
   '/acme/orders/$id': typeof AppAcmeOrdersIdRoute
   '/acme/accounts': typeof AppAcmeAccountsIndexRoute
@@ -199,6 +207,7 @@ export interface FileRoutesById {
   '/_app/acme/': typeof AppAcmeIndexRoute
   '/_app/certificates/': typeof AppCertificatesIndexRoute
   '/_app/provisioners/': typeof AppProvisionersIndexRoute
+  '/_app/ssh/': typeof AppSshIndexRoute
   '/_app/acme/accounts/$id': typeof AppAcmeAccountsIdRoute
   '/_app/acme/orders/$id': typeof AppAcmeOrdersIdRoute
   '/_app/acme/accounts/': typeof AppAcmeAccountsIndexRoute
@@ -223,6 +232,7 @@ export interface FileRouteTypes {
     | '/acme/'
     | '/certificates/'
     | '/provisioners/'
+    | '/ssh/'
     | '/acme/accounts/$id'
     | '/acme/orders/$id'
     | '/acme/accounts/'
@@ -245,6 +255,7 @@ export interface FileRouteTypes {
     | '/acme'
     | '/certificates'
     | '/provisioners'
+    | '/ssh'
     | '/acme/accounts/$id'
     | '/acme/orders/$id'
     | '/acme/accounts'
@@ -268,6 +279,7 @@ export interface FileRouteTypes {
     | '/_app/acme/'
     | '/_app/certificates/'
     | '/_app/provisioners/'
+    | '/_app/ssh/'
     | '/_app/acme/accounts/$id'
     | '/_app/acme/orders/$id'
     | '/_app/acme/accounts/'
@@ -400,6 +412,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProvisionersNameRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/ssh/': {
+      id: '/_app/ssh/'
+      path: '/ssh'
+      fullPath: '/ssh/'
+      preLoaderRoute: typeof AppSshIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/acme/accounts/': {
       id: '/_app/acme/accounts/'
       path: '/acme/accounts'
@@ -447,6 +466,7 @@ interface AppRouteChildren {
   AppAcmeIndexRoute: typeof AppAcmeIndexRoute
   AppCertificatesIndexRoute: typeof AppCertificatesIndexRoute
   AppProvisionersIndexRoute: typeof AppProvisionersIndexRoute
+  AppSshIndexRoute: typeof AppSshIndexRoute
   AppAcmeAccountsIdRoute: typeof AppAcmeAccountsIdRoute
   AppAcmeOrdersIdRoute: typeof AppAcmeOrdersIdRoute
   AppAcmeAccountsIndexRoute: typeof AppAcmeAccountsIndexRoute
@@ -469,6 +489,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAcmeIndexRoute: AppAcmeIndexRoute,
   AppCertificatesIndexRoute: AppCertificatesIndexRoute,
   AppProvisionersIndexRoute: AppProvisionersIndexRoute,
+  AppSshIndexRoute: AppSshIndexRoute,
   AppAcmeAccountsIdRoute: AppAcmeAccountsIdRoute,
   AppAcmeOrdersIdRoute: AppAcmeOrdersIdRoute,
   AppAcmeAccountsIndexRoute: AppAcmeAccountsIndexRoute,

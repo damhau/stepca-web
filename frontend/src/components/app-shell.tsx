@@ -11,6 +11,7 @@ import {
   Network,
   Search,
   ShieldCheck,
+  Terminal,
   type LucideIcon,
 } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -49,6 +50,7 @@ const MAIN: Item[] = [
   { to: "/certificates", label: "Certificates", icon: FileText, badge: "expiring" },
   { to: "/provisioners", label: "Provisioners", icon: KeyRound },
   { to: "/acme", label: "ACME", icon: Network },
+  { to: "/ssh", label: "SSH", icon: Terminal },
   { to: "/audit", label: "Audit log", icon: ListChecks, role: "admin" },
 ]
 

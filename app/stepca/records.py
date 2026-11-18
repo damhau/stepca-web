@@ -136,3 +136,22 @@ class Admin:
     type: str  # "ADMIN" or "SUPER_ADMIN"
     created_at: datetime | None
     deleted: bool
+
+
+@dataclass(frozen=True)
+class SshCertificate:
+    """An SSH certificate as step-ca's ssh_certs table stores it, read from the OpenSSH wire format."""
+
+    serial: str  # decimal, the key step-ca stores it under
+    kind: str  # "user" or "host"
+    key_id: str
+    principals: list[str]
+    valid_after: datetime | None  # None: from the beginning
+    valid_before: datetime | None  # None: never expires
+    key_type: str
+    fingerprint: str
+    ca_fingerprint: str
+    critical_options: dict[str, str]
+    extensions: dict[str, str]
+    # Set when the stored certificate doesn't parse; the other fields are then empty
+    error: str | None = None

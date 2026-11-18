@@ -28,6 +28,7 @@ https://smallstep.com/docs/step-ca
   - **New certificate:** a key pair made in the browser (ECDSA P-256 or P-384, Ed25519, RSA 2048: only its CSR is sent) or an uploaded CSR, signed by a JWK provisioner with its password, for a chosen validity. Then download a PEM bundle, the key, or a Kubernetes TLS Secret; the equivalent step CLI command is shown.
   - Select several certificates to download them as one PEM bundle or revoke them together; revoke with an RFC 5280 reason.
 - **ACME** (read-only): accounts, orders, certificates, authorizations and challenges, and the drill-down from an account to its orders, from an order to its authorizations, challenges and certificate. They stay fast however many orders renewals leave in step-ca's database (step-ca never deletes them).
+- **SSH** (read-only): the active certificates first (step-ca keeps every certificate it ever issued, and the expired ones pile up), with tabs for expired, revoked and all certificates and their counts; filtered by type (user or host), searched by key ID, principal, serial or key fingerprint, sorted and paged by the server. A panel beside the list for each certificate: type, key ID, principals, serial, key and the fingerprints of the certified key and of the CA key that signed it, validity (a certificate that never expires says so), critical options, extensions, revocation; its `*-cert.pub` file to copy or download (`ssh-keygen -L -f` reads it). Everything comes from step-ca's `ssh_certs` table (and `revoked_ssh_certs` for revocations); `ssh_users`, `ssh_hosts` and `ssh_host_principals` are only indexes of it and aren't read. RSA, ECDSA and Ed25519 certificates are read; one of another key type (security keys, `sk-*`) is listed as unreadable and can still be downloaded. Revoking stays with `step ssh revoke`.
 - **Provisioners**: list, add (JWK, ACME) and delete; a settings page for each (lifetimes, renewal, ACME challenges and options) that saves its changes together. ACME provisioners show their directory URL and a cert-manager ClusterIssuer with the CA's root; JWK provisioners a step CLI command. Their latest certificates and changes.
 - **Admins**: list, add, change type and delete (when the app's CA identity is a super admin).
 - **Authority**: health and version; the chain of trust (each root and the intermediates it issued, the one step-ca signs with, their keys, fingerprints and how much of their lifetime is used); the CRL; the app's settings in effect (admins).
@@ -35,7 +36,7 @@ https://smallstep.com/docs/step-ca
 - **Roles and audit log**: viewer, operator and admin roles; every change and sign-in is recorded.
 - **Systemd service control** (optional, off by default): start, stop or restart step-ca.
 
-Not supported: SSH certificates, ACME EAB keys (open-source step-ca can't create them), policies and webhooks.
+Not supported: issuing or revoking SSH certificates from the UI, ACME EAB keys (open-source step-ca can't create them), policies and webhooks.
 
 ## Project Structure
 
@@ -77,7 +78,7 @@ The ACME lists read a copy of step-ca's ACME orders, authorizations, challenges 
 
 ### Pages and API
 
-The frontend's pages are `/` (`?range=24h|7d`), `/certificates` (`?tab=expiring|revoked|expired`; `cert=<serial>` opens a certificate's panel), `/acme/orders[/<id>]`, `/acme/accounts[/<id>]`, `/acme/authorizations`, `/acme/challenges`, `/acme/certificates`, `/provisioners[/<name>]`, `/ca` (`?tab=configuration`), `/admins`, `/audit`, `/search?q=` and `/service`. `/certificates/<serial>`, `/acme` and `/settings` lead to them, and so do the old pages' URLs (`/x509/cert/<serial>`, `/step/provisioners`, ...).
+The frontend's pages are `/` (`?range=24h|7d`), `/certificates` (`?tab=expiring|revoked|expired`; `cert=<serial>` opens a certificate's panel), `/acme/orders[/<id>]`, `/acme/accounts[/<id>]`, `/acme/authorizations`, `/acme/challenges`, `/acme/certificates`, `/ssh` (`?tab=expired|revoked|all`, `?kind=user|host`; `cert=<serial>` opens a certificate's panel), `/provisioners[/<name>]`, `/ca` (`?tab=configuration`), `/admins`, `/audit`, `/search?q=` and `/service`. `/certificates/<serial>`, `/acme` and `/settings` lead to them, and so do the old pages' URLs (`/x509/cert/<serial>`, `/step/provisioners`, ...).
 
 Everything the frontend shows comes from the JSON API under `/api/v1`, documented by `frontend/openapi.json` (regenerate it with `uv run python -m app.api.openapi`):
 
@@ -85,6 +86,7 @@ Everything the frontend shows comes from the JSON API under `/api/v1`, documente
 - `GET /api/v1/certificates` – filtered (`status`, `days`, `q`, and `provisioner` and `key`, each repeatable), sorted (`sort`, `order`) and paged (`page`, `per_page`); `format=csv` returns every matching row as a file. The ACME lists and the audit log take the same `q`, `page`, `per_page` and `format`
 - `GET /api/v1/certificates/counts` (per tab), `/facets` (the provisioners and key types to filter on), `/bundle?serial=…` (several certificates as one PEM file)
 - `GET /api/v1/certificates/<serial>`, `/<serial>/events`, `/<serial>/download?format=pem|chain|der`; `POST /api/v1/certificates` (sign a CSR; returns the certificate and its chain), `/<serial>/revoke` (operator)
+- `GET /api/v1/ssh/certificates` – filtered (`kind=user|host`, `status`, `q`; without `status` every certificate, the page asks for `valid`), sorted (`sort`, `order`) and paged like the X.509 list; `format=csv` returns every matching row. `/ssh/certificates/counts` (per tab; `kind=user|host`), `/ssh/certificates/<serial>`, `/ssh/certificates/<serial>/download` (the `*-cert.pub` file)
 - `GET /api/v1/acme/{accounts,orders,authorizations,challenges,certificates}`, `/acme/accounts/<id>` (with its latest 50 orders and `order_total`; `/acme/orders?q=<account id>` has every one), `/acme/orders/<id>`
 - `GET/POST/PUT/DELETE /api/v1/provisioners[/<name>]`, `GET/POST/PATCH/DELETE /api/v1/admins[/<id>]` (changes: admin)
 - `GET /api/v1/ca`, `/ca/roots.pem`, `/ca/intermediates.pem`, `/ca/crl?format=der|pem`
@@ -156,7 +158,7 @@ Every API route needs a session except `/api/v1/session`; writes need the sessio
 
 ### Database Connection
 
-- The app expects a PostgreSQL database with Step CA tables (`x509_certs`, `acme_accounts`, `provisioners`, etc.).
+- The app expects a PostgreSQL database with Step CA tables (`x509_certs`, `ssh_certs`, `acme_accounts`, `provisioners`, etc.).
 - The app only **reads** step-ca's database, so give it a read-only role. Changes to the CA go through the step-ca API. Run this as a PostgreSQL superuser, replacing `step-ca` with the role step-ca itself uses:
 
   ```sql
